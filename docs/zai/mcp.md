@@ -111,3 +111,4 @@ The MCP toggles and local endpoints are shown in:
 ## Limitations and expectations
 - Web Reader behavior is site-dependent (bot protection, redirects, dynamic rendering) and upstream may fail to extract content for some URLs.
 - Web Search / zread / vision can be subject to upstream plan/entitlement/quota limits and may return 4xx/5xx depending on the upstream account state.
+- Some upstream tool failures are returned as a successful JSON-RPC response whose `result.content[0].text` starts with `MCP error ...` (i.e. not a JSON-RPC `error` object). Clients should treat tool outputs as data and handle such error strings.

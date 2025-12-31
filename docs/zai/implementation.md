@@ -136,7 +136,8 @@ Behavior:
   - `DELETE /mcp` terminates a session
 
 Upstream calls:
-- z.ai vision endpoint: `https://api.z.ai/api/paas/v4/chat/completions`
+- z.ai vision endpoint (preferred for GLM Coding Plan): `https://api.z.ai/api/coding/paas/v4/chat/completions`
+- fallback: `https://api.z.ai/api/paas/v4/chat/completions`
 - Uses `Authorization: Bearer <zai_key>`
 - Default model: `glm-4.6v` (hardcoded for now)
 
@@ -150,8 +151,8 @@ Tool input and limits:
   - `understand_technical_diagram`
   - `analyze_data_visualization`
   - `ui_diff_check`
-  - `analyze_image`
-  - `analyze_video`
+  - `image_analysis` (alias: `analyze_image`)
+  - `video_analysis` (alias: `analyze_video`)
 
 ## UI
 Page: `src/pages/ApiProxy.tsx`
