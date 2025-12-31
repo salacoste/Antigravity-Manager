@@ -82,6 +82,7 @@ Local endpoint:
 
 Behavior:
 - This is a local MCP server hosted by the proxy (not a reverse-proxy to a remote MCP endpoint).
+- For GLM Coding Plan users, the proxy prefers the z.ai coding endpoint (`/api/coding/paas/v4`) and falls back to the general endpoint only when the coding endpoint is unavailable for the current key.
 - Session is required:
   - Call `initialize` first.
   - Read the `mcp-session-id` response header.
