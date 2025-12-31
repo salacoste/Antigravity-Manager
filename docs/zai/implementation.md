@@ -8,6 +8,8 @@ Related deep dives:
 - [`docs/zai/vision-mcp.md`](vision-mcp.md)
 - [`docs/proxy/auth.md`](../proxy/auth.md)
 - [`docs/proxy/accounts.md`](../proxy/accounts.md)
+- [`docs/proxy/routing.md`](../proxy/routing.md)
+- [`docs/proxy/config.md`](../proxy/config.md)
 
 ## Scope (current)
 - z.ai is integrated as an **optional upstream** for **Anthropic/Claude protocol only** (`/v1/messages`, `/v1/messages/count_tokens`).

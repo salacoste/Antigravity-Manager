@@ -81,6 +81,8 @@ Notes:
 Behavior:
 - The proxy forwards Streamable HTTP JSON-RPC calls to the upstream.
 - Tool inputs follow upstream schemas (e.g. `repo_name` is typically `owner/repo`).
+  - `repo_name` must be a public GitHub repository in `owner/repo` format that the upstream service can access.
+  - For private repos or repos not indexed/available upstream, tool calls can return `target not found` errors.
 
 Implementation:
 - Handler: [`src-tauri/src/proxy/handlers/mcp.rs`](../../src-tauri/src/proxy/handlers/mcp.rs) (`handle_zread`)

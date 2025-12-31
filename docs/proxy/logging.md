@@ -35,3 +35,5 @@ Frontend:
 - UI toggle: `src/pages/ApiProxy.tsx`
 - Strings: `src/locales/en.json`, `src/locales/zh.json`
 
+Related troubleshooting:
+- UI/runtime error capture (helps diagnose “white screen”): [`docs/app/frontend-logging.md`](../app/frontend-logging.md)

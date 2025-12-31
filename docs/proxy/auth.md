@@ -28,6 +28,10 @@ Hot reload:
 - Config save triggers running server updates in [`src-tauri/src/commands/mod.rs`](../../src-tauri/src/commands/mod.rs)
   - `save_config(...)` calls `axum_server.update_security(&config.proxy).await`
 
+Routing context:
+- Auth applies equally to all protocol surfaces served by the proxy (OpenAI / Claude / Gemini / MCP).
+- Routing overview: [`docs/proxy/routing.md`](routing.md)
+
 ## Client contract
 When auth is enabled, clients should send:
 - `Authorization: Bearer <proxy.api_key>`
