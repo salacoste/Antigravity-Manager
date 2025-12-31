@@ -33,3 +33,6 @@ src-tauri/.env
 .env
 .env.*
 environment/
+
+# Local snapshots of upstream docs (do not commit)
+docs/zai/upstream/

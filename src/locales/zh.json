@@ -354,6 +354,8 @@
                     "web_search_tooltip": "启用后开放 /mcp/web_search_prime/mcp，并转发到 z.ai 的 Web Search MCP 上游。",
                     "web_reader": "网页阅读",
                     "web_reader_tooltip": "启用后开放 /mcp/web_reader/mcp，并转发到 z.ai 的 Web Reader MCP 上游。",
+                    "zread": "zread",
+                    "zread_tooltip": "启用后开放 /mcp/zread/mcp，并转发到 z.ai 的 zread MCP 上游。",
                     "vision": "视觉",
                     "vision_tooltip": "启用后开放 /mcp/zai-mcp-server/mcp（本地 MCP 服务），提供视觉相关工具能力，并通过 z.ai 执行。",
                     "local_endpoints": "本地地址（在 MCP 客户端中配置以下 URL）：",

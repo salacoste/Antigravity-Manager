@@ -164,18 +164,22 @@ impl AxumServer {
                 get(handlers::claude::handle_list_models),
             )
             // z.ai MCP (optional reverse-proxy)
-            .route(
-                "/mcp/web_search_prime/mcp",
-                any(handlers::mcp::handle_web_search_prime),
-            )
 	            .route(
-	                "/mcp/web_reader/mcp",
-	                any(handlers::mcp::handle_web_reader),
+	                "/mcp/web_search_prime/mcp",
+	                any(handlers::mcp::handle_web_search_prime),
 	            )
-	            .route(
-	                "/mcp/zai-mcp-server/mcp",
-	                any(handlers::mcp::handle_zai_mcp_server),
-	            )
+		            .route(
+		                "/mcp/web_reader/mcp",
+		                any(handlers::mcp::handle_web_reader),
+		            )
+		            .route(
+		                "/mcp/zread/mcp",
+		                any(handlers::mcp::handle_zread),
+		            )
+		            .route(
+		                "/mcp/zai-mcp-server/mcp",
+		                any(handlers::mcp::handle_zai_mcp_server),
+		            )
 	            // Gemini Protocol (Native)
 	            .route("/v1beta/models", get(handlers::gemini::handle_list_models))
             // Handle both GET (get info) and POST (generateContent with colon) at the same route

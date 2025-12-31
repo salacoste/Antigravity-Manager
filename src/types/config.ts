@@ -26,6 +26,7 @@ export interface ZaiMcpConfig {
     enabled: boolean;
     web_search_enabled: boolean;
     web_reader_enabled: boolean;
+    zread_enabled: boolean;
     vision_enabled: boolean;
 }
 

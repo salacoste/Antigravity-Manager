@@ -33,7 +33,8 @@ fn copy_passthrough_headers(incoming: &HeaderMap) -> HeaderMap {
     for (k, v) in incoming.iter() {
         let key = k.as_str().to_ascii_lowercase();
         match key.as_str() {
-            "content-type" | "accept" | "user-agent" => {
+            // Forward minimal safe set + MCP session header for streamableHttp.
+            "content-type" | "accept" | "user-agent" | "mcp-session-id" => {
                 out.insert(k.clone(), v.clone());
             }
             _ => {}
@@ -163,6 +164,24 @@ pub async fn handle_web_reader(
         body,
     )
     .await;
+    resp.extensions_mut()
+        .insert(crate::proxy::observability::UpstreamRoute("zai_mcp"));
+    resp
+}
+
+pub async fn handle_zread(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    method: Method,
+    body: Body,
+) -> Response {
+    let zai = state.zai.read().await.clone();
+    if !zai.mcp.zread_enabled {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    drop(zai);
+
+    let mut resp = forward_mcp(&state, headers, method, "https://api.z.ai/api/mcp/zread/mcp", body).await;
     resp.extensions_mut()
         .insert(crate::proxy::observability::UpstreamRoute("zai_mcp"));
     resp

@@ -68,6 +68,8 @@ pub struct ZaiMcpConfig {
     #[serde(default)]
     pub web_reader_enabled: bool,
     #[serde(default)]
+    pub zread_enabled: bool,
+    #[serde(default)]
     pub vision_enabled: bool,
 }
 
@@ -77,6 +79,7 @@ impl Default for ZaiMcpConfig {
             enabled: false,
             web_search_enabled: false,
             web_reader_enabled: false,
+            zread_enabled: false,
             vision_enabled: false,
         }
     }

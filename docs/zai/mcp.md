@@ -28,7 +28,17 @@ Upstream:
 Implementation:
 - Handler: [`src-tauri/src/proxy/handlers/mcp.rs`](../../src-tauri/src/proxy/handlers/mcp.rs) (`handle_web_reader`)
 
-### 3) Vision MCP (built-in server)
+### 3) zread (remote reverse-proxy)
+Local endpoint:
+- `/mcp/zread/mcp`
+
+Upstream:
+- `https://api.z.ai/api/mcp/zread/mcp`
+
+Implementation:
+- Handler: [`src-tauri/src/proxy/handlers/mcp.rs`](../../src-tauri/src/proxy/handlers/mcp.rs) (`handle_zread`)
+
+### 4) Vision MCP (built-in server)
 Local endpoint:
 - `/mcp/zai-mcp-server/mcp`
 

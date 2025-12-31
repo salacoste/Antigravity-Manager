@@ -353,6 +353,8 @@
                     "web_search_tooltip": "Exposes /mcp/web_search_prime/mcp and forwards requests to the z.ai Web Search MCP upstream.",
                     "web_reader": "Web Reader",
                     "web_reader_tooltip": "Exposes /mcp/web_reader/mcp and forwards requests to the z.ai Web Reader MCP upstream.",
+                    "zread": "zread",
+                    "zread_tooltip": "Exposes /mcp/zread/mcp and forwards requests to the z.ai zread MCP upstream.",
                     "vision": "Vision",
                     "vision_tooltip": "Exposes /mcp/zai-mcp-server/mcp (local MCP server) that provides vision tools backed by z.ai.",
                     "local_endpoints": "Local endpoints (configure your MCP client to use these URLs):",
