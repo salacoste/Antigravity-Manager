@@ -1051,13 +1051,36 @@ print(response.text)`;
                                         </label>
                                     </div>
 
-                                    {appConfig.proxy.zai?.mcp?.enabled && (
+                                    {(appConfig.proxy.zai?.mcp?.enabled &&
+                                        (appConfig.proxy.zai?.mcp?.web_search_enabled ||
+                                            appConfig.proxy.zai?.mcp?.web_reader_enabled ||
+                                            appConfig.proxy.zai?.mcp?.vision_enabled)) && (
                                         <div className="bg-gray-50 dark:bg-base-200/50 rounded-lg p-3 text-[10px] font-mono text-gray-500">
-                                            <div className="mb-1 font-bold text-gray-400 uppercase tracking-wider">{t('proxy.config.zai.mcp.local_endpoints')}</div>
+                                            <div className="mb-1 font-bold text-gray-400 uppercase tracking-wider">
+                                                {t('proxy.config.zai.mcp.local_endpoints')}
+                                            </div>
                                             <div className="space-y-0.5 select-all">
-                                                {appConfig.proxy.zai?.mcp?.web_search_enabled && <div>http://127.0.0.1:{status.running ? status.port : (appConfig.proxy.port || 8045)}/mcp/web_search_prime/mcp</div>}
-                                                {appConfig.proxy.zai?.mcp?.web_reader_enabled && <div>http://127.0.0.1:{status.running ? status.port : (appConfig.proxy.port || 8045)}/mcp/web_reader/mcp</div>}
-                                                {appConfig.proxy.zai?.mcp?.vision_enabled && <div>http://127.0.0.1:{status.running ? status.port : (appConfig.proxy.port || 8045)}/mcp/zai-mcp-server/mcp</div>}
+                                                {appConfig.proxy.zai?.mcp?.web_search_enabled && (
+                                                    <div>
+                                                        http://127.0.0.1:
+                                                        {status.running ? status.port : (appConfig.proxy.port || 8045)}
+                                                        /mcp/web_search_prime/mcp
+                                                    </div>
+                                                )}
+                                                {appConfig.proxy.zai?.mcp?.web_reader_enabled && (
+                                                    <div>
+                                                        http://127.0.0.1:
+                                                        {status.running ? status.port : (appConfig.proxy.port || 8045)}
+                                                        /mcp/web_reader/mcp
+                                                    </div>
+                                                )}
+                                                {appConfig.proxy.zai?.mcp?.vision_enabled && (
+                                                    <div>
+                                                        http://127.0.0.1:
+                                                        {status.running ? status.port : (appConfig.proxy.port || 8045)}
+                                                        /mcp/zai-mcp-server/mcp
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}

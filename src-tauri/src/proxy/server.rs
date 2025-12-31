@@ -104,18 +104,24 @@ impl AxumServer {
 	        let zai_vision_mcp_state =
 	            Arc::new(crate::proxy::zai_vision_mcp::ZaiVisionMcpState::new());
 
-	        let state = AppState {
-	            token_manager: token_manager.clone(),
-	            anthropic_mapping: mapping_state.clone(),
-	            openai_mapping: openai_mapping_state.clone(),
-	            custom_mapping: custom_mapping_state.clone(),
-	            request_timeout: 300, // 5分钟超时
+        let state = AppState {
+            token_manager: token_manager.clone(),
+            anthropic_mapping: mapping_state.clone(),
+            openai_mapping: openai_mapping_state.clone(),
+            custom_mapping: custom_mapping_state.clone(),
+            request_timeout: 300, // 5分钟超时
             thought_signature_map: Arc::new(tokio::sync::Mutex::new(
                 std::collections::HashMap::new(),
             )),
             upstream_proxy: proxy_state.clone(),
             upstream: Arc::new(crate::proxy::upstream::client::UpstreamClient::new(Some(
                 upstream_proxy.clone(),
+            ))),
+            zai: zai_state.clone(),
+            provider_rr: provider_rr.clone(),
+            zai_vision_mcp: zai_vision_mcp_state,
+            monitor: monitor.clone(),
+        };
             ))),
             zai: zai_state.clone(),
             provider_rr: provider_rr.clone(),

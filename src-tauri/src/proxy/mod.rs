@@ -18,7 +18,6 @@ pub mod zai_vision_mcp;    // Built-in Vision MCP server state
 pub mod zai_vision_tools;  // Built-in Vision MCP tools (z.ai vision API)
 pub mod monitor;           // 监控
 
-
 pub use config::ProxyConfig;
 pub use config::ProxyAuthMode;
 pub use config::ZaiConfig;
