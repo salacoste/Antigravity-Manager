@@ -1343,6 +1343,44 @@ print(response.text)`;
                                         </label>
                                     </div>
 
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
+                                            {t('proxy.config.zai.mcp.web_reader_url_normalization')}
+                                            <HelpTooltip
+                                                text={t('proxy.config.zai.mcp.web_reader_url_normalization_tooltip')}
+                                                ariaLabel={t('proxy.config.zai.mcp.web_reader_url_normalization')}
+                                                placement="right"
+                                                iconSize={12}
+                                            />
+                                        </label>
+                                        <select
+                                            className="select select-sm select-bordered w-full text-xs"
+                                            value={appConfig.proxy.zai?.mcp?.web_reader_url_normalization || 'off'}
+                                            onChange={(e) =>
+                                                updateZaiGeneralConfig({
+                                                    mcp: {
+                                                        ...(appConfig.proxy.zai?.mcp || {}),
+                                                        web_reader_url_normalization: e.target.value as any,
+                                                    } as any,
+                                                })
+                                            }
+                                            disabled={!appConfig.proxy.zai?.mcp?.web_reader_enabled}
+                                        >
+                                            <option value="off">
+                                                {t('proxy.config.zai.mcp.web_reader_url_normalization_options.off')}
+                                            </option>
+                                            <option value="strip_tracking_query">
+                                                {t('proxy.config.zai.mcp.web_reader_url_normalization_options.strip_tracking_query')}
+                                            </option>
+                                            <option value="strip_query">
+                                                {t('proxy.config.zai.mcp.web_reader_url_normalization_options.strip_query')}
+                                            </option>
+                                        </select>
+                                        <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                                            {t('proxy.config.zai.mcp.web_reader_url_normalization_hint')}
+                                        </p>
+                                    </div>
+
                                     {(appConfig.proxy.zai?.mcp?.enabled &&
                                         (appConfig.proxy.zai?.mcp?.web_search_enabled ||
                                             appConfig.proxy.zai?.mcp?.web_reader_enabled ||

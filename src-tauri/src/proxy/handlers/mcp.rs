@@ -12,6 +12,127 @@ use tokio_stream::wrappers::IntervalStream;
 
 use crate::proxy::server::AppState;
 
+fn should_strip_tracking_param(key: &str) -> bool {
+    let k = key.to_ascii_lowercase();
+    k.starts_with("utm_")
+        || k.starts_with("hsa_")
+        || matches!(
+            k.as_str(),
+            "gclid" | "fbclid" | "gbraid" | "wbraid" | "msclkid"
+        )
+}
+
+fn normalize_web_reader_url(
+    url_str: &str,
+    mode: crate::proxy::config::ZaiWebReaderUrlNormalizationMode,
+) -> Option<String> {
+    use crate::proxy::config::ZaiWebReaderUrlNormalizationMode as Mode;
+
+    if matches!(mode, Mode::Off) {
+        return None;
+    }
+
+    let mut url = url::Url::parse(url_str).ok()?;
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return None;
+    }
+
+    match mode {
+        Mode::Off => None,
+        Mode::StripQuery => {
+            if url.query().is_none() {
+                return None;
+            }
+            url.set_query(None);
+            Some(url.to_string())
+        }
+        Mode::StripTrackingQuery => {
+            let Some(q) = url.query() else {
+                return None;
+            };
+            let pairs: Vec<(String, String)> = url::form_urlencoded::parse(q.as_bytes())
+                .into_owned()
+                .filter(|(k, _)| !should_strip_tracking_param(k))
+                .collect();
+
+            // If nothing changes, keep as-is.
+            let original_len = url::form_urlencoded::parse(q.as_bytes()).count();
+            if pairs.len() == original_len {
+                return None;
+            }
+
+            if pairs.is_empty() {
+                url.set_query(None);
+                return Some(url.to_string());
+            }
+
+            let mut ser = url::form_urlencoded::Serializer::new(String::new());
+            for (k, v) in pairs {
+                ser.append_pair(&k, &v);
+            }
+            let new_q = ser.finish();
+            url.set_query(Some(&new_q));
+            Some(url.to_string())
+        }
+    }
+}
+
+fn maybe_normalize_web_reader_body(
+    collected: bytes::Bytes,
+    mode: crate::proxy::config::ZaiWebReaderUrlNormalizationMode,
+) -> bytes::Bytes {
+    use serde_json::Value;
+
+    if matches!(mode, crate::proxy::config::ZaiWebReaderUrlNormalizationMode::Off) {
+        return collected;
+    }
+
+    let Ok(mut v) = serde_json::from_slice::<Value>(&collected) else {
+        return collected;
+    };
+
+    // Expect JSON-RPC: { method: "tools/call", params: { name, arguments: { url } } }
+    let is_tools_call = v
+        .get("method")
+        .and_then(|m| m.as_str())
+        .map(|m| m == "tools/call")
+        .unwrap_or(false);
+    if !is_tools_call {
+        return collected;
+    }
+
+    let tool_name = v
+        .get("params")
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("");
+    if tool_name != "webReader" {
+        return collected;
+    }
+
+    let Some(url_value) = v
+        .get_mut("params")
+        .and_then(|p| p.get_mut("arguments"))
+        .and_then(|a| a.get_mut("url"))
+    else {
+        return collected;
+    };
+
+    let Some(url_str) = url_value.as_str() else {
+        return collected;
+    };
+
+    let Some(normalized) = normalize_web_reader_url(url_str, mode) else {
+        return collected;
+    };
+
+    *url_value = Value::String(normalized);
+    match serde_json::to_vec(&v) {
+        Ok(bytes) => bytes::Bytes::from(bytes),
+        Err(_) => collected,
+    }
+}
+
 fn build_client(
     upstream_proxy: crate::proxy::config::UpstreamProxyConfig,
     timeout_secs: u64,
@@ -65,7 +186,7 @@ async fn forward_mcp(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
     };
 
-    let collected = match to_bytes(body, 100 * 1024 * 1024).await {
+    let mut collected = match to_bytes(body, 100 * 1024 * 1024).await {
         Ok(b) => b,
         Err(e) => {
             return (
@@ -75,6 +196,11 @@ async fn forward_mcp(
                 .into_response();
         }
     };
+
+    // Optional normalization for Web Reader tool calls to improve upstream compatibility.
+    if method == Method::POST && upstream_url.contains("/mcp/web_reader/") {
+        collected = maybe_normalize_web_reader_body(collected, zai.mcp.web_reader_url_normalization);
+    }
 
     let mut headers = copy_passthrough_headers(&incoming_headers);
     // z.ai MCP server requires Accept to include both application/json and text/event-stream.

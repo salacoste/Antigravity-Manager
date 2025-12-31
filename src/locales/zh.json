@@ -345,20 +345,28 @@
                     "pooled": "加入队列（占 1 个槽位）",
                     "fallback": "仅兜底"
                 },
-                "mcp": {
-                    "title": "MCP 服务（通过本地代理）",
-                    "title_tooltip": "在本地代理上暴露可选的 /mcp/* 端点，供 MCP 客户端直连。仅在服务运行、z.ai 配置完成且对应开关开启时可用。",
-                    "enabled": "启用 MCP 反代",
-                    "enabled_tooltip": "MCP 端点总开关；关闭时所有 /mcp/* 路由将返回 404。",
-                    "web_search": "网页搜索",
-                    "web_search_tooltip": "启用后开放 /mcp/web_search_prime/mcp，并转发到 z.ai 的 Web Search MCP 上游。",
-                    "web_reader": "网页阅读",
-                    "web_reader_tooltip": "启用后开放 /mcp/web_reader/mcp，并转发到 z.ai 的 Web Reader MCP 上游。",
-                    "zread": "zread",
-                    "zread_tooltip": "启用后开放 /mcp/zread/mcp，并转发到 z.ai 的 zread MCP 上游（偏文档/仓库阅读工具，不是网页阅读器）。",
-                    "vision": "视觉",
-                    "vision_tooltip": "启用后开放 /mcp/zai-mcp-server/mcp（本地 MCP 服务），提供视觉相关工具能力，并通过 z.ai 执行。",
-                    "local_endpoints": "本地地址（在 MCP 客户端中配置以下 URL）：",
+	                "mcp": {
+	                    "title": "MCP 服务（通过本地代理）",
+	                    "title_tooltip": "在本地代理上暴露可选的 /mcp/* 端点，供 MCP 客户端直连。仅在服务运行、z.ai 配置完成且对应开关开启时可用。",
+	                    "enabled": "启用 MCP 反代",
+	                    "enabled_tooltip": "MCP 端点总开关；关闭时所有 /mcp/* 路由将返回 404。",
+	                    "web_search": "网页搜索",
+	                    "web_search_tooltip": "启用后开放 /mcp/web_search_prime/mcp，并转发到 z.ai 的 Web Search MCP 上游。",
+	                    "web_reader": "网页阅读",
+	                    "web_reader_tooltip": "启用后开放 /mcp/web_reader/mcp，并转发到 z.ai 的 Web Reader MCP 上游。",
+	                    "web_reader_url_normalization": "网页阅读 URL 规范化",
+	                    "web_reader_url_normalization_tooltip": "可选地在转发到上游前，对 webReader 工具调用的 URL 做重写/清理。适用于某些站点因追踪参数过长导致解析失败的情况。",
+	                    "web_reader_url_normalization_hint": "仅对 tools/call 且工具名为 webReader 的请求生效；其他 MCP 工具与端点不做修改。",
+	                    "web_reader_url_normalization_options": {
+	                        "off": "关闭（不修改）",
+	                        "strip_tracking_query": "移除常见追踪参数（utm_*、hsa_*、gclid、fbclid、gbraid、wbraid、msclkid）",
+	                        "strip_query": "移除整个 query（?…）"
+	                    },
+	                    "zread": "zread",
+	                    "zread_tooltip": "启用后开放 /mcp/zread/mcp，并转发到 z.ai 的 zread MCP 上游（偏文档/仓库阅读工具，不是网页阅读器）。",
+	                    "vision": "视觉",
+	                    "vision_tooltip": "启用后开放 /mcp/zai-mcp-server/mcp（本地 MCP 服务），提供视觉相关工具能力，并通过 z.ai 执行。",
+	                    "local_endpoints": "本地地址（在 MCP 客户端中配置以下 URL）：",
                     "local_endpoints_tooltip": "把这些 URL 填到你的 MCP 客户端里即可。它们使用同一个代理端口，并遵循当前的鉴权策略。"
                 }
             },

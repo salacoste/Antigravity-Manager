@@ -69,8 +69,28 @@ pub struct ZaiMcpConfig {
     pub web_reader_enabled: bool,
     #[serde(default)]
     pub zread_enabled: bool,
+    /// Optional URL normalization for the Web Reader MCP server.
+    /// Helps with upstream quirks around long/tracking query strings.
+    #[serde(default)]
+    pub web_reader_url_normalization: ZaiWebReaderUrlNormalizationMode,
     #[serde(default)]
     pub vision_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ZaiWebReaderUrlNormalizationMode {
+    Off,
+    /// Removes common tracking parameters like utm_*, gclid, fbclid, gbraid, wbraid, msclkid, hsa_*.
+    StripTrackingQuery,
+    /// Removes the entire query string (`?…`) from the URL.
+    StripQuery,
+}
+
+impl Default for ZaiWebReaderUrlNormalizationMode {
+    fn default() -> Self {
+        Self::Off
+    }
 }
 
 impl Default for ZaiMcpConfig {
@@ -80,6 +100,7 @@ impl Default for ZaiMcpConfig {
             web_search_enabled: false,
             web_reader_enabled: false,
             zread_enabled: false,
+            web_reader_url_normalization: ZaiWebReaderUrlNormalizationMode::Off,
             vision_enabled: false,
         }
     }

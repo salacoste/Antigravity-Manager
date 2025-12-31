@@ -25,6 +25,16 @@ Local endpoint:
 Upstream:
 - `https://api.z.ai/api/mcp/web_reader/mcp`
 
+Optional URL normalization:
+- Config: `proxy.zai.mcp.web_reader_url_normalization`
+  - `off` (default): forward URL as-is
+  - `strip_tracking_query`: removes common tracking params (e.g. `utm_*`, `hsa_*`, `gclid`, `fbclid`, `gbraid`, `wbraid`, `msclkid`)
+  - `strip_query`: removes the entire query string (`?…`)
+- Behavior:
+  - Applies only to JSON-RPC `tools/call` where `params.name == "webReader"` and `params.arguments.url` is an `http(s)` URL.
+  - Other MCP methods/tools/endpoints are not modified.
+  - This exists to work around upstream quirks observed with long/tracking query strings (sometimes rejected as “URL format”).
+
 Implementation:
 - Handler: [`src-tauri/src/proxy/handlers/mcp.rs`](../../src-tauri/src/proxy/handlers/mcp.rs) (`handle_web_reader`)
 

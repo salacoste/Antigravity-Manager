@@ -344,20 +344,28 @@
                     "pooled": "Pooled (one slot)",
                     "fallback": "Fallback only"
                 },
-                "mcp": {
-                    "title": "MCP Servers (via local proxy)",
-                    "title_tooltip": "Exposes optional /mcp/* endpoints on this local proxy so MCP clients can connect. Available only when the service is running, z.ai is configured, and the corresponding toggles are enabled.",
-                    "enabled": "Enable MCP proxy",
-                    "enabled_tooltip": "Master switch for MCP endpoints. When off, all /mcp/* routes return 404.",
-                    "web_search": "Web Search",
-                    "web_search_tooltip": "Exposes /mcp/web_search_prime/mcp and forwards requests to the z.ai Web Search MCP upstream.",
-                    "web_reader": "Web Reader",
-                    "web_reader_tooltip": "Exposes /mcp/web_reader/mcp and forwards requests to the z.ai Web Reader MCP upstream.",
-                    "zread": "zread",
-                    "zread_tooltip": "Exposes /mcp/zread/mcp and forwards requests to the z.ai zread MCP upstream (document/repo reading tools, not the web reader).",
-                    "vision": "Vision",
-                    "vision_tooltip": "Exposes /mcp/zai-mcp-server/mcp (local MCP server) that provides vision tools backed by z.ai.",
-                    "local_endpoints": "Local endpoints (configure your MCP client to use these URLs):",
+	                "mcp": {
+	                    "title": "MCP Servers (via local proxy)",
+	                    "title_tooltip": "Exposes optional /mcp/* endpoints on this local proxy so MCP clients can connect. Available only when the service is running, z.ai is configured, and the corresponding toggles are enabled.",
+	                    "enabled": "Enable MCP proxy",
+	                    "enabled_tooltip": "Master switch for MCP endpoints. When off, all /mcp/* routes return 404.",
+	                    "web_search": "Web Search",
+	                    "web_search_tooltip": "Exposes /mcp/web_search_prime/mcp and forwards requests to the z.ai Web Search MCP upstream.",
+	                    "web_reader": "Web Reader",
+	                    "web_reader_tooltip": "Exposes /mcp/web_reader/mcp and forwards requests to the z.ai Web Reader MCP upstream.",
+	                    "web_reader_url_normalization": "Web Reader URL normalization",
+	                    "web_reader_url_normalization_tooltip": "Optionally rewrites webReader tool call URLs before forwarding upstream. Useful when sites break due to long tracking query strings.",
+	                    "web_reader_url_normalization_hint": "Applies only to tools/call for the webReader tool; other MCP tools and endpoints are not modified.",
+	                    "web_reader_url_normalization_options": {
+	                        "off": "Off (no changes)",
+	                        "strip_tracking_query": "Strip tracking query params (utm_*, hsa_*, gclid, fbclid, gbraid, wbraid, msclkid)",
+	                        "strip_query": "Strip full query string (?...)"
+	                    },
+	                    "zread": "zread",
+	                    "zread_tooltip": "Exposes /mcp/zread/mcp and forwards requests to the z.ai zread MCP upstream (document/repo reading tools, not the web reader).",
+	                    "vision": "Vision",
+	                    "vision_tooltip": "Exposes /mcp/zai-mcp-server/mcp (local MCP server) that provides vision tools backed by z.ai.",
+	                    "local_endpoints": "Local endpoints (configure your MCP client to use these URLs):",
                     "local_endpoints_tooltip": "Use these URLs in your MCP client. They share the same host/port as the API Proxy and follow the proxy authorization policy."
                 }
             },
