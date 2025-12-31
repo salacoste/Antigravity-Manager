@@ -35,6 +35,9 @@ Local endpoint:
 Upstream:
 - `https://api.z.ai/api/mcp/zread/mcp`
 
+Notes:
+- This MCP server exposes repository/document reading tools (e.g. `search_doc`, `read_file`, `get_repo_structure`). It is not the same as the Web Reader server.
+
 Implementation:
 - Handler: [`src-tauri/src/proxy/handlers/mcp.rs`](../../src-tauri/src/proxy/handlers/mcp.rs) (`handle_zread`)
 
