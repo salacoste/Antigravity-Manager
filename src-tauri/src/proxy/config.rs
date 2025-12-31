@@ -69,6 +69,10 @@ pub struct ZaiMcpConfig {
     pub web_reader_enabled: bool,
     #[serde(default)]
     pub zread_enabled: bool,
+    /// Optional API key override used only for remote z.ai MCP endpoints.
+    /// If empty, the proxy uses `proxy.zai.api_key`.
+    #[serde(default)]
+    pub api_key_override: String,
     /// Optional URL normalization for the Web Reader MCP server.
     /// Helps with upstream quirks around long/tracking query strings.
     #[serde(default)]
@@ -100,6 +104,7 @@ impl Default for ZaiMcpConfig {
             web_search_enabled: false,
             web_reader_enabled: false,
             zread_enabled: false,
+            api_key_override: String::new(),
             web_reader_url_normalization: ZaiWebReaderUrlNormalizationMode::Off,
             vision_enabled: false,
         }

@@ -98,6 +98,7 @@ Implementation:
 - Local proxy authorization (if enabled) applies to `/mcp/*` like any other proxy route:
   - Middleware: [`src-tauri/src/proxy/middleware/auth.rs`](../../src-tauri/src/proxy/middleware/auth.rs)
 - z.ai upstream authorization is always injected by the proxy using `proxy.zai.api_key`.
+- Optional: remote MCP endpoints can use a separate key via `proxy.zai.mcp.api_key_override` (when set, it overrides `proxy.zai.api_key` for Web Search/Web Reader/zread only).
 - MCP clients should only authenticate to the local proxy (if proxy auth is enabled); they should not embed any z.ai key.
 
 ## Streaming / content-type specifics

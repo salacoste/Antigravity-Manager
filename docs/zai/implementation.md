@@ -52,6 +52,7 @@ Config lives under `proxy.zai` (`src-tauri/src/proxy/config.rs`):
   - `web_search_enabled`
   - `web_reader_enabled`
   - `vision_enabled`
+  - `api_key_override` (optional; used only for remote MCP endpoints)
 
 Runtime hot update:
 - `save_config` hot-updates `auth`, `upstream_proxy`, `model mappings`, and `z.ai` without restart.

@@ -27,6 +27,7 @@ export interface ZaiMcpConfig {
     web_search_enabled: boolean;
     web_reader_enabled: boolean;
     zread_enabled: boolean;
+    api_key_override?: string;
     web_reader_url_normalization?: 'off' | 'strip_tracking_query' | 'strip_query';
     vision_enabled: boolean;
 }

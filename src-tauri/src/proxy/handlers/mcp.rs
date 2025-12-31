@@ -209,7 +209,12 @@ async fn forward_mcp(
         header::ACCEPT,
         HeaderValue::from_static("application/json, text/event-stream"),
     );
-    if let Ok(v) = HeaderValue::from_str(&format!("Bearer {}", zai.api_key)) {
+    let mcp_api_key = if !zai.mcp.api_key_override.trim().is_empty() {
+        zai.mcp.api_key_override.trim()
+    } else {
+        zai.api_key.trim()
+    };
+    if let Ok(v) = HeaderValue::from_str(&format!("Bearer {}", mcp_api_key)) {
         headers.insert(header::AUTHORIZATION, v);
     }
 

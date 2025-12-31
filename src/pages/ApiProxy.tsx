@@ -1304,6 +1304,36 @@ print(response.text)`;
                                 }
                             >
                                 <div className="space-y-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[11px] font-medium text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
+                                            {t('proxy.config.zai.mcp.api_key_override')}
+                                            <HelpTooltip
+                                                text={t('proxy.config.zai.mcp.api_key_override_tooltip')}
+                                                ariaLabel={t('proxy.config.zai.mcp.api_key_override')}
+                                                placement="right"
+                                                iconSize={12}
+                                            />
+                                        </label>
+                                        <input
+                                            type="password"
+                                            className="input input-sm input-bordered w-full font-mono text-xs"
+                                            value={appConfig.proxy.zai?.mcp?.api_key_override || ''}
+                                            onChange={(e) =>
+                                                updateZaiGeneralConfig({
+                                                    mcp: {
+                                                        ...(appConfig.proxy.zai?.mcp || {}),
+                                                        api_key_override: e.target.value,
+                                                    } as any,
+                                                })
+                                            }
+                                            placeholder={t('proxy.config.zai.mcp.api_key_override_placeholder')}
+                                            disabled={!appConfig.proxy.zai?.mcp?.enabled}
+                                        />
+                                        <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                                            {t('proxy.config.zai.mcp.api_key_override_hint')}
+                                        </p>
+                                    </div>
+
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         <label className="flex items-center gap-2 border border-gray-100 dark:border-base-200 p-2 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-base-200/50 transition-colors">
                                             <input
