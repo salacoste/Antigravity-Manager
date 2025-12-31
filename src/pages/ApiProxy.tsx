@@ -215,9 +215,16 @@ export default function ApiProxy() {
     const [selectedModelId, setSelectedModelId] = useState('gemini-3-flash');
     const [zaiAvailableModels, setZaiAvailableModels] = useState<string[]>([]);
     const [zaiModelsLoading, setZaiModelsLoading] = useState(false);
-    const [, setZaiModelsError] = useState<string | null>(null);
+    const [zaiModelsError, setZaiModelsError] = useState<string | null>(null);
+    const [zaiDefaultModelIsCustom, setZaiDefaultModelIsCustom] = useState({
+        opus: false,
+        sonnet: false,
+        haiku: false,
+    });
+    const [zaiOverrideToIsCustom, setZaiOverrideToIsCustom] = useState<Record<string, boolean>>({});
     const [zaiNewMappingFrom, setZaiNewMappingFrom] = useState('');
     const [zaiNewMappingTo, setZaiNewMappingTo] = useState('');
+    const [zaiNewMappingToIsCustom, setZaiNewMappingToIsCustom] = useState(false);
 
     const zaiModelOptions = useMemo(() => {
         const unique = new Set(zaiAvailableModels);
@@ -227,6 +234,22 @@ export default function ApiProxy() {
     const zaiModelMapping = useMemo(() => {
         return appConfig?.proxy.zai?.model_mapping || {};
     }, [appConfig?.proxy.zai?.model_mapping]);
+
+    useEffect(() => {
+        if (!appConfig?.proxy?.zai) return;
+        if (zaiModelOptions.length === 0) return;
+
+        setZaiDefaultModelIsCustom({
+            opus: !!appConfig.proxy.zai.models?.opus && !zaiModelOptions.includes(appConfig.proxy.zai.models.opus),
+            sonnet: !!appConfig.proxy.zai.models?.sonnet && !zaiModelOptions.includes(appConfig.proxy.zai.models.sonnet),
+            haiku: !!appConfig.proxy.zai.models?.haiku && !zaiModelOptions.includes(appConfig.proxy.zai.models.haiku),
+        });
+    }, [
+        zaiModelOptions,
+        appConfig?.proxy?.zai?.models?.opus,
+        appConfig?.proxy?.zai?.models?.sonnet,
+        appConfig?.proxy?.zai?.models?.haiku,
+    ]);
 
     // 初始化加载
     useEffect(() => {
@@ -341,7 +364,8 @@ export default function ApiProxy() {
             setZaiAvailableModels(models);
         } catch (error: any) {
             console.error('Failed to fetch z.ai models:', error);
-            setZaiModelsError(error.toString());
+            setZaiAvailableModels([]);
+            setZaiModelsError(String(error));
         } finally {
             setZaiModelsLoading(false);
         }
@@ -396,6 +420,12 @@ export default function ApiProxy() {
                 }
             }
         };
+        setZaiOverrideToIsCustom((prev) => {
+            if (!prev[from]) return prev;
+            const next = { ...prev };
+            delete next[from];
+            return next;
+        });
         saveConfig(newConfig);
     };
 
@@ -897,104 +927,310 @@ print(response.text)`;
 
                                     {/* Model Mapping Section */}
                                     <div className="pt-4 border-t border-gray-100 dark:border-base-200">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                                                {t('proxy.config.zai.models.title')}
-                                            </h4>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest inline-flex items-center gap-1">
+                                                    {t('proxy.config.zai.models.title')}
+                                                    <HelpTooltip
+                                                        text={t('proxy.config.zai.models.title_tooltip')}
+                                                        ariaLabel={t('proxy.config.zai.models.title')}
+                                                        placement="right"
+                                                    />
+                                                </h4>
+                                                <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                                                    {t('proxy.config.zai.models.hint', { count: zaiModelOptions.length })}
+                                                </p>
+                                                {zaiModelsError && (
+                                                    <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-500">
+                                                        {t('proxy.config.zai.models.error', { error: zaiModelsError })}
+                                                    </p>
+                                                )}
+                                            </div>
                                             <button
                                                 onClick={refreshZaiModels}
-                                                disabled={zaiModelsLoading || !appConfig.proxy.zai?.api_key}
+                                                disabled={zaiModelsLoading || !(appConfig.proxy.zai?.api_key || '').trim()}
                                                 className="btn btn-ghost btn-xs gap-1"
                                             >
                                                 <RefreshCw size={12} className={zaiModelsLoading ? 'animate-spin' : ''} />
-                                                {t('proxy.config.zai.models.refresh')}
+                                                {zaiModelsLoading ? t('proxy.config.zai.models.refreshing') : t('proxy.config.zai.models.refresh')}
                                             </button>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            {['opus', 'sonnet', 'haiku'].map((family) => (
-                                                <div key={family} className="space-y-1">
-                                                    <label className="text-[10px] text-gray-500 capitalize">{family}</label>
-                                                    <div className="flex gap-1">
-                                                        {zaiModelOptions.length > 0 && (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                                            {(
+                                                [
+                                                    {
+                                                        id: 'opus' as const,
+                                                        labelKey: 'proxy.config.zai.models.opus',
+                                                        tooltipKey: 'proxy.config.zai.models.opus_tooltip',
+                                                    },
+                                                    {
+                                                        id: 'sonnet' as const,
+                                                        labelKey: 'proxy.config.zai.models.sonnet',
+                                                        tooltipKey: 'proxy.config.zai.models.sonnet_tooltip',
+                                                    },
+                                                    {
+                                                        id: 'haiku' as const,
+                                                        labelKey: 'proxy.config.zai.models.haiku',
+                                                        tooltipKey: 'proxy.config.zai.models.haiku_tooltip',
+                                                    },
+                                                ] as const
+                                            ).map(({ id, labelKey, tooltipKey }) => (
+                                                <div key={id} className="space-y-1">
+                                                    <label className="text-[10px] text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
+                                                        {t(labelKey)}
+                                                        <HelpTooltip text={t(tooltipKey)} ariaLabel={t(labelKey)} placement="right" iconSize={12} />
+                                                    </label>
+
+                                                    {zaiModelOptions.length > 0 ? (
+                                                        <div className="space-y-1">
                                                             <select
-                                                                className="select select-xs select-bordered max-w-[80px]"
-                                                                value=""
-                                                                onChange={(e) => e.target.value && updateZaiDefaultModels({ [family]: e.target.value })}
+                                                                className="select select-xs select-bordered w-full font-mono"
+                                                                value={
+                                                                    zaiDefaultModelIsCustom[id]
+                                                                        ? '__custom__'
+                                                                        : (appConfig.proxy.zai?.models?.[id] || '')
+                                                                }
+                                                                onChange={(e) => {
+                                                                    const next = e.target.value;
+                                                                    if (next === '__custom__') {
+                                                                        setZaiDefaultModelIsCustom((prev) => ({ ...prev, [id]: true }));
+                                                                        return;
+                                                                    }
+                                                                    setZaiDefaultModelIsCustom((prev) => ({ ...prev, [id]: false }));
+                                                                    updateZaiDefaultModels({ [id]: next } as any);
+                                                                }}
+                                                                disabled={zaiModelsLoading}
                                                             >
-                                                                <option value="">Select</option>
-                                                                {zaiModelOptions.map(m => <option key={m} value={m}>{m}</option>)}
+                                                                <option value="">{t('proxy.config.zai.models.select_placeholder')}</option>
+                                                                {zaiModelOptions.map((modelId) => (
+                                                                    <option key={modelId} value={modelId}>
+                                                                        {modelId}
+                                                                    </option>
+                                                                ))}
+                                                                <option value="__custom__">{t('proxy.config.zai.models.custom_option')}</option>
                                                             </select>
-                                                        )}
+
+                                                            {zaiDefaultModelIsCustom[id] && (
+                                                                <input
+                                                                    type="text"
+                                                                    className="input input-xs input-bordered w-full font-mono"
+                                                                    value={appConfig.proxy.zai?.models?.[id] || ''}
+                                                                    onChange={(e) => updateZaiDefaultModels({ [id]: e.target.value } as any)}
+                                                                    placeholder={t('proxy.config.zai.models.to_placeholder')}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ) : (
                                                         <input
                                                             type="text"
                                                             className="input input-xs input-bordered w-full font-mono"
-                                                            value={appConfig.proxy.zai?.models?.[family as keyof typeof appConfig.proxy.zai.models] || ''}
-                                                            onChange={(e) => updateZaiDefaultModels({ [family]: e.target.value })}
+                                                            value={appConfig.proxy.zai?.models?.[id] || ''}
+                                                            onChange={(e) => updateZaiDefaultModels({ [id]: e.target.value } as any)}
+                                                            placeholder={t('proxy.config.zai.models.to_placeholder')}
                                                         />
-                                                    </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
 
                                         <details className="mt-3 group">
                                             <summary className="cursor-pointer text-[10px] text-gray-500 hover:text-blue-500 transition-colors inline-flex items-center gap-1 select-none">
-                                                <Settings size={12} />
                                                 {t('proxy.config.zai.models.advanced_title')}
+                                                <HelpTooltip
+                                                    text={t('proxy.config.zai.models.advanced_tooltip')}
+                                                    ariaLabel={t('proxy.config.zai.models.advanced_title')}
+                                                    placement="right"
+                                                    iconSize={12}
+                                                />
                                             </summary>
                                             <div className="mt-2 space-y-2 p-2 bg-gray-50 dark:bg-base-200/50 rounded-lg">
-                                                {/* Advanced Mapping Table */}
-                                                {Object.entries(zaiModelMapping).map(([from, to]) => (
-                                                    <div key={from} className="flex items-center gap-2">
-                                                        <div className="flex-1 bg-white dark:bg-base-100 px-2 py-1 rounded border border-gray-200 dark:border-base-300 text-[10px] font-mono truncate" title={from}>{from}</div>
-                                                        <ArrowRight size={10} className="text-gray-400" />
-                                                        <div className="flex-[1.5] flex gap-1">
-                                                            {zaiModelOptions.length > 0 && (
-                                                                <select
-                                                                    className="select select-xs select-ghost h-6 min-h-0 px-1"
-                                                                    value=""
-                                                                    onChange={(e) => e.target.value && upsertZaiModelMapping(from, e.target.value)}
-                                                                >
-                                                                    <option value="">▼</option>
-                                                                    {zaiModelOptions.map(m => <option key={m} value={m}>{m}</option>)}
-                                                                </select>
-                                                            )}
+                                                {Object.keys(zaiModelMapping).length === 0 ? (
+                                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                                                        {t('proxy.config.zai.models.empty')}
+                                                    </p>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        {Object.entries(zaiModelMapping)
+                                                            .sort(([a], [b]) => a.localeCompare(b))
+                                                            .map(([from, to]) => (
+                                                                <div key={from} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                                                                    <div className="md:col-span-5">
+                                                                        <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1">
+                                                                            {t('proxy.config.zai.models.from_label')}
+                                                                        </label>
+                                                                        <input
+                                                                            type="text"
+                                                                            value={from}
+                                                                            readOnly
+                                                                            className="input input-xs input-bordered w-full font-mono bg-gray-50 dark:bg-base-300"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="md:col-span-6">
+                                                                        <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1">
+                                                                            {t('proxy.config.zai.models.to_label')}
+                                                                        </label>
+                                                                        {zaiModelOptions.length > 0 ? (
+                                                                            <div className="space-y-1">
+                                                                                <select
+                                                                                    className="select select-xs select-bordered w-full font-mono"
+                                                                                    value={
+                                                                                        (zaiOverrideToIsCustom[from] ??
+                                                                                            (!to || !zaiModelOptions.includes(to)))
+                                                                                            ? '__custom__'
+                                                                                            : to
+                                                                                    }
+                                                                                    onChange={(e) => {
+                                                                                        const next = e.target.value;
+                                                                                        if (next === '__custom__') {
+                                                                                            setZaiOverrideToIsCustom((prev) => ({
+                                                                                                ...prev,
+                                                                                                [from]: true,
+                                                                                            }));
+                                                                                            return;
+                                                                                        }
+                                                                                        setZaiOverrideToIsCustom((prev) => ({
+                                                                                            ...prev,
+                                                                                            [from]: false,
+                                                                                        }));
+                                                                                        upsertZaiModelMapping(from, next);
+                                                                                    }}
+                                                                                    disabled={zaiModelsLoading}
+                                                                                >
+                                                                                    <option value="">
+                                                                                        {t('proxy.config.zai.models.select_placeholder')}
+                                                                                    </option>
+                                                                                    {zaiModelOptions.map((modelId) => (
+                                                                                        <option key={modelId} value={modelId}>
+                                                                                            {modelId}
+                                                                                        </option>
+                                                                                    ))}
+                                                                                    <option value="__custom__">
+                                                                                        {t('proxy.config.zai.models.custom_option')}
+                                                                                    </option>
+                                                                                </select>
+                                                                                {(zaiOverrideToIsCustom[from] ??
+                                                                                    (!to || !zaiModelOptions.includes(to))) && (
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        className="input input-xs input-bordered w-full font-mono"
+                                                                                        value={to}
+                                                                                        onChange={(e) =>
+                                                                                            upsertZaiModelMapping(from, e.target.value)
+                                                                                        }
+                                                                                        placeholder={t('proxy.config.zai.models.to_placeholder')}
+                                                                                    />
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <input
+                                                                                type="text"
+                                                                                className="input input-xs input-bordered w-full font-mono"
+                                                                                value={to}
+                                                                                onChange={(e) => upsertZaiModelMapping(from, e.target.value)}
+                                                                                placeholder={t('proxy.config.zai.models.to_placeholder')}
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="md:col-span-1 flex md:justify-end">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-ghost btn-xs text-gray-500 hover:text-red-500"
+                                                                            onClick={() => removeZaiModelMapping(from)}
+                                                                            title={t('common.delete')}
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                    </div>
+                                                )}
+
+                                                <div className="pt-3 border-t border-gray-200/50">
+                                                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                                                        <div className="md:col-span-5">
+                                                            <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1">
+                                                                {t('proxy.config.zai.models.from_label')}
+                                                            </label>
                                                             <input
-                                                                type="text"
-                                                                className="input input-xs input-bordered w-full font-mono h-6"
-                                                                value={to}
-                                                                onChange={(e) => upsertZaiModelMapping(from, e.target.value)}
+                                                                className="input input-xs input-bordered w-full font-mono"
+                                                                placeholder={t('proxy.config.zai.models.from_placeholder')}
+                                                                value={zaiNewMappingFrom}
+                                                                onChange={(e) => setZaiNewMappingFrom(e.target.value)}
                                                             />
                                                         </div>
-                                                        <button onClick={() => removeZaiModelMapping(from)} className="text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                                                        <div className="md:col-span-6">
+                                                            <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-1">
+                                                                {t('proxy.config.zai.models.to_label')}
+                                                            </label>
+                                                            {zaiModelOptions.length > 0 ? (
+                                                                <div className="space-y-1">
+                                                                    <select
+                                                                        className="select select-xs select-bordered w-full font-mono"
+                                                                        value={
+                                                                            zaiNewMappingToIsCustom ? '__custom__' : (zaiNewMappingTo || '')
+                                                                        }
+                                                                        onChange={(e) => {
+                                                                            const next = e.target.value;
+                                                                            if (next === '__custom__') {
+                                                                                setZaiNewMappingToIsCustom(true);
+                                                                                return;
+                                                                            }
+                                                                            setZaiNewMappingToIsCustom(false);
+                                                                            setZaiNewMappingTo(next);
+                                                                        }}
+                                                                        disabled={zaiModelsLoading}
+                                                                    >
+                                                                        <option value="">
+                                                                            {t('proxy.config.zai.models.select_placeholder')}
+                                                                        </option>
+                                                                        {zaiModelOptions.map((modelId) => (
+                                                                            <option key={modelId} value={modelId}>
+                                                                                {modelId}
+                                                                            </option>
+                                                                        ))}
+                                                                        <option value="__custom__">
+                                                                            {t('proxy.config.zai.models.custom_option')}
+                                                                        </option>
+                                                                    </select>
+                                                                    {zaiNewMappingToIsCustom && (
+                                                                        <input
+                                                                            type="text"
+                                                                            className="input input-xs input-bordered w-full font-mono"
+                                                                            value={zaiNewMappingTo}
+                                                                            onChange={(e) => setZaiNewMappingTo(e.target.value)}
+                                                                            placeholder={t('proxy.config.zai.models.to_placeholder')}
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    className="input input-xs input-bordered w-full font-mono"
+                                                                    value={zaiNewMappingTo}
+                                                                    onChange={(e) => setZaiNewMappingTo(e.target.value)}
+                                                                    placeholder={t('proxy.config.zai.models.to_placeholder')}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div className="md:col-span-1 flex md:justify-end">
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-xs btn-primary"
+                                                                onClick={() => {
+                                                                    const from = zaiNewMappingFrom.trim();
+                                                                    const to = zaiNewMappingTo.trim();
+                                                                    if (!from || !to) return;
+                                                                    upsertZaiModelMapping(from, to);
+                                                                    setZaiNewMappingFrom('');
+                                                                    setZaiNewMappingTo('');
+                                                                }}
+                                                            >
+                                                                {t('proxy.config.zai.models.add_rule')}
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                ))}
-
-                                                <div className="flex items-center gap-2 pt-2 border-t border-gray-200/50">
-                                                    <input
-                                                        className="input input-xs input-bordered flex-1 font-mono"
-                                                        placeholder="From (e.g. claude-3-opus)"
-                                                        value={zaiNewMappingFrom}
-                                                        onChange={e => setZaiNewMappingFrom(e.target.value)}
-                                                    />
-                                                    <input
-                                                        className="input input-xs input-bordered flex-1 font-mono"
-                                                        placeholder="To (e.g. glm-4)"
-                                                        value={zaiNewMappingTo}
-                                                        onChange={e => setZaiNewMappingTo(e.target.value)}
-                                                    />
-                                                    <button
-                                                        className="btn btn-xs btn-primary"
-                                                        onClick={() => {
-                                                            if (zaiNewMappingFrom && zaiNewMappingTo) {
-                                                                upsertZaiModelMapping(zaiNewMappingFrom, zaiNewMappingTo);
-                                                                setZaiNewMappingFrom('');
-                                                                setZaiNewMappingTo('');
-                                                            }
-                                                        }}
-                                                    >
-                                                        <Plus size={12} />
-                                                    </button>
                                                 </div>
                                             </div>
                                         </details>
