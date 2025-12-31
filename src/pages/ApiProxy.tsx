@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
@@ -258,6 +258,8 @@ export default function ApiProxy() {
         return appConfig.proxy.allow_lan_access ? 'all_except_health' : 'off';
     }, [appConfig]);
 
+    const saveSeqRef = useRef(0);
+
     // 初始化加载
     useEffect(() => {
         loadConfig();
@@ -285,11 +287,18 @@ export default function ApiProxy() {
     };
 
     const saveConfig = async (newConfig: AppConfig) => {
+        const prevConfig = appConfig;
+        const seq = ++saveSeqRef.current;
+        // Optimistic UI update so switches/sliders feel responsive.
+        setAppConfig(newConfig);
         try {
             await invoke('save_config', { config: newConfig });
-            setAppConfig(newConfig);
         } catch (error) {
             console.error('保存配置失败:', error);
+            // Revert only if this save is still the latest attempted write.
+            if (saveSeqRef.current === seq && prevConfig) {
+                setAppConfig(prevConfig);
+            }
             alert('保存配置失败: ' + error);
         }
     };
