@@ -251,6 +251,13 @@ export default function ApiProxy() {
         appConfig?.proxy?.zai?.models?.haiku,
     ]);
 
+    const effectiveAuthMode = useMemo(() => {
+        if (!appConfig) return 'off' as const;
+        const mode = (appConfig.proxy.auth_mode || 'off') as NonNullable<ProxyConfig['auth_mode']>;
+        if (mode !== 'auto') return mode;
+        return appConfig.proxy.allow_lan_access ? 'all_except_health' : 'off';
+    }, [appConfig]);
+
     // 初始化加载
     useEffect(() => {
         loadConfig();
@@ -804,6 +811,11 @@ print(response.text)`;
                                             </select>
                                             <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
                                                 {t('proxy.config.auth.hint')}
+                                            </p>
+                                            <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                                                {t('proxy.config.auth.effective', {
+                                                    mode: t(`proxy.config.auth.modes.${effectiveAuthMode}`),
+                                                })}
                                             </p>
                                         </div>
                                     </div>
