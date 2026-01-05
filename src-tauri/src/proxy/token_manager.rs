@@ -1,6 +1,6 @@
 // 移除冗余的顶层导入，因为这些在代码中已由 full path 或局部导入处理
 use dashmap::DashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -19,6 +19,8 @@ pub struct ProxyToken {
     pub account_path: PathBuf,  // 账号文件路径，用于更新
     pub project_id: Option<String>,
     pub subscription_tier: Option<String>, // "FREE" | "PRO" | "ULTRA"
+    pub quota_models: Option<HashMap<String, i32>>, // model_id -> remaining percentage
+    pub quota_is_forbidden: bool,
 }
 
 pub struct TokenManager {
@@ -163,6 +165,29 @@ impl TokenManager {
             .and_then(|q| q.get("subscription_tier"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+
+        // 提取配额模型列表 (用于路由可用性判断)
+        let quota_is_forbidden = account.get("quota")
+            .and_then(|q| q.get("is_forbidden"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let quota_models = account.get("quota")
+            .and_then(|q| q.get("models"))
+            .and_then(|v| v.as_array())
+            .map(|models| {
+                let mut map = HashMap::new();
+                for model in models {
+                    let name = model.get("name").and_then(|v| v.as_str());
+                    let percentage = model.get("percentage").and_then(|v| {
+                        v.as_i64().or_else(|| v.as_f64().map(|f| f.round() as i64))
+                    });
+                    if let (Some(name), Some(percentage)) = (name, percentage) {
+                        map.insert(name.to_string(), percentage as i32);
+                    }
+                }
+                map
+            });
         
         Ok(Some(ProxyToken {
             account_id,
@@ -174,7 +199,42 @@ impl TokenManager {
             account_path: path.clone(),
             project_id,
             subscription_tier,
+            quota_models,
+            quota_is_forbidden,
         }))
+    }
+
+    /// 快照当前池内可用模型 (基于配额数据)
+    pub fn model_availability_snapshot(&self) -> crate::proxy::common::model_mapping::ModelAvailability {
+        use crate::proxy::common::model_mapping::ModelAvailability;
+
+        let mut models = HashSet::new();
+        let mut has_unknown_quota = false;
+
+        for token in self.tokens.iter() {
+            let token = token.value();
+            if token.quota_is_forbidden {
+                continue;
+            }
+
+            match &token.quota_models {
+                Some(quota_models) => {
+                    for (model, percentage) in quota_models {
+                        if *percentage > 0 {
+                            models.insert(model.clone());
+                        }
+                    }
+                }
+                None => {
+                    has_unknown_quota = true;
+                }
+            }
+        }
+
+        ModelAvailability {
+            models,
+            has_unknown_quota,
+        }
     }
     
     /// 获取当前可用的 Token（支持粘性会话与智能调度）

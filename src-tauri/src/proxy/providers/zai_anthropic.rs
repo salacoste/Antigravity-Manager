@@ -15,13 +15,29 @@ fn sanitize_body_for_zai(mut body: Value) -> Value {
     // it rejects some optional sampling parameters (observed: `temperature`, `top_p`).
     // To keep client compatibility (e.g. Vercel AI SDK / OpenCode), drop them when present.
     if let Some(obj) = body.as_object_mut() {
+        let max_tokens = obj.get("max_tokens").and_then(|v| v.as_u64());
         obj.remove("temperature");
         obj.remove("top_p");
         // `effort` is a client hint not supported by all upstreams.
         obj.remove("effort");
         if let Some(thinking) = obj.get_mut("thinking").and_then(|v| v.as_object_mut()) {
             if let Some(budget) = thinking.remove("budgetTokens") {
-                thinking.entry("budget_tokens".to_string()).or_insert(budget);
+                thinking.insert("budget_tokens".to_string(), budget);
+            }
+            let budget_tokens = thinking
+                .get("budget_tokens")
+                .and_then(|v| v.as_u64());
+            if let (Some(max_tokens), Some(budget_tokens)) = (max_tokens, budget_tokens) {
+                if max_tokens <= budget_tokens {
+                    let adjusted = max_tokens.saturating_sub(1);
+                    tracing::warn!(
+                        "[z.ai] Adjusting thinking.budget_tokens {} -> {} to satisfy max_tokens ({}) constraint",
+                        budget_tokens,
+                        adjusted,
+                        max_tokens
+                    );
+                    thinking.insert("budget_tokens".to_string(), Value::from(adjusted));
+                }
             }
         }
     }

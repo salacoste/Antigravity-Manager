@@ -5,6 +5,27 @@ use super::models::*;
 use crate::proxy::mappers::signature_store::get_thought_signature;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static THINKING_REQUESTS: AtomicU64 = AtomicU64::new(0);
+static THINKING_DISABLED: AtomicU64 = AtomicU64::new(0);
+
+fn log_thinking_disable(reason: &str) {
+    let disabled = THINKING_DISABLED.fetch_add(1, Ordering::Relaxed) + 1;
+    let total = THINKING_REQUESTS.load(Ordering::Relaxed);
+    let ratio = if total > 0 {
+        (disabled as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    };
+    tracing::warn!(
+        "[Thinking-Mode] Disabled: {} | disabled {}/{} ({:.1}%)",
+        reason,
+        disabled,
+        total,
+        ratio
+    );
+}
 
 /// 清理消息中的 cache_control 字段
 /// 
@@ -115,6 +136,9 @@ pub fn transform_claude_request_in(
         .as_ref()
         .map(|t| t.type_ == "enabled")
         .unwrap_or(false);
+    if is_thinking_enabled {
+        THINKING_REQUESTS.fetch_add(1, Ordering::Relaxed);
+    }
 
     // [NEW FIX] Check if target model supports thinking
     // Only models with "-thinking" suffix or Claude models support thinking
@@ -127,6 +151,7 @@ pub fn transform_claude_request_in(
             "[Thinking-Mode] Target model '{}' does not support thinking. Force disabling thinking mode.",
             mapped_model
         );
+        log_thinking_disable("target model does not support thinking");
         is_thinking_enabled = false;
     }
 
@@ -136,6 +161,7 @@ pub fn transform_claude_request_in(
         let should_disable = should_disable_thinking_due_to_history(&claude_req.messages);
         if should_disable {
              tracing::warn!("[Thinking-Mode] Automatically disabling thinking checks due to incompatible tool-use history (mixed application)");
+             log_thinking_disable("incompatible tool-use history");
              is_thinking_enabled = false;
         }
     }
@@ -342,7 +368,7 @@ fn build_contents(
                             }
                         }
                         ContentBlock::Thinking { thinking, signature, .. } => {
-                            tracing::error!("[DEBUG-TRANSFORM] Processing thinking block. Sig: {:?}", signature);
+                            tracing::debug!("[DEBUG-TRANSFORM] Processing thinking block. Sig: {:?}", signature);
                             
                             // [FIX] If thinking is disabled (smart downgrade), convert ALL thinking blocks to text
                             // to avoid "thinking is disabled but message contains thinking" error
@@ -663,6 +689,7 @@ fn build_generation_config(
     is_thinking_enabled: bool
 ) -> Value {
     let mut config = json!({});
+    let max_tokens = claude_req.max_tokens.unwrap_or(64000);
 
     // Thinking 配置
     if let Some(thinking) = &claude_req.thinking {
@@ -677,6 +704,16 @@ fn build_generation_config(
                     has_web_search || claude_req.model.contains("gemini-2.5-flash");
                 if is_flash_model {
                     budget = budget.min(24576);
+                }
+                if max_tokens <= budget {
+                    let adjusted = max_tokens.saturating_sub(1);
+                    tracing::warn!(
+                        "[Thinking-Mode] Adjusting thinking budget {} -> {} to satisfy max_tokens ({}) constraint",
+                        budget,
+                        adjusted,
+                        max_tokens
+                    );
+                    budget = adjusted;
                 }
                 thinking_config["thinkingBudget"] = json!(budget);
             }
@@ -702,7 +739,6 @@ fn build_generation_config(
     }*/
 
     // max_tokens 映射为 maxOutputTokens (fallback to a safe default)
-    let max_tokens = claude_req.max_tokens.unwrap_or(64000);
     config["maxOutputTokens"] = json!(max_tokens);
 
     // Stop sequences: honor client-provided values when present, otherwise apply defaults.

@@ -14,13 +14,15 @@ pub async fn handle_detect_model(
         return (StatusCode::BAD_REQUEST, "Missing 'model' field").into_response();
     }
 
-    // 1. Resolve mapping
-    let mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
+    // 1. Resolve mapping (with availability)
+    let availability = state.token_manager.model_availability_snapshot();
+    let mapped_model = crate::proxy::common::model_mapping::resolve_model_route_with_availability(
         model_name,
         &*state.custom_mapping.read().await,
         &*state.openai_mapping.read().await,
         &*state.anthropic_mapping.read().await,
         false,  // Common 请求不应用 Claude 家族映射
+        Some(&availability),
     );
 
     // 2. Resolve capabilities

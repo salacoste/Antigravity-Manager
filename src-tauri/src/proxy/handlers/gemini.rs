@@ -57,17 +57,19 @@ pub async fn handle_generate(
     let token_manager = state.token_manager;
     let pool_size = token_manager.len();
     let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
+    let availability = token_manager.model_availability_snapshot();
     
     let mut last_error = String::new();
 
     for attempt in 0..max_attempts {
         // 3. 模型路由与配置解析
-        let mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
+        let mapped_model = crate::proxy::common::model_mapping::resolve_model_route_with_availability(
             &model_name,
             &*state.custom_mapping.read().await,
             &*state.openai_mapping.read().await,
             &*state.anthropic_mapping.read().await,
             false,  // Gemini 请求不应用 Claude 家族映射
+            Some(&availability),
         );
         // 提取 tools 列表以进行联网探测 (Gemini 风格可能是嵌套的)
         let tools_val: Option<Vec<Value>> = body.get("tools").and_then(|t| t.as_array()).map(|arr| {
@@ -83,6 +85,12 @@ pub async fn handle_generate(
         });
 
         let config = crate::proxy::mappers::common_utils::resolve_request_config(&model_name, &mapped_model, &tools_val);
+        info!(
+            "[Router] Gemini route: {} -> {} (type: {})",
+            model_name,
+            mapped_model,
+            config.request_type
+        );
 
         // 4. 获取 Token (使用准确的 request_type)
         // 提取 SessionId (粘性指纹)

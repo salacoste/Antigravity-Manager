@@ -75,6 +75,15 @@ OpenAI 兼容协议使用既有代理逻辑（映射 + Google 执行）。z.ai �
 - `proxy.openai_mapping` — 影响 OpenAI 协议
 - `proxy.custom_mapping` — 可选的自定义覆盖
 
+### 3.1 基于配额的可用性路由（quota gating）
+
+当账号配额数据可用时，代理会优先使用请求的模型，只在该模型无配额时降级。
+
+说明：
+- Claude/Gemini 请求：若配额缺失，保持请求模型，避免不必要降级。
+- OpenAI 兼容请求：仍按配置映射到 Gemini 目标（OpenAI 模型不在池中）。
+- 配额新鲜度会影响结果，请使用 UI 的“刷新配额”保持准确性。
+
 ### 规则优先级与相互作用说明（面向使用者）
 
 虽然 UI 里展示了多个 “Series Groups”，但路由解析顺序是确定的：

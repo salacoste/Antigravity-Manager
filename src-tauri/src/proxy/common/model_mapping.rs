@@ -1,6 +1,91 @@
 // 模型名称映射
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use once_cell::sync::Lazy;
+
+#[derive(Debug, Clone)]
+pub struct ModelAvailability {
+    pub models: HashSet<String>,
+    pub has_unknown_quota: bool,
+}
+
+impl ModelAvailability {
+    pub fn resolve_requested_model(&self, model: &str) -> Option<String> {
+        for candidate in expand_model_candidates(model) {
+            if self.models.contains(&candidate) {
+                return Some(candidate);
+            }
+        }
+
+        if self.has_unknown_quota && is_pool_model_name(model) {
+            return Some(model.to_string());
+        }
+
+        None
+    }
+
+    pub fn is_model_available(&self, model: &str) -> bool {
+        expand_model_candidates(model)
+            .iter()
+            .any(|candidate| self.models.contains(candidate))
+    }
+
+    pub fn can_use_original(&self, model: &str) -> bool {
+        self.resolve_requested_model(model).is_some()
+    }
+}
+
+fn is_pool_model_name(model: &str) -> bool {
+    let lower = model.to_lowercase();
+    if lower.starts_with("gemini-") {
+        return true;
+    }
+    if lower.starts_with("claude-") {
+        if CLAUDE_TO_GEMINI.contains_key(model) {
+            return true;
+        }
+        return lower.contains("opus") || lower.contains("sonnet") || lower.contains("haiku");
+    }
+    false
+}
+
+fn expand_model_candidates(model: &str) -> Vec<String> {
+    let trimmed = model.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    let mut candidates = Vec::new();
+    let mut base = trimmed.to_string();
+
+    if let Some(stripped) = base.strip_suffix("-online") {
+        base = stripped.to_string();
+    }
+
+    candidates.push(base.clone());
+
+    if base.starts_with("gemini-3-pro-image") && base != "gemini-3-pro-image" {
+        candidates.push("gemini-3-pro-image".to_string());
+    }
+
+    if base == "gemini-3-pro" {
+        candidates.push("gemini-3-pro-high".to_string());
+        candidates.push("gemini-3-pro-low".to_string());
+    }
+
+    if base.starts_with("claude-opus-4-5") && !base.contains("thinking") {
+        candidates.push("claude-opus-4-5-thinking".to_string());
+    }
+
+    if base.starts_with("claude-sonnet-4-5") && !base.contains("thinking") {
+        candidates.push("claude-sonnet-4-5-thinking".to_string());
+    }
+
+    if base.ends_with("-thinking") {
+        candidates.push(base.trim_end_matches("-thinking").to_string());
+    }
+
+    candidates
+}
 
 static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     let mut m = HashMap::new();
@@ -15,6 +100,7 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     m.insert("claude-3-5-sonnet-20241022", "claude-sonnet-4-5");
     m.insert("claude-3-5-sonnet-20240620", "claude-sonnet-4-5");
     m.insert("claude-opus-4", "claude-opus-4-5-thinking");
+    m.insert("claude-opus-4-5", "claude-opus-4-5-thinking");
     m.insert("claude-opus-4-5-20251101", "claude-opus-4-5-thinking");
     m.insert("claude-haiku-4", "claude-sonnet-4-5");
     m.insert("claude-3-haiku-20240307", "claude-sonnet-4-5");
@@ -43,6 +129,7 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     // Gemini 协议映射表
     m.insert("gemini-2.5-flash-lite", "gemini-2.5-flash-lite");
     m.insert("gemini-2.5-flash-thinking", "gemini-2.5-flash-thinking");
+    m.insert("gemini-3-pro", "gemini-3-pro-high");
     m.insert("gemini-3-pro-low", "gemini-3-pro-low");
     m.insert("gemini-3-pro-high", "gemini-3-pro-high");
     m.insert("gemini-3-pro-preview", "gemini-3-pro-preview");
@@ -145,6 +232,155 @@ pub async fn get_all_dynamic_models(
     sorted_ids
 }
 
+/// 核心模型路由解析引擎 (可选配额可用性控制)
+/// 优先级：Custom Mapping (精确) > Group Mapping (家族) > System Mapping (内置插件)
+pub fn resolve_model_route_with_availability(
+    original_model: &str,
+    custom_mapping: &std::collections::HashMap<String, String>,
+    openai_mapping: &std::collections::HashMap<String, String>,
+    anthropic_mapping: &std::collections::HashMap<String, String>,
+    apply_claude_family_mapping: bool,
+    availability: Option<&ModelAvailability>,
+) -> String {
+    let allow_target = |target: &str| {
+        availability.map_or(true, |a| a.is_model_available(target) || a.has_unknown_quota)
+    };
+
+    // 1. 检查自定义精确映射 (优先级最高)
+    if let Some(target) = custom_mapping.get(original_model) {
+        crate::modules::logger::log_info(&format!("[Router] 使用自定义精确映射: {} -> {}", original_model, target));
+        return target.clone();
+    }
+
+    // 2. 如果目标模型可用，优先使用原始模型
+    if let Some(availability) = availability {
+        if let Some(candidate) = availability.resolve_requested_model(original_model) {
+            return candidate;
+        }
+    }
+
+    let lower_model = original_model.to_lowercase();
+
+    // 3. 检查家族分组映射 (OpenAI 系)
+    // GPT-4 系列 (含 GPT-4 经典, o1, o3 等, 排除 4o/mini/turbo)
+    if (lower_model.starts_with("gpt-4") && !lower_model.contains("o") && !lower_model.contains("mini") && !lower_model.contains("turbo")) || 
+       lower_model.starts_with("o1-") || lower_model.starts_with("o3-") || lower_model == "gpt-4" {
+        if let Some(target) = openai_mapping.get("gpt-4-series") {
+            if allow_target(target) {
+                crate::modules::logger::log_info(&format!("[Router] 使用 GPT-4 系列映射: {} -> {}", original_model, target));
+                return target.clone();
+            }
+        }
+    }
+    
+    // GPT-4o / 3.5 系列 (均衡与轻量, 含 4o, mini, turbo)
+    if lower_model.contains("4o") || lower_model.starts_with("gpt-3.5") || (lower_model.contains("mini") && !lower_model.contains("gemini")) || lower_model.contains("turbo") {
+        if let Some(target) = openai_mapping.get("gpt-4o-series") {
+            if allow_target(target) {
+                crate::modules::logger::log_info(&format!("[Router] 使用 GPT-4o/3.5 系列映射: {} -> {}", original_model, target));
+                return target.clone();
+            }
+        }
+    }
+
+    // GPT-5 系列 (gpt-5, gpt-5.1, gpt-5.2 等)
+    if lower_model.starts_with("gpt-5") {
+        // 优先使用 gpt-5-series 映射，如果没有则使用 gpt-4-series
+        if let Some(target) = openai_mapping.get("gpt-5-series") {
+            if allow_target(target) {
+                crate::modules::logger::log_info(&format!("[Router] 使用 GPT-5 系列映射: {} -> {}", original_model, target));
+                return target.clone();
+            }
+        }
+        if let Some(target) = openai_mapping.get("gpt-4-series") {
+            if allow_target(target) {
+                crate::modules::logger::log_info(&format!("[Router] 使用 GPT-4 系列映射 (GPT-5 fallback): {} -> {}", original_model, target));
+                return target.clone();
+            }
+        }
+    }
+
+    // 4. 检查家族分组映射 (Anthropic 系)
+    if lower_model.starts_with("claude-") {
+        // [CRITICAL] 检查是否应用 Claude 家族映射
+        // 如果是非 CLI 请求（如 Cherry Studio），先检查是否为原生支持的直通模型
+        if !apply_claude_family_mapping {
+            if let Some(mapped) = CLAUDE_TO_GEMINI.get(original_model) {
+                if *mapped == original_model {
+                    // 原生支持的直通模型，跳过家族映射
+                    crate::modules::logger::log_info(&format!("[Router] 非 CLI 请求，跳过家族映射: {}", original_model));
+                    return original_model.to_string();
+                }
+            }
+        }
+
+        // Claude 家族映射 (优先于 series)
+        if apply_claude_family_mapping {
+            let family_key = if lower_model.contains("opus") {
+                Some("claude-opus-family")
+            } else if lower_model.contains("sonnet") {
+                Some("claude-sonnet-family")
+            } else if lower_model.contains("haiku") {
+                Some("claude-haiku-family")
+            } else {
+                None
+            };
+
+            if let Some(key) = family_key {
+                if let Some(target) = anthropic_mapping.get(key) {
+                    if allow_target(target) {
+                        crate::modules::logger::log_warn(&format!(
+                            "[Router] 使用 Anthropic 家族映射: {} -> {}",
+                            original_model,
+                            target
+                        ));
+                        return target.clone();
+                    }
+                }
+            }
+        }
+
+        // [NEW] Haiku 智能降级策略 (仅在无配额信息时启用)
+        // 将所有 Haiku 模型自动降级到 gemini-2.5-flash-lite (最轻量/便宜的模型)
+        if apply_claude_family_mapping
+            && availability.is_none()
+            && lower_model.contains("haiku")
+            && !anthropic_mapping.contains_key("claude-haiku-family")
+        {
+            crate::modules::logger::log_info(&format!(
+                "[Router] Haiku 智能降级 (CLI): {} -> gemini-2.5-flash-lite",
+                original_model
+            ));
+            return "gemini-2.5-flash-lite".to_string();
+        }
+
+        let family_key = if lower_model.contains("4-5") || lower_model.contains("4.5") {
+            "claude-4.5-series"
+        } else if lower_model.contains("3-5") || lower_model.contains("3.5") {
+            "claude-3.5-series"
+        } else {
+            "claude-default"
+        };
+
+        if let Some(target) = anthropic_mapping.get(family_key) {
+            if allow_target(target) {
+                crate::modules::logger::log_warn(&format!("[Router] 使用 Anthropic 系列映射: {} -> {}", original_model, target));
+                return target.clone();
+            }
+        }
+        
+        // 兜底兼容旧版精确映射
+        if let Some(target) = anthropic_mapping.get(original_model) {
+            if allow_target(target) {
+                return target.clone();
+            }
+        }
+    }
+
+    // 5. 下沉到系统默认映射逻辑
+    map_claude_model_to_gemini(original_model)
+}
+
 /// 核心模型路由解析引擎
 /// 优先级：Custom Mapping (精确) > Group Mapping (家族) > System Mapping (内置插件)
 /// 
@@ -159,88 +395,14 @@ pub fn resolve_model_route(
     anthropic_mapping: &std::collections::HashMap<String, String>,
     apply_claude_family_mapping: bool,
 ) -> String {
-    // 1. 检查自定义精确映射 (优先级最高)
-    if let Some(target) = custom_mapping.get(original_model) {
-        crate::modules::logger::log_info(&format!("[Router] 使用自定义精确映射: {} -> {}", original_model, target));
-        return target.clone();
-    }
-
-    let lower_model = original_model.to_lowercase();
-
-    // 2. 检查家族分组映射 (OpenAI 系)
-    // GPT-4 系列 (含 GPT-4 经典, o1, o3 等, 排除 4o/mini/turbo)
-    if (lower_model.starts_with("gpt-4") && !lower_model.contains("o") && !lower_model.contains("mini") && !lower_model.contains("turbo")) || 
-       lower_model.starts_with("o1-") || lower_model.starts_with("o3-") || lower_model == "gpt-4" {
-        if let Some(target) = openai_mapping.get("gpt-4-series") {
-            crate::modules::logger::log_info(&format!("[Router] 使用 GPT-4 系列映射: {} -> {}", original_model, target));
-            return target.clone();
-        }
-    }
-    
-    // GPT-4o / 3.5 系列 (均衡与轻量, 含 4o, mini, turbo)
-    if lower_model.contains("4o") || lower_model.starts_with("gpt-3.5") || (lower_model.contains("mini") && !lower_model.contains("gemini")) || lower_model.contains("turbo") {
-        if let Some(target) = openai_mapping.get("gpt-4o-series") {
-            crate::modules::logger::log_info(&format!("[Router] 使用 GPT-4o/3.5 系列映射: {} -> {}", original_model, target));
-            return target.clone();
-        }
-    }
-
-    // GPT-5 系列 (gpt-5, gpt-5.1, gpt-5.2 等)
-    if lower_model.starts_with("gpt-5") {
-        // 优先使用 gpt-5-series 映射，如果没有则使用 gpt-4-series
-        if let Some(target) = openai_mapping.get("gpt-5-series") {
-            crate::modules::logger::log_info(&format!("[Router] 使用 GPT-5 系列映射: {} -> {}", original_model, target));
-            return target.clone();
-        }
-        if let Some(target) = openai_mapping.get("gpt-4-series") {
-            crate::modules::logger::log_info(&format!("[Router] 使用 GPT-4 系列映射 (GPT-5 fallback): {} -> {}", original_model, target));
-            return target.clone();
-        }
-    }
-
-    // 3. 检查家族分组映射 (Anthropic 系)
-    if lower_model.starts_with("claude-") {
-        // [CRITICAL] 检查是否应用 Claude 家族映射
-        // 如果是非 CLI 请求（如 Cherry Studio），先检查是否为原生支持的直通模型
-        if !apply_claude_family_mapping {
-            if let Some(mapped) = CLAUDE_TO_GEMINI.get(original_model) {
-                if *mapped == original_model {
-                    // 原生支持的直通模型，跳过家族映射
-                    crate::modules::logger::log_info(&format!("[Router] 非 CLI 请求，跳过家族映射: {}", original_model));
-                    return original_model.to_string();
-                }
-            }
-        }
-        
-        // [NEW] Haiku 智能降级策略
-        // 将所有 Haiku 模型自动降级到 gemini-2.5-flash-lite (最轻量/便宜的模型)
-        // [FIX] 仅在 CLI 模式下生效 (apply_claude_family_mapping == true)
-        if apply_claude_family_mapping && lower_model.contains("haiku") {
-            crate::modules::logger::log_info(&format!("[Router] Haiku 智能降级 (CLI): {} -> gemini-2.5-flash-lite", original_model));
-            return "gemini-2.5-flash-lite".to_string();
-        }
-
-        let family_key = if lower_model.contains("4-5") || lower_model.contains("4.5") {
-            "claude-4.5-series"
-        } else if lower_model.contains("3-5") || lower_model.contains("3.5") {
-            "claude-3.5-series"
-        } else {
-            "claude-default"
-        };
-
-        if let Some(target) = anthropic_mapping.get(family_key) {
-            crate::modules::logger::log_warn(&format!("[Router] 使用 Anthropic 系列映射: {} -> {}", original_model, target));
-            return target.clone();
-        }
-        
-        // 兜底兼容旧版精确映射
-        if let Some(target) = anthropic_mapping.get(original_model) {
-             return target.clone();
-        }
-    }
-
-    // 4. 下沉到系统默认映射逻辑
-    map_claude_model_to_gemini(original_model)
+    resolve_model_route_with_availability(
+        original_model,
+        custom_mapping,
+        openai_mapping,
+        anthropic_mapping,
+        apply_claude_family_mapping,
+        None,
+    )
 }
 
 #[cfg(test)]
@@ -261,6 +423,10 @@ mod tests {
         assert_eq!(
             map_claude_model_to_gemini("gemini-2.5-flash-mini-test"),
             "gemini-2.5-flash-mini-test"
+        );
+        assert_eq!(
+            map_claude_model_to_gemini("gemini-3-pro"),
+            "gemini-3-pro-high"
         );
         assert_eq!(
             map_claude_model_to_gemini("unknown-model"),

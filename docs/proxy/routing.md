@@ -74,6 +74,17 @@ The proxy supports multiple mapping layers (configured in the API Proxy UI):
 - `proxy.openai_mapping` — affects OpenAI protocol requests
 - `proxy.custom_mapping` — optional custom map overrides
 
+Recommended priority rules are documented in `docs/proxy/routing-priorities.md`.
+
+### 3.1 Availability-aware routing (quota gated)
+
+When account quota data is available, the proxy prefers the **requested model** if any pool account has remaining credits for it. Downgrades only occur when no credits are available for the requested model.
+
+Notes:
+- Claude/Gemini requests: if quotas are missing, the proxy keeps the requested model (to avoid unnecessary downgrades).
+- OpenAI-compat requests: still map to the configured Gemini targets (OpenAI models are not in the pool).
+- Quota freshness matters. Use the UI “refresh quotas” action to keep availability decisions accurate.
+
 ### Resolution order and interaction notes (user-facing)
 
 Although the UI presents multiple “Series Groups”, they are applied deterministically by the resolver:

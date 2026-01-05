@@ -14,6 +14,7 @@ use crate::proxy::privacy::{mask_email, stable_hash_hex};
 
 const MAX_RETRY_ATTEMPTS: usize = 3;
 use crate::proxy::session_manager::SessionManager;
+use crate::proxy::common::model_mapping::ModelAvailability;
 
 fn attach_attribution(
     response: &mut axum::response::Response,
@@ -34,11 +35,123 @@ fn attach_attribution(
     });
 }
 
+fn detect_openai_thinking_preference(model: &str, body: &Value) -> bool {
+    let lower = model.to_lowercase();
+    let explicit_family = lower.contains("claude-opus")
+        || lower.contains("claude-sonnet")
+        || lower.contains("claude-haiku");
+
+    if let Some(thinking) = body.get("thinking") {
+        if let Some(kind) = thinking.get("type").and_then(|v| v.as_str()) {
+            return kind == "enabled";
+        }
+    }
+
+    if let Some(reasoning) = body.get("reasoning") {
+        if let Some(effort) = reasoning.get("effort").and_then(|v| v.as_str()) {
+            return effort != "none";
+        }
+    }
+
+    if lower.contains("thinking") {
+        return true;
+    }
+
+    if explicit_family && !lower.contains("thinking") {
+        return false;
+    }
+
+    true
+}
+
+fn select_first_available(availability: &ModelAvailability, candidates: &[&str]) -> Option<String> {
+    for candidate in candidates {
+        if availability.is_model_available(candidate) || availability.has_unknown_quota {
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
+fn select_openai_claude_target(
+    model: &str,
+    thinking_enabled: bool,
+    availability: &ModelAvailability,
+) -> Option<String> {
+    let lower = model.to_lowercase();
+    let is_openai_model = lower.starts_with("gpt-")
+        || lower.starts_with("o1-")
+        || lower.starts_with("o3-")
+        || lower.starts_with("o4-");
+
+    let family = if lower.contains("claude-opus") {
+        Some("opus")
+    } else if lower.contains("claude-sonnet") {
+        Some("sonnet")
+    } else if lower.contains("claude-haiku") {
+        Some("haiku")
+    } else if is_openai_model {
+        Some("opus")
+    } else {
+        None
+    };
+
+    match family {
+        Some("haiku") => select_first_available(
+            availability,
+            &["gemini-3-pro-high", "gemini-3-flash"],
+        ),
+        Some("opus") => {
+            if thinking_enabled {
+                select_first_available(
+                    availability,
+                    &[
+                        "claude-opus-4-5-thinking",
+                        "claude-sonnet-4-5-thinking",
+                        "gemini-3-pro-high",
+                        "claude-sonnet-4-5",
+                        "gemini-3-flash",
+                    ],
+                )
+            } else {
+                select_first_available(
+                    availability,
+                    &["gemini-3-pro-high", "gemini-3-flash"],
+                )
+            }
+        }
+        Some("sonnet") => {
+            if thinking_enabled {
+                select_first_available(
+                    availability,
+                    &[
+                        "claude-sonnet-4-5-thinking",
+                        "gemini-3-pro-high",
+                        "claude-sonnet-4-5",
+                        "gemini-3-flash",
+                    ],
+                )
+            } else {
+                select_first_available(
+                    availability,
+                    &[
+                        "claude-sonnet-4-5",
+                        "claude-sonnet-4-5-thinking",
+                        "gemini-3-pro-high",
+                        "gemini-3-flash",
+                    ],
+                )
+            }
+        }
+        _ => None,
+    }
+}
+
 pub async fn handle_chat_completions(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let mut openai_req: OpenAIRequest = serde_json::from_value(body)
+    let mut openai_req: OpenAIRequest = serde_json::from_value(body.clone())
         .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid request: {}", e)))?;
 
     // Safety: Ensure messages is not empty
@@ -64,17 +177,42 @@ pub async fn handle_chat_completions(
     let token_manager = state.token_manager;
     let pool_size = token_manager.len();
     let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
+    let availability = token_manager.model_availability_snapshot();
 
     let mut last_error = String::new();
 
     for attempt in 0..max_attempts {
-        // 2. 预解析模型路由与配置
-        let mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
-            &openai_req.model,
-            &*state.custom_mapping.read().await,
-            &*state.openai_mapping.read().await,
-            &*state.anthropic_mapping.read().await,
-            false,  // OpenAI 请求不应用 Claude 家族映射
+        let thinking_enabled = detect_openai_thinking_preference(&openai_req.model, &body);
+        let custom_target = {
+            let custom_mapping = state.custom_mapping.read().await;
+            custom_mapping.get(&openai_req.model).cloned()
+        };
+
+        let mut route_source = "resolver";
+        let mapped_model = if let Some(target) = custom_target {
+            route_source = "custom";
+            target
+        } else if let Some(target) =
+            select_openai_claude_target(&openai_req.model, thinking_enabled, &availability)
+        {
+            route_source = "priority";
+            target
+        } else {
+            crate::proxy::common::model_mapping::resolve_model_route_with_availability(
+                &openai_req.model,
+                &*state.custom_mapping.read().await,
+                &*state.openai_mapping.read().await,
+                &*state.anthropic_mapping.read().await,
+                false,  // OpenAI 请求不应用 Claude 家族映射
+                Some(&availability),
+            )
+        };
+        info!(
+            "[Router] OpenAI route ({}): {} -> {} (thinking_enabled: {})",
+            route_source,
+            openai_req.model,
+            mapped_model,
+            thinking_enabled
         );
         // 将 OpenAI 工具转为 Value 数组以便探测联网
         let tools_val: Option<Vec<Value>> = openai_req
@@ -541,16 +679,42 @@ pub async fn handle_completions(
     let token_manager = state.token_manager;
     let pool_size = token_manager.len();
     let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
+    let availability = token_manager.model_availability_snapshot();
 
     let mut last_error = String::new();
 
     for _attempt in 0..max_attempts {
-        let mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
-            &openai_req.model,
-            &*state.custom_mapping.read().await,
-            &*state.openai_mapping.read().await,
-            &*state.anthropic_mapping.read().await,
-            false,  // OpenAI 请求不应用 Claude 家族映射
+        let thinking_enabled = detect_openai_thinking_preference(&openai_req.model, &body);
+        let custom_target = {
+            let custom_mapping = state.custom_mapping.read().await;
+            custom_mapping.get(&openai_req.model).cloned()
+        };
+
+        let mut route_source = "resolver";
+        let mapped_model = if let Some(target) = custom_target {
+            route_source = "custom";
+            target
+        } else if let Some(target) =
+            select_openai_claude_target(&openai_req.model, thinking_enabled, &availability)
+        {
+            route_source = "priority";
+            target
+        } else {
+            crate::proxy::common::model_mapping::resolve_model_route_with_availability(
+                &openai_req.model,
+                &*state.custom_mapping.read().await,
+                &*state.openai_mapping.read().await,
+                &*state.anthropic_mapping.read().await,
+                false,  // OpenAI 请求不应用 Claude 家族映射
+                Some(&availability),
+            )
+        };
+        info!(
+            "[Router] OpenAI route ({}): {} -> {} (thinking_enabled: {})",
+            route_source,
+            openai_req.model,
+            mapped_model,
+            thinking_enabled
         );
         // 将 OpenAI 工具转为 Value 数组以便探测联网
         let tools_val: Option<Vec<Value>> = openai_req

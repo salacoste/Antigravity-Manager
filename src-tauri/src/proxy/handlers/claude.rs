@@ -24,6 +24,33 @@ use crate::proxy::privacy::{mask_email, stable_hash_hex};
 const MAX_RETRY_ATTEMPTS: usize = 3;
 const MIN_SIGNATURE_LENGTH: usize = 10;  // 最小有效签名长度
 
+fn derive_claude_routing_model(original_model: &str, thinking_enabled: bool) -> String {
+    let lower_model = original_model.to_lowercase();
+    if !lower_model.starts_with("claude-") {
+        return original_model.to_string();
+    }
+
+    if lower_model.contains("haiku") {
+        return "gemini-3-pro-high".to_string();
+    }
+
+    if lower_model.contains("opus") {
+        if thinking_enabled {
+            return "claude-opus-4-5-thinking".to_string();
+        }
+        return "gemini-3-pro-high".to_string();
+    }
+
+    if lower_model.contains("sonnet") {
+        if thinking_enabled {
+            return "claude-sonnet-4-5-thinking".to_string();
+        }
+        return "claude-sonnet-4-5".to_string();
+    }
+
+    original_model.to_string()
+}
+
 fn attach_attribution(
     response: &mut Response,
     provider: &str,
@@ -87,7 +114,7 @@ fn filter_invalid_thinking_blocks(messages: &mut Vec<Message>) {
         if msg.role != "assistant" && msg.role != "model" {
             continue;
         }
-        tracing::error!("[DEBUG-FILTER] Inspecting msg with role: {}", msg.role);
+        tracing::debug!("[DEBUG-FILTER] Inspecting msg with role: {}", msg.role);
         
         if let MessageContent::Array(blocks) = &mut msg.content {
             let original_len = blocks.len();
@@ -98,7 +125,7 @@ fn filter_invalid_thinking_blocks(messages: &mut Vec<Message>) {
                 if matches!(block, ContentBlock::Thinking { .. }) {
                     // [DEBUG] 强制输出日志
                     if let ContentBlock::Thinking { ref signature, .. } = block {
-                         tracing::error!("[DEBUG-FILTER] Found thinking block. Sig len: {:?}", signature.as_ref().map(|s| s.len()));
+                         tracing::debug!("[DEBUG-FILTER] Found thinking block. Sig len: {:?}", signature.as_ref().map(|s| s.len()));
                     }
 
                     // [CRITICAL FIX] Vertex AI 不认可 skip_thought_signature_validator
@@ -508,19 +535,28 @@ pub async fn handle_messages(
     
     let pool_size = token_manager.len();
     let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
+    let availability = token_manager.model_availability_snapshot();
 
     let mut last_error = String::new();
     let mut retried_without_thinking = false;
     
     for attempt in 0..max_attempts {
+        let thinking_enabled = request_for_body
+            .thinking
+            .as_ref()
+            .map(|t| t.type_ == "enabled")
+            .unwrap_or(false);
+        let routing_model = derive_claude_routing_model(&request_for_body.model, thinking_enabled);
+
         // 2. 模型路由与配置解析 (提前解析以确定请求类型)
         // 先不应用家族映射，获取初步的 mapped_model
-        let initial_mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
-            &request_for_body.model,
+        let initial_mapped_model = crate::proxy::common::model_mapping::resolve_model_route_with_availability(
+            &routing_model,
             &*state.custom_mapping.read().await,
             &*state.openai_mapping.read().await,
             &*state.anthropic_mapping.read().await,
             false,  // 先不应用家族映射
+            Some(&availability),
         );
         
         // 将 Claude 工具转为 Value 数组以便探测联网
@@ -537,12 +573,13 @@ pub async fn handle_messages(
         
         let mut mapped_model = if is_cli_request {
             // CLI 请求：重新调用 resolve_model_route，应用家族映射
-            crate::proxy::common::model_mapping::resolve_model_route(
-                &request_for_body.model,
+            crate::proxy::common::model_mapping::resolve_model_route_with_availability(
+                &routing_model,
                 &*state.custom_mapping.read().await,
                 &*state.openai_mapping.read().await,
                 &*state.anthropic_mapping.read().await,
                 true,  // CLI 请求应用家族映射
+                Some(&availability),
             )
         } else {
             // 非 CLI 请求：使用初步的 mapped_model（已跳过家族映射）
@@ -582,39 +619,58 @@ pub async fn handle_messages(
         // ===== 【优化】后台任务智能检测与降级 =====
         // 使用新的检测系统，支持 5 大类关键词和多 Flash 模型策略
         let background_task_type = detect_background_task_type(&request_for_body);
+        let can_use_requested = availability.is_model_available(&mapped_model) || availability.has_unknown_quota;
         
         // 传递映射后的模型名
         let mut request_with_mapped = request_for_body.clone();
 
         if let Some(task_type) = background_task_type {
-            // 检测到后台任务,强制降级到 Flash 模型
-            let downgrade_model = select_background_model(task_type);
-            
-            info!(
-                "[{}][AUTO] 检测到后台任务 (类型: {:?}),强制降级: {} -> {}",
-                trace_id,
-                task_type,
-                mapped_model,
-                downgrade_model
-            );
-            
-            // 覆盖用户自定义映射
-            mapped_model = downgrade_model.to_string();
-            
-            // 后台任务净化：
-            // 1. 移除工具定义（后台任务不需要工具）
-            request_with_mapped.tools = None;
-            
-            // 2. 移除 Thinking 配置（Flash 模型不支持）
-            request_with_mapped.thinking = None;
-            
-            // 3. 清理历史消息中的 Thinking Block，防止 Invalid Argument
-            for msg in request_with_mapped.messages.iter_mut() {
-                if let crate::proxy::mappers::claude::models::MessageContent::Array(blocks) = &mut msg.content {
-                    blocks.retain(|b| !matches!(b, 
-                        crate::proxy::mappers::claude::models::ContentBlock::Thinking { .. } |
-                        crate::proxy::mappers::claude::models::ContentBlock::RedactedThinking { .. }
-                    ));
+            if can_use_requested {
+                info!(
+                    "[{}][AUTO] 检测到后台任务 (类型: {:?})，但请求模型有配额，跳过降级: {}",
+                    trace_id,
+                    task_type,
+                    mapped_model
+                );
+            } else {
+                // 检测到后台任务,强制降级到 Flash 模型
+                let downgrade_model = select_background_model(task_type);
+
+                if availability.is_model_available(downgrade_model) || availability.has_unknown_quota {
+                    info!(
+                        "[{}][AUTO] 检测到后台任务 (类型: {:?}),强制降级: {} -> {}",
+                        trace_id,
+                        task_type,
+                        mapped_model,
+                        downgrade_model
+                    );
+
+                    // 覆盖用户自定义映射
+                    mapped_model = downgrade_model.to_string();
+
+                    // 后台任务净化：
+                    // 1. 移除工具定义（后台任务不需要工具）
+                    request_with_mapped.tools = None;
+
+                    // 2. 移除 Thinking 配置（Flash 模型不支持）
+                    request_with_mapped.thinking = None;
+
+                    // 3. 清理历史消息中的 Thinking Block，防止 Invalid Argument
+                    for msg in request_with_mapped.messages.iter_mut() {
+                        if let crate::proxy::mappers::claude::models::MessageContent::Array(blocks) = &mut msg.content {
+                            blocks.retain(|b| !matches!(b,
+                                crate::proxy::mappers::claude::models::ContentBlock::Thinking { .. } |
+                                crate::proxy::mappers::claude::models::ContentBlock::RedactedThinking { .. }
+                            ));
+                        }
+                    }
+                } else {
+                    info!(
+                        "[{}][AUTO] 检测到后台任务 (类型: {:?})，降级模型无配额，保持: {}",
+                        trace_id,
+                        task_type,
+                        mapped_model
+                    );
                 }
             }
         } else {
@@ -637,6 +693,13 @@ pub async fn handle_messages(
         }
 
         
+        info!(
+            "[{}][Router] Final route: {} -> {} (thinking_enabled: {})",
+            trace_id,
+            request_for_body.model,
+            mapped_model,
+            thinking_enabled
+        );
         request_with_mapped.model = mapped_model;
 
         // 生成 Trace ID (简单用时间戳后缀)
@@ -660,6 +723,30 @@ pub async fn handle_messages(
                 ).into_response();
             }
         };
+        let gen_config = gemini_body
+            .get("request")
+            .and_then(|v| v.get("generationConfig"));
+        if let Some(gen_config) = gen_config {
+            let max_tokens = gen_config.get("maxOutputTokens").and_then(|v| v.as_u64());
+            let thinking_budget = gen_config
+                .get("thinkingConfig")
+                .and_then(|v| v.get("thinkingBudget"))
+                .and_then(|v| v.as_u64());
+            let thinking_enabled = gen_config.get("thinkingConfig").is_some();
+            let max_tokens_display = max_tokens
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "none".to_string());
+            let thinking_budget_display = thinking_budget
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "none".to_string());
+            info!(
+                "[{}][Router] Generation config: maxOutputTokens={}, thinkingBudget={}, thinkingEnabled={}",
+                trace_id,
+                max_tokens_display,
+                thinking_budget_display,
+                thinking_enabled
+            );
+        }
         
     // 4. 上游调用
     let is_stream = request.stream;
