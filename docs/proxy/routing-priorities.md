@@ -6,7 +6,8 @@ This document captures the current routing priorities we want the proxy to enfor
 - Applies to requests handled by the Google account pool.
 - Availability is driven by pool quota snapshots:
   - If a candidate model appears in any pool account with remaining percentage > 0, it is considered available.
-  - If a model does not appear in the quota list, it is treated as unavailable.
+  - If any account has unknown quota data, availability is treated as best-effort (unknown models may be considered available).
+  - If all accounts report quotas and a model does not appear, it is treated as unavailable.
 - z.ai is unaffected by these rules (Claude passthrough has its own mapping).
 
 ## Claude protocol (POST /v1/messages)
@@ -27,6 +28,7 @@ Availability gating:
 
 Thinking detection:
 - `thinking.enabled` is derived from `thinking.type == "enabled"` in the Claude request.
+  - Thinking may be auto-disabled when the latest assistant message includes tool_use without a matching thinking block, to avoid upstream 400s.
 
 ## OpenAI-like requests (POST /v1/chat/completions, /v1/completions, /v1/responses)
 We route OpenAI models to the highest available Claude model, and then fall back in a strict order.
@@ -58,6 +60,7 @@ Priority chains (first available wins):
 
 Custom mapping override:
 - `proxy.custom_mapping` exact match always overrides the chains above.
+  - Recommended: `gemini-3-pro-low -> gemini-3-flash` (when low-tier quotas are missing).
 
 ## Gemini protocol (POST /v1beta/*)
 Gemini protocol requests are passed through the Google pool directly and are **not** remapped to Claude.
