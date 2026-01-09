@@ -189,10 +189,12 @@ pub async fn handle_generate(
             // 记录限流信息 (全局同步)
             token_manager.mark_rate_limited(&email, status_code, retry_after.as_deref(), &error_text);
 
-            // 只有明确包含 "QUOTA_EXHAUSTED" 才停止，避免误判上游的频率限制提示 (如 "check quota")
+            // 只有明确包含 "QUOTA_EXHAUSTED" 才停止 -> 【Fix PR#493】改为继续尝试下一个账号
             if status_code == 429 && error_text.contains("QUOTA_EXHAUSTED") {
-                error!("Gemini Quota exhausted (429) on account {} attempt {}/{}, stopping to protect pool.", email, attempt + 1, max_attempts);
-                return Err((status, error_text));
+                error!("Gemini Quota exhausted (429) on account {} attempt {}/{}, will rotate to next account.", email, attempt + 1, max_attempts);
+                // 标记该账号受限 (已经在上面的 mark_rate_limited 完成)
+                // 继续循环以尝试下一个账号
+                continue;
             }
 
             tracing::warn!("Gemini Upstream {} on account {} attempt {}/{}, rotating account", status_code, email, attempt + 1, max_attempts);

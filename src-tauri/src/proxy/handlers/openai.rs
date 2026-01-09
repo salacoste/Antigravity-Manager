@@ -219,15 +219,17 @@ pub async fn handle_chat_completions(
                 continue;
             }
 
-            // 2. 只有明确包含 "QUOTA_EXHAUSTED" 才停止，避免误判频率提示 (如 "check quota")
+            // 2. 只有明确包含 "QUOTA_EXHAUSTED" 才停止 -> 【Fix PR#493】改为继续尝试下一个账号
             if error_text.contains("QUOTA_EXHAUSTED") {
                 error!(
-                    "OpenAI Quota exhausted (429) on account {} attempt {}/{}, stopping to protect pool.",
+                    "OpenAI Quota exhausted (429) on account {} attempt {}/{}, will rotate to next account.",
                     email,
                     attempt + 1,
                     max_attempts
                 );
-                return Err((status, error_text));
+                // 标记该账号受限 (已经在上面的 mark_rate_limited 完成)
+                // 继续循环以尝试下一个账号
+                continue;
             }
 
             // 3. 其他限流或服务器过载情况，轮换账号

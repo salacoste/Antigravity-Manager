@@ -170,6 +170,15 @@ pub async fn fetch_account_quota(
     modules::update_account_quota(&account_id, quota.clone())
         .map_err(crate::error::AppError::Account)?;
 
+    // 【Fix PR#493】成功刷新后清除代理服务的限流锁
+    if let Some(proxy_state) = app.try_state::<crate::commands::proxy::ProxyServiceState>() {
+        let instance_lock = proxy_state.instance.read().await;
+        if let Some(instance) = instance_lock.as_ref() {
+            instance.token_manager.clear_rate_limit(&account_id);
+            modules::logger::log_info(&format!("已清除账号限流锁: {}", account.email));
+        }
+    }
+
     crate::modules::tray::update_tray_menus(&app);
 
     Ok(quota)
@@ -185,7 +194,7 @@ pub struct RefreshStats {
 
 /// 刷新所有账号配额
 #[tauri::command]
-pub async fn refresh_all_quotas() -> Result<RefreshStats, String> {
+pub async fn refresh_all_quotas(app: tauri::AppHandle) -> Result<RefreshStats, String> {
     use futures::future::join_all;
     use std::sync::Arc;
     use tokio::sync::Semaphore;
@@ -198,6 +207,14 @@ pub async fn refresh_all_quotas() -> Result<RefreshStats, String> {
         MAX_CONCURRENT
     ));
     let accounts = modules::list_accounts()?;
+
+    // 【Fix PR#493】获取 TokenManager 引用以便在线程中清除锁
+    let token_manager = if let Some(proxy_state) = app.try_state::<crate::commands::proxy::ProxyServiceState>() {
+        let instance_lock = proxy_state.instance.read().await;
+        instance_lock.as_ref().map(|i| i.token_manager.clone())
+    } else {
+        None
+    };
 
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT));
 
@@ -220,6 +237,7 @@ pub async fn refresh_all_quotas() -> Result<RefreshStats, String> {
             let email = account.email.clone();
             let account_id = account.id.clone();
             let permit = semaphore.clone();
+            let token_manager = token_manager.clone();
             async move {
                 let _guard = permit.acquire().await.unwrap();
                 modules::logger::log_info(&format!("  - Processing {}", email));
@@ -231,6 +249,12 @@ pub async fn refresh_all_quotas() -> Result<RefreshStats, String> {
                             Err(msg)
                         } else {
                             modules::logger::log_info(&format!("    ✅ {} Success", email));
+
+                            // 【Fix PR#493】清除限流锁
+                            if let Some(tm) = &token_manager {
+                                tm.clear_rate_limit(&account_id);
+                            }
+
                             Ok(())
                         }
                     }
