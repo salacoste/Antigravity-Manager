@@ -88,7 +88,7 @@ function App() {
         (event) => {
           const { original_model, fallback_model } = event.payload;
           showToast(
-            `${original_model} недоступен, используем ${fallback_model}`,
+            `${original_model} unavailable, using ${fallback_model}`,
             'warning',
             5000
           );

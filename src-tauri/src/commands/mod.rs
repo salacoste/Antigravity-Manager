@@ -819,3 +819,22 @@ pub async fn test_model_fallback_notification(app: tauri::AppHandle) -> Result<(
     modules::logger::log_info("Test model fallback notification sent to UI");
     Ok(())
 }
+
+/// 打开 DevTools (仅在 dev 模式下工作)
+#[tauri::command]
+pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        #[cfg(debug_assertions)]
+        {
+            window.open_devtools();
+            modules::logger::log_info("DevTools opened");
+            Ok(())
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Err("DevTools only available in development mode".to_string())
+        }
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
