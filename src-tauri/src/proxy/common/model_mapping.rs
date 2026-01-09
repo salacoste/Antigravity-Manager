@@ -7,6 +7,7 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
 
     // 直接支持的模型
     m.insert("claude-opus-4-5-thinking", "claude-opus-4-5-thinking");
+    m.insert("claude-opus-4-5", "claude-opus-4-5-thinking"); // Google предоставляет Opus только с thinking
     m.insert("claude-sonnet-4-5", "claude-sonnet-4-5");
     m.insert("claude-sonnet-4-5-thinking", "claude-sonnet-4-5-thinking");
 
@@ -44,9 +45,10 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     m.insert("gemini-2.5-flash-lite", "gemini-2.5-flash-lite");
     m.insert("gemini-2.5-flash-thinking", "gemini-2.5-flash-thinking");
     m.insert("gemini-3-pro-low", "gemini-3-pro-low");
-    m.insert("gemini-3-pro-high", "gemini-3-pro-high");
+    m.insert("gemini-3-pro-high", "gemini-3-pro-high");  // Явно БЕЗ thinking
+    m.insert("gemini-3-pro-high-thinking", "gemini-3-pro-high-thinking");  // Явно С thinking
     m.insert("gemini-3-pro-preview", "gemini-3-pro-preview");
-    m.insert("gemini-3-pro", "gemini-3-pro");  // [FIX PR #368] 添加基础模型支持
+    m.insert("gemini-3-pro", "gemini-3-pro-high-thinking");  // По умолчанию роутим в high-thinking
     m.insert("gemini-2.5-flash", "gemini-2.5-flash");
     m.insert("gemini-3-flash", "gemini-3-flash");
     m.insert("gemini-3-pro-image", "gemini-3-pro-image");
@@ -66,8 +68,8 @@ pub fn map_claude_model_to_gemini(input: &str) -> String {
         return input.to_string();
     }
 
-    // 3. Fallback to default
-    "claude-sonnet-4-5".to_string()
+    // 3. Fallback to default: gemini-3-pro-high-thinking для всех неизвестных моделей
+    "gemini-3-pro-high-thinking".to_string()
 }
 
 /// 获取所有内置支持的模型列表关键字
@@ -183,22 +185,46 @@ mod tests {
 
     #[test]
     fn test_model_mapping() {
+        // Claude Sonnet routing
         assert_eq!(
             map_claude_model_to_gemini("claude-3-5-sonnet-20241022"),
             "claude-sonnet-4-5"
         );
+
+        // Claude Opus routing (always with thinking since Google only provides thinking version)
         assert_eq!(
             map_claude_model_to_gemini("claude-opus-4"),
             "claude-opus-4-5-thinking"
         );
+        assert_eq!(
+            map_claude_model_to_gemini("claude-opus-4-5"),
+            "claude-opus-4-5-thinking"
+        );
+
+        // Gemini 3 Pro routing rules
+        assert_eq!(
+            map_claude_model_to_gemini("gemini-3-pro"),
+            "gemini-3-pro-high-thinking"  // Default: route to high-thinking
+        );
+        assert_eq!(
+            map_claude_model_to_gemini("gemini-3-pro-high"),
+            "gemini-3-pro-high"  // Explicit: WITHOUT thinking
+        );
+        assert_eq!(
+            map_claude_model_to_gemini("gemini-3-pro-high-thinking"),
+            "gemini-3-pro-high-thinking"  // Explicit: WITH thinking
+        );
+
         // Test gemini pass-through (should not be caught by "mini" rule)
         assert_eq!(
             map_claude_model_to_gemini("gemini-2.5-flash-mini-test"),
             "gemini-2.5-flash-mini-test"
         );
+
+        // Test new fallback to gemini-3-pro-high-thinking
         assert_eq!(
             map_claude_model_to_gemini("unknown-model"),
-            "claude-sonnet-4-5"
+            "gemini-3-pro-high-thinking"
         );
     }
 }
