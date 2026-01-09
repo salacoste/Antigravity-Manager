@@ -16,6 +16,11 @@ pub fn set_app_handle(app: tauri::AppHandle) {
     let _ = APP_HANDLE.set(app);
 }
 
+/// Get the global AppHandle
+pub fn get_app_handle() -> Option<&'static tauri::AppHandle> {
+    APP_HANDLE.get()
+}
+
 /// Emit model fallback event to UI
 fn emit_model_fallback_event(original_model: &str, fallback_model: &str) -> Result<(), String> {
     if let Some(app) = APP_HANDLE.get() {
@@ -172,7 +177,7 @@ pub fn transform_claude_request_in(
     // [IMPROVED] 提取 web search 模型为常量，便于维护
     const WEB_SEARCH_FALLBACK_MODEL: &str = "gemini-2.5-flash";
 
-    let mut mapped_model = if has_web_search_tool {
+    let mapped_model = if has_web_search_tool {
         tracing::debug!(
             "[Claude-Request] Web search tool detected, using fallback model: {}",
             WEB_SEARCH_FALLBACK_MODEL
@@ -182,22 +187,10 @@ pub fn transform_claude_request_in(
         crate::proxy::common::model_mapping::map_claude_model_to_gemini(&claude_req.model)
     };
 
-    // [FALLBACK] Claude Opus Thinking → Gemini Pro High (issue #497 workaround)
-    // Due to high timeout rate (93.7%) with claude-opus-4-5-thinking, fallback to Gemini
-    if mapped_model == "claude-opus-4-5-thinking" {
-        let fallback_model = "gemini-3-pro-high";
-        tracing::warn!(
-            "[Model-Fallback] Claude Opus Thinking unavailable (issue #497). Falling back: {} -> {}",
-            mapped_model,
-            fallback_model
-        );
-        mapped_model = fallback_model.to_string();
-
-        // Emit UI notification event
-        if let Err(e) = emit_model_fallback_event(&claude_req.model, &mapped_model) {
-            tracing::debug!("[Model-Fallback] Failed to emit UI event: {}", e);
-        }
-    }
+    // 🆕 [FALLBACK REMOVED] Claude Opus Thinking → Gemini Pro High
+    // Unconditional fallback removed! Now using conditional fallback in claude.rs handler
+    // Fallback only triggers when ALL accounts are rate-limited for claude-opus-4-5-thinking
+    // See: src-tauri/src/proxy/handlers/claude.rs:503-542
     
     // 将 Claude 工具转为 Value 数组以便探测联网
     let tools_val: Option<Vec<Value>> = claude_req.tools.as_ref().map(|list| {

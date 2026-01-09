@@ -181,17 +181,29 @@ impl TokenManager {
     /// 参数 `quota_group` 用于区分 "claude" vs "gemini" 组
     /// 参数 `force_rotate` 为 true 时将忽略锁定，强制切换账号
     /// 参数 `session_id` 用于跨请求维持会话粘性
-    pub async fn get_token(&self, quota_group: &str, force_rotate: bool, session_id: Option<&str>) -> Result<(String, String, String), String> {
+    pub async fn get_token(
+        &self,
+        quota_group: &str,
+        force_rotate: bool,
+        session_id: Option<&str>,
+        model: Option<&str>,  // 🆕 添加模型参数用于 model-aware rate limit checking
+    ) -> Result<(String, String, String), String> {
         // 【优化 Issue #284】添加 5 秒超时，防止死锁
         let timeout_duration = std::time::Duration::from_secs(5);
-        match tokio::time::timeout(timeout_duration, self.get_token_internal(quota_group, force_rotate, session_id)).await {
+        match tokio::time::timeout(timeout_duration, self.get_token_internal(quota_group, force_rotate, session_id, model)).await {
             Ok(result) => result,
             Err(_) => Err("Token acquisition timeout (5s) - system too busy or deadlock detected".to_string()),
         }
     }
 
     /// 内部实现：获取 Token 的核心逻辑
-    async fn get_token_internal(&self, quota_group: &str, force_rotate: bool, session_id: Option<&str>) -> Result<(String, String, String), String> {
+    async fn get_token_internal(
+        &self,
+        quota_group: &str,
+        force_rotate: bool,
+        session_id: Option<&str>,
+        model: Option<&str>,  // 🆕 模型参数
+    ) -> Result<(String, String, String), String> {
         let mut tokens_snapshot: Vec<ProxyToken> = self.tokens.iter().map(|e| e.value().clone()).collect();
         let total = tokens_snapshot.len();
         if total == 0 {
@@ -279,7 +291,13 @@ impl TokenManager {
                         }
 
                         // 【新增】主动避开限流或 5xx 锁定的账号 (来自 PR #28 的高可用思路)
-                        if self.is_rate_limited(&candidate.account_id) {
+                        // 🆕 Model-aware rate limit checking
+                        let is_limited = if let Some(m) = model {
+                            self.rate_limit_tracker.is_rate_limited_for_model(&candidate.account_id, m)
+                        } else {
+                            self.is_rate_limited(&candidate.account_id)
+                        };
+                        if is_limited {
                             continue;
                         }
 
@@ -308,7 +326,13 @@ impl TokenManager {
                     }
 
                     // 【新增】主动避开限流或 5xx 锁定的账号
-                    if self.is_rate_limited(&candidate.account_id) {
+                    // 🆕 Model-aware rate limit checking
+                    let is_limited = if let Some(m) = model {
+                        self.rate_limit_tracker.is_rate_limited_for_model(&candidate.account_id, m)
+                    } else {
+                        self.is_rate_limited(&candidate.account_id)
+                    };
+                    if is_limited {
                         continue;
                     }
 
@@ -571,12 +595,14 @@ impl TokenManager {
         status: u16,
         retry_after_header: Option<&str>,
         error_body: &str,
+        model: Option<&str>,  // 🆕 添加模型参数
     ) {
         self.rate_limit_tracker.parse_from_error(
             account_id,
             status,
             retry_after_header,
             error_body,
+            model,  // 🆕 传递模型参数
         );
     }
     
@@ -584,7 +610,55 @@ impl TokenManager {
     pub fn is_rate_limited(&self, account_id: &str) -> bool {
         self.rate_limit_tracker.is_rate_limited(account_id)
     }
-    
+
+    /// 🆕 检查所有账号是否对特定模型全部 rate-limited
+    ///
+    /// 用于决定是否需要进行模型 fallback。只有当所有账号对特定模型都限流时才应该 fallback。
+    ///
+    /// # Arguments
+    /// * `model` - 需要检查的模型名称
+    ///
+    /// # Returns
+    /// * `true` - 所有账号对该模型都限流，应该考虑 fallback
+    /// * `false` - 至少有一个账号对该模型可用，应该继续重试其他账号
+    pub fn check_all_accounts_rate_limited_for_model(&self, model: &str) -> bool {
+        // DashMap 是线程安全的并发 HashMap，可以直接访问
+
+        // 如果没有任何账号，返回 true (无可用账号 = 全部限流)
+        if self.tokens.is_empty() {
+            tracing::warn!("[Rate-Limit-Check] No accounts available for model {}", model);
+            return true;
+        }
+
+        // 检查每个账号对该模型的限流状态
+        let total_accounts = self.tokens.len();
+        let rate_limited_count = self.tokens.iter()
+            .filter(|entry| {
+                let token = entry.value();
+                self.rate_limit_tracker.is_rate_limited_for_model(&token.account_id, model)
+            })
+            .count();
+
+        let all_limited = rate_limited_count == total_accounts;
+
+        if all_limited {
+            tracing::warn!(
+                "[Rate-Limit-Check] All {} accounts are rate-limited for model: {}",
+                total_accounts,
+                model
+            );
+        } else {
+            tracing::debug!(
+                "[Rate-Limit-Check] {}/{} accounts rate-limited for model: {} (at least one available)",
+                rate_limited_count,
+                total_accounts,
+                model
+            );
+        }
+
+        all_limited
+    }
+
     /// 获取距离限流重置还有多少秒
     #[allow(dead_code)]
     pub fn get_rate_limit_reset_seconds(&self, account_id: &str) -> Option<u64> {
@@ -763,15 +837,16 @@ impl TokenManager {
         if has_explicit_retry_time {
             // API 返回了精确时间(quotaResetDelay),直接使用,无需实时刷新
             if let Some(m) = model {
-                tracing::debug!("账号 {} 的模型 {} 的 429 响应包含 quotaResetDelay,直接使用 API 返回的时间", account_id, m);
+                tracing::info!("🔒 [Rate-Limit] 账号 {} 的模型 {} 检测到 429/quotaResetDelay，标记为 rate-limited", account_id, m);
             } else {
-                tracing::debug!("账号 {} 的 429 响应包含 quotaResetDelay,直接使用 API 返回的时间", account_id);
+                tracing::info!("🔒 [Rate-Limit] 账号 {} 检测到 429/quotaResetDelay，标记为 rate-limited", account_id);
             }
             self.rate_limit_tracker.parse_from_error(
                 account_id,
                 status,
                 retry_after_header,
                 error_body,
+                model,  // 🆕 传递模型参数
             );
             return;
         }
@@ -810,6 +885,7 @@ impl TokenManager {
             status,
             retry_after_header,
             error_body,
+            model,  // 🆕 传递模型参数
         );
     }
 

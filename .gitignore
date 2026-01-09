@@ -48,3 +48,8 @@ DOCKER_DEPLOYMENT.md
 
 # Antigravity documentation (reverse engineering artifacts)
 docs/antigravity/
+
+# Development and debug artifacts
+_bmad
+_bmad-output
+.debug

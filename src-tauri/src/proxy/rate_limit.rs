@@ -139,18 +139,20 @@ impl RateLimitTracker {
     }
     
     /// 从错误响应解析限流信息
-    /// 
+    ///
     /// # Arguments
     /// * `account_id` - 账号 ID
     /// * `status` - HTTP 状态码
     /// * `retry_after_header` - Retry-After header 值
     /// * `body` - 错误响应 body
+    /// * `model` - 可选的模型名称,用于模型级别限流
     pub fn parse_from_error(
         &self,
         account_id: &str,
         status: u16,
         retry_after_header: Option<&str>,
         body: &str,
+        model: Option<&str>,
     ) -> Option<RateLimitInfo> {
         // 支持 429 (限流) 以及 500/503/529 (后端故障软避让)
         if status != 429 && status != 500 && status != 503 && status != 529 {
@@ -247,20 +249,47 @@ impl RateLimitTracker {
             retry_after_sec: retry_sec,
             detected_at: SystemTime::now(),
             reason,
-            model: None,  // 默认账号级别限流
+            model: model.map(|s| s.to_string()),  // 🆕 使用传入的模型参数
         };
-        
+
+        // 🆕 构造复合键: 如果有模型则为 "account:model", 否则为 "account"
+        let storage_key = if let Some(m) = model {
+            format!("{}:{}", account_id, m)
+        } else {
+            account_id.to_string()
+        };
+
         // 存储
-        self.limits.insert(account_id.to_string(), info.clone());
-        
-        tracing::warn!(
-            "账号 {} [{}] 限流类型: {:?}, 重置延时: {}秒",
-            account_id,
+        self.limits.insert(storage_key.clone(), info.clone());
+
+        // 🆕 添加明确的 INFO 日志，确保可见
+        tracing::info!(
+            "✅ [Rate-Limit-Stored] Key: {}, Status: {}, Reason: {:?}, Reset in: {}s",
+            storage_key,
             status,
             reason,
             retry_sec
         );
-        
+
+        if let Some(m) = model {
+            tracing::warn!(
+                "账号 {} 模型 {} [{}] 限流类型: {:?}, 重置延时: {}秒",
+                account_id,
+                m,
+                status,
+                reason,
+                retry_sec
+            );
+        } else {
+            tracing::warn!(
+                "账号 {} [{}] 限流类型: {:?}, 重置延时: {}秒",
+                account_id,
+                status,
+                reason,
+                retry_sec
+            );
+        }
+
         Some(info)
     }
     
@@ -447,7 +476,34 @@ impl RateLimitTracker {
             false
         }
     }
-    
+
+    /// 🆕 检查账号对特定模型是否在限流中
+    ///
+    /// # Arguments
+    /// * `account_id` - 账号 ID
+    /// * `model` - 模型名称
+    ///
+    /// # Returns
+    /// 如果账号对该模型在限流中返回 true,否则返回 false
+    pub fn is_rate_limited_for_model(&self, account_id: &str, model: &str) -> bool {
+        // 先检查 model-specific rate limit: "account:model"
+        let model_key = format!("{}:{}", account_id, model);
+        if let Some(info) = self.limits.get(&model_key) {
+            if info.reset_time > SystemTime::now() {
+                return true;
+            }
+        }
+
+        // 再检查 account-level rate limit: "account"
+        if let Some(info) = self.limits.get(account_id) {
+            if info.reset_time > SystemTime::now() {
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// 获取距离限流重置还有多少秒
     pub fn get_reset_seconds(&self, account_id: &str) -> Option<u64> {
         if let Some(info) = self.get(account_id) {
@@ -546,7 +602,7 @@ mod tests {
     #[test]
     fn test_get_remaining_wait() {
         let tracker = RateLimitTracker::new();
-        tracker.parse_from_error("acc1", 429, Some("30"), "");
+        tracker.parse_from_error("acc1", 429, Some("30"), "", None);
         let wait = tracker.get_remaining_wait("acc1");
         assert!(wait > 25 && wait <= 30);
     }
@@ -555,7 +611,7 @@ mod tests {
     fn test_safety_buffer() {
         let tracker = RateLimitTracker::new();
         // 如果 API 返回 1s，我们强制设为 2s
-        tracker.parse_from_error("acc1", 429, Some("1"), "");
+        tracker.parse_from_error("acc1", 429, Some("1"), "", None);
         let wait = tracker.get_remaining_wait("acc1");
         // Due to time passing, it might be 1 or 2
         assert!(wait >= 1 && wait <= 2);

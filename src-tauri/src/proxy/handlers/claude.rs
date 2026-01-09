@@ -27,6 +27,7 @@ const MIN_SIGNATURE_LENGTH: usize = 10;  // 最小有效签名长度
 // These can be adjusted for performance/cost optimization
 const BACKGROUND_MODEL_LITE: &str = "gemini-2.5-flash-lite";  // For simple/lightweight tasks
 const BACKGROUND_MODEL_STANDARD: &str = "gemini-2.5-flash";   // For complex background tasks
+const BACKGROUND_MODEL_CLAUDE_CODE: &str = "gemini-3-pro-high"; // For Claude Code system reminders (🆕 Fix: was using LITE, causing infinite loops)
 
 // ===== Jitter Configuration (REMOVED) =====
 // Jitter was causing connection instability, reverted to fixed delays
@@ -499,7 +500,49 @@ pub async fn handle_messages(
 
     let mut last_error = String::new();
     let mut retried_without_thinking = false;
-    
+
+    // 🆕 [CONDITIONAL-FALLBACK] Claude Opus → Gemini Pro High (issue #497 智能降级)
+    // 只有当所有账号都对 claude-opus-4-5-thinking 限流时才进行 fallback
+    // 这样可以最大化利用可用账号，减少不必要的 fallback
+    let initial_mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
+        &request_for_body.model,
+        &*state.custom_mapping.read().await,
+    );
+
+    if initial_mapped_model == "claude-opus-4-5-thinking" {
+        // 检查所有账号是否都对该模型限流
+        if token_manager.check_all_accounts_rate_limited_for_model("claude-opus-4-5-thinking") {
+            let fallback_model = "gemini-3-pro-high";
+            tracing::warn!(
+                "[Conditional-Fallback] All accounts rate-limited for Claude Opus Thinking. Falling back: {} -> {}",
+                initial_mapped_model,
+                fallback_model
+            );
+
+            // 修改请求模型为 fallback 模型
+            // 注意：这里修改的是 Claude API 的模型名称，后续在 resolve_model_route 时会映射到实际的 Gemini 模型
+            request_for_body.model = fallback_model.to_string();
+
+            // Emit UI notification event
+            // 使用与 request.rs 相同的 emit 方式
+            if let Some(app) = crate::proxy::mappers::claude::request::get_app_handle() {
+                use tauri::Emitter;
+                let payload = serde_json::json!({
+                    "from": "claude-opus-4-5-thinking",
+                    "to": fallback_model,
+                    "reason": "all_accounts_rate_limited"
+                });
+                if let Err(e) = app.emit("proxy://model-fallback", payload) {
+                    tracing::debug!("[Conditional-Fallback] Failed to emit UI event: {}", e);
+                }
+            }
+        } else {
+            tracing::debug!(
+                "[Conditional-Fallback] At least one account available for Claude Opus, no fallback needed"
+            );
+        }
+    }
+
     for attempt in 0..max_attempts {
         // 2. 模型路由解析
         let mut mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
@@ -520,7 +563,8 @@ pub async fn handle_messages(
         let session_id = Some(session_id_str.as_str());
 
         let force_rotate_token = attempt > 0;
-        let (access_token, project_id, email) = match token_manager.get_token(&config.request_type, force_rotate_token, session_id).await {
+        // 🆕 传递模型参数实现 model-aware rate limiting
+        let (access_token, project_id, email) = match token_manager.get_token(&config.request_type, force_rotate_token, session_id, Some(&mapped_model)).await {
             Ok(t) => t,
             Err(e) => {
                 let safe_message = if e.contains("invalid_grant") {
@@ -822,7 +866,9 @@ pub async fn handle_messages(
             }
             
             // 使用统一退避策略
-            let strategy = determine_retry_strategy(status_code, &error_text, retried_without_thinking);
+            // [Fix] Since we just handled the clean-up logic, explicitly ensure we retry
+            // instead of letting determine_retry_strategy block us due to the flag check
+            let strategy = RetryStrategy::FixedDelay(Duration::from_millis(200));
             if apply_retry_strategy(strategy, attempt, status_code, &trace_id).await {
                 continue;
             }
@@ -959,6 +1005,7 @@ const SUMMARY_KEYWORDS: &[&str] = &[
     "condense the previous messages",
     "shorten the conversation history",
     "extract key points from",
+    "The following is the text to summarize", // [OpenCode Fix] Detect internal summarization loop
 ];
 
 /// 建议生成关键词
@@ -975,6 +1022,7 @@ const SUGGESTION_KEYWORDS: &[&str] = &[
 const SYSTEM_KEYWORDS: &[&str] = &[
     "Warmup",
     "<system-reminder>",
+    "[SYSTEM REMINDER", // [OpenCode Fix] Detect bracketed system reminders
     // Removed: "Caveat: The messages below were generated" - this is a normal Claude Desktop system prompt
     "This is a system message",
 ];
@@ -1063,7 +1111,7 @@ fn select_background_model(task_type: BackgroundTaskType) -> &'static str {
     match task_type {
         BackgroundTaskType::TitleGeneration => BACKGROUND_MODEL_LITE,     // 极简任务
         BackgroundTaskType::SimpleSummary => BACKGROUND_MODEL_LITE,       // 简单摘要
-        BackgroundTaskType::SystemMessage => BACKGROUND_MODEL_LITE,       // 系统消息
+        BackgroundTaskType::SystemMessage => BACKGROUND_MODEL_CLAUDE_CODE, // 🆕 系统消息 (Claude Code) - использует умную модель для предотвращения циклов
         BackgroundTaskType::PromptSuggestion => BACKGROUND_MODEL_LITE,    // 建议生成
         BackgroundTaskType::EnvironmentProbe => BACKGROUND_MODEL_LITE,    // 环境探测
         BackgroundTaskType::ContextCompression => BACKGROUND_MODEL_STANDARD, // 复杂压缩
