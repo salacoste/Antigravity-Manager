@@ -1039,30 +1039,31 @@ fn build_generation_config(
     }
 
     // Effort level mapping (Claude API v2.0.67+)
-    // Maps Claude's output_config.effort to Gemini's effortLevel
-    // [FIX] Only set effortLevel for Gemini models, not Claude models
-    // Claude models via Google API don't support effortLevel parameter
+    // Maps Claude's output_config.effort to temperature parameter
+    // [FIX] Google Cloud Code API doesn't support effortLevel parameter
+    // Instead, map effort to temperature to control output quality:
+    //   - high effort → low temperature (0.3) = more precise, detailed
+    //   - medium effort → balanced temperature (0.7)
+    //   - low effort → high temperature (1.0) = faster, less detailed
     if let Some(output_config) = &claude_req.output_config {
         if let Some(effort) = &output_config.effort {
-            // Check if this is a Gemini model (not Claude)
-            let is_gemini_model = !mapped_model.contains("claude");
-
-            if is_gemini_model {
-                config["effortLevel"] = json!(match effort.to_lowercase().as_str() {
-                    "high" => "HIGH",
-                    "medium" => "MEDIUM",
-                    "low" => "LOW",
-                    _ => "HIGH" // Default to HIGH for unknown values
-                });
+            // Only apply if user hasn't explicitly set temperature
+            if claude_req.temperature.is_none() {
+                let temperature = match effort.to_lowercase().as_str() {
+                    "high" => 0.3,
+                    "medium" => 0.7,
+                    "low" => 1.0,
+                    _ => 0.7 // Default to balanced
+                };
+                config["temperature"] = json!(temperature);
                 tracing::debug!(
-                    "[Generation-Config] Effort level set for Gemini model: {} -> {}",
+                    "[Generation-Config] Effort level mapped to temperature: {} -> {}",
                     effort,
-                    config["effortLevel"]
+                    temperature
                 );
             } else {
                 tracing::debug!(
-                    "[Generation-Config] Skipping effortLevel for Claude model (unsupported): {}",
-                    mapped_model
+                    "[Generation-Config] User-specified temperature takes precedence over effort level"
                 );
             }
         }
