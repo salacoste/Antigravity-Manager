@@ -18,10 +18,10 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     m.insert("claude-opus-4", "claude-opus-4-5-thinking");
     m.insert("claude-opus-4-5-20251101", "claude-opus-4-5-thinking");
     m.insert("claude-opus-4-5-high", "claude-opus-4-5-thinking"); // OpenCode Opus with -high suffix
-    m.insert("claude-haiku-4", "gemini-2.5-flash"); // Haiku → Flash (быстрая и дешевая модель)
-    m.insert("claude-haiku-4-5", "gemini-2.5-flash"); // OpenCode Haiku → Flash
-    m.insert("claude-3-haiku-20240307", "gemini-2.5-flash");
-    m.insert("claude-haiku-4-5-20251001", "gemini-2.5-flash");
+    m.insert("claude-haiku-4", "gemini-3-pro-high"); // Haiku → Gemini 3 Pro High
+    m.insert("claude-haiku-4-5", "gemini-3-pro-high"); // OpenCode Haiku → Gemini 3 Pro High
+    m.insert("claude-3-haiku-20240307", "gemini-3-pro-high");
+    m.insert("claude-haiku-4-5-20251001", "gemini-3-pro-high");
     // OpenAI 协议映射表
     m.insert("gpt-4", "gemini-2.5-pro");
     m.insert("gpt-4-turbo", "gemini-2.5-pro");
@@ -46,13 +46,13 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     // Gemini 协议映射表
     m.insert("gemini-2.5-flash-lite", "gemini-2.5-flash-lite");
     m.insert("gemini-2.5-flash-thinking", "gemini-2.5-flash-thinking");
-    m.insert("gemini-3-pro-low", "gemini-3-pro-low");
-    m.insert("gemini-3-pro-high", "gemini-3-pro-high");  // Явно БЕЗ thinking
-    m.insert("gemini-3-pro-high-thinking", "gemini-3-pro-high-thinking");  // Явно С thinking
-    m.insert("gemini-3-pro-preview", "gemini-3-pro-preview");
-    m.insert("gemini-3-pro", "gemini-3-pro-high-thinking");  // По умолчанию роутим в high-thinking
+    m.insert("gemini-3-pro-low", "gemini-3-pro-high");  // 3 Pro Low → High
+    m.insert("gemini-3-pro-high", "gemini-3-pro-high");
+    m.insert("gemini-3-pro-high-thinking", "gemini-3-pro-high");  // Thinking → обычный High
+    m.insert("gemini-3-pro-preview", "gemini-3-pro-high");  // Preview → High
+    m.insert("gemini-3-pro", "gemini-3-pro-high");  // По умолчанию роутим в high
     m.insert("gemini-2.5-flash", "gemini-2.5-flash");
-    m.insert("gemini-3-flash", "gemini-3-flash");
+    m.insert("gemini-3-flash", "gemini-3-pro-high");  // Flash → High
     m.insert("gemini-3-pro-image", "gemini-3-pro-image");
 
 
@@ -70,8 +70,8 @@ pub fn map_claude_model_to_gemini(input: &str) -> String {
         return input.to_string();
     }
 
-    // 3. Fallback to default: gemini-3-pro-high-thinking для всех неизвестных моделей
-    "gemini-3-pro-high-thinking".to_string()
+    // 3. Fallback to default: gemini-2.5-flash для всех неизвестных моделей (экономия)
+    "gemini-2.5-flash".to_string()
 }
 
 /// 获取所有内置支持的模型列表关键字
@@ -208,24 +208,28 @@ mod tests {
             "claude-opus-4-5-thinking"
         );
 
-        // Claude Haiku routing to Gemini Flash (fast & cheap)
+        // Claude Haiku routing to Gemini 3 Pro High
         assert_eq!(
             map_claude_model_to_gemini("claude-haiku-4-5"),
-            "gemini-2.5-flash"
+            "gemini-3-pro-high"
         );
 
         // Gemini 3 Pro routing rules
         assert_eq!(
             map_claude_model_to_gemini("gemini-3-pro"),
-            "gemini-3-pro-high-thinking"  // Default: route to high-thinking
+            "gemini-3-pro-high"  // Default: route to high
         );
         assert_eq!(
             map_claude_model_to_gemini("gemini-3-pro-high"),
-            "gemini-3-pro-high"  // Explicit: WITHOUT thinking
+            "gemini-3-pro-high"
         );
         assert_eq!(
             map_claude_model_to_gemini("gemini-3-pro-high-thinking"),
-            "gemini-3-pro-high-thinking"  // Explicit: WITH thinking
+            "gemini-3-pro-high"  // Thinking → обычный High
+        );
+        assert_eq!(
+            map_claude_model_to_gemini("gemini-3-flash"),
+            "gemini-3-pro-high"  // Flash → High
         );
 
         // Test gemini pass-through (should not be caught by "mini" rule)
@@ -234,10 +238,10 @@ mod tests {
             "gemini-2.5-flash-mini-test"
         );
 
-        // Test new fallback to gemini-3-pro-high-thinking
+        // Test new fallback to gemini-2.5-flash (экономия)
         assert_eq!(
             map_claude_model_to_gemini("unknown-model"),
-            "gemini-3-pro-high-thinking"
+            "gemini-2.5-flash"
         );
     }
 }
