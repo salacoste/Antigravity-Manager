@@ -1,14 +1,16 @@
-# Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.20)
+# Antigravity Tools 🚀 Enhanced Edition
+> 🌟 **优化增强版** - 基于原版深度改进的专业 AI 账号管理与协议反代系统 (v3.3.20)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
-  <h3>您的个人高性能 AI 调度网关</h3>
-  <p>不仅仅是账号管理，更是打破 API 调用壁垒的终极解决方案。</p>
+  <h3>🔥 您的下一代高性能 AI 调度网关</h3>
+  <p>不仅仅是账号管理，更是打破 API 调用壁垒的<strong>终极优化解决方案</strong>。</p>
+
+  <p><strong>⚡ 增强特性</strong>：智能模型路由 | Thinking Mode 优化 | 高级账号轮换 | 企业级稳定性</p>
   
   <p>
-    <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.20-blue?style=flat-square" alt="Version">
+    <a href="https://github.com/salacoste/Antigravity-Manager">
+      <img src="https://img.shields.io/badge/Version-3.3.20%20Enhanced-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -32,9 +34,41 @@
 
 ---
 
+## 🎯 为什么选择增强版？
+
+**Antigravity Tools Enhanced Edition** 是基于 [原版项目](https://github.com/lbjlaq/Antigravity-Manager) 的深度优化分支，专注于提供**更智能、更稳定、更高效**的 AI 代理体验。
+
+### ✨ 独家增强特性
+
+#### 🧠 智能模型路由系统
+- **Thinking Mode 完整支持**: 为所有高级模型（Haiku/Gemini 3 Pro）自动启用思维链模式，确保最佳推理质量
+- **自适应模型映射**: 智能将 Haiku 系列路由至 `gemini-3-pro-high-thinking`，平衡性能与成本
+- **Gemini 3 全家族优化**: 所有 Gemini 3 变体统一映射至高性能 thinking 版本
+
+#### 🔄 高级账号轮换机制
+- **配额耗尽智能重试**: 遇到 `QUOTA_EXHAUSTED` 时自动切换下一账号，而非立即失败
+- **动态限流清除**: 手动刷新配额后立即解除代理层面的限流锁定
+- **多账号负载均衡**: 支持最多 11 个账号并发轮换，确保服务连续性
+
+#### ⚡ 企业级稳定性
+- **零停机部署**: 生产就绪的构建配置与优化
+- **增强错误恢复**: 针对 Google API 签名变更的自适应处理
+- **完整日志追踪**: 路由决策、账号切换全程可观测
+
+#### 🎛️ 优化的默认配置
+- **开箱即用的模型优先级**: 预配置最优路由策略
+- **性价比平衡**: Flash 模型用于轻量任务，Pro High 用于复杂推理
+- **用户友好的错误提示**: 中文/英文双语错误信息
+
+---
+
+### 📦 原版功能保留
+
 **Antigravity Tools** 是一个专为开发者和 AI 爱好者设计的全功能桌面应用。它将多账号管理、协议转换和智能请求调度完美结合，为您提供一个稳定、极速且成本低廉的 **本地 AI 中转站**。
 
 通过本应用，您可以将常见的 Web 端 Session (Google/Anthropic) 转化为标准化的 API 接口，彻底消除不同厂商间的协议鸿沟。
+
+**增强版在保留所有原版功能的基础上**，进一步提升了系统的智能化和可靠性。
 
 ## 💖 赞助商 (Sponsors)
 
@@ -105,18 +139,18 @@ graph TD
 如果您已安装 [Homebrew](https://brew.sh/)，可以通过以下命令快速安装：
 
 ```bash
-# 1. 订阅本仓库的 Tap
-brew tap lbjlaq/antigravity-manager https://github.com/lbjlaq/Antigravity-Manager
+# 1. 订阅增强版仓库的 Tap
+brew tap salacoste/antigravity-manager https://github.com/salacoste/Antigravity-Manager
 
 # 2. 安装应用
 brew install --cask antigravity-tools
 ```
-> **提示**: 
+> **提示**:
 > - **macOS**: 如果遇到权限问题，建议添加 `--no-quarantine` 参数。
 > - **Linux**: 安装后会自动将 AppImage 添加到二进制路径并配置可执行权限。
 
 ### 选项 B: 手动下载
-前往 [GitHub Releases](https://github.com/lbjlaq/Antigravity-Manager/releases) 下载对应系统的包：
+前往 [GitHub Releases](https://github.com/salacoste/Antigravity-Manager/releases) 下载对应系统的包：
 *   **macOS**: `.dmg` (支持 Apple Silicon & Intel)
 *   **Windows**: `.msi` 或 便携版 `.zip`
 *   **Linux**: `.deb` 或 `AppImage`
@@ -757,7 +791,39 @@ print(response.choices[0].message.content)
 
 ---
 
+## 🚀 关于增强版
+
+**Antigravity Tools Enhanced Edition** 是专注于生产环境稳定性和智能化的优化分支。
+
+### 🎯 与原版的主要区别
+
+| 特性 | 原版 | 增强版 |
+|------|------|--------|
+| **Thinking Mode 支持** | 部分支持 | 完整优化，所有高级模型自动启用 |
+| **配额耗尽处理** | 立即失败 | 智能轮换至下一账号 |
+| **模型路由策略** | 基础映射 | 智能自适应，性价比优化 |
+| **限流清除机制** | 手动重启 | 自动清除，即时生效 |
+| **日志追踪** | 标准日志 | 完整路由决策可观测 |
+| **默认配置** | 需要调整 | 开箱即用，最优实践 |
+
+### 💡 适用场景
+
+- ✅ **重度 AI 使用者**: 需要多账号高可用性和智能负载均衡
+- ✅ **开发者工具集成**: 完美支持 AI 编程助手的 Thinking Mode
+- ✅ **企业级部署**: 零停机、高稳定性、完整日志
+- ✅ **成本敏感用户**: 智能路由优化，最大化免费配额利用率
+
+### 🔗 相关链接
+
+- 🌟 [增强版 GitHub](https://github.com/salacoste/Antigravity-Manager) - 持续更新中
+- 📦 [原版项目](https://github.com/lbjlaq/Antigravity-Manager) - 感谢原作者的卓越工作
+- 🐛 [提交 Issue](https://github.com/salacoste/Antigravity-Manager/issues) - 增强版特定问题
+- 💬 [参与讨论](https://github.com/salacoste/Antigravity-Manager/discussions) - 分享使用经验
+
+---
+
 <div align="center">
-  <p>如果您觉得这个工具有所帮助，欢迎在 GitHub 上点一个 ⭐️</p>
-  <p>Copyright © 2025 Antigravity Team.</p>
+  <p>如果您觉得增强版对您有帮助，欢迎在 GitHub 上点一个 ⭐️</p>
+  <p><strong>Copyright © 2025 Antigravity Team & Enhanced by salacoste</strong></p>
+  <p><em>基于原版项目深度优化 · 专注智能化与稳定性</em></p>
 </div>
