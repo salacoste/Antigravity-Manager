@@ -111,14 +111,6 @@ pub fn transform_claude_request_in(
     claude_req: &ClaudeRequest,
     project_id: &str,
 ) -> Result<Value, String> {
-    // [DEBUG] Log incoming request parameters
-    tracing::info!(
-        "[Claude-Request] Incoming: model={}, max_tokens={:?}, thinking={:?}",
-        claude_req.model,
-        claude_req.max_tokens,
-        claude_req.thinking.as_ref().map(|t| format!("type={}, budget={:?}", t.type_, t.budget_tokens))
-    );
-
     // [CRITICAL FIX] 预先清理所有消息中的 cache_control 字段
     // 这解决了 VS Code 插件等客户端在多轮对话中将历史消息的 cache_control 字段
     // 原封不动发回导致的 "Extra inputs are not permitted" 错误
@@ -348,6 +340,18 @@ pub fn transform_claude_request_in(
         }
     }
 
+    // [CRITICAL LOG] Log final request structure for debugging INVALID_ARGUMENT errors
+    if let Some(gen_config) = body["request"].get("generationConfig") {
+        if let Some(thinking_config) = gen_config.get("thinkingConfig") {
+            let max_tokens = gen_config.get("maxOutputTokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            tracing::warn!(
+                "[Claude-Request] THINKING MODE: model={}, maxOutputTokens={}, thinkingConfig={}",
+                body["model"].as_str().unwrap_or("unknown"),
+                max_tokens,
+                serde_json::to_string(thinking_config).unwrap_or_default()
+            );
+        }
+    }
 
     Ok(body)
 }
@@ -959,10 +963,6 @@ fn build_generation_config(
                 if is_flash_model {
                     budget = budget.min(24576);
                 }
-                tracing::info!(
-                    "[Generation-Config] Setting thinkingBudget: original={}, clamped={}, model={}",
-                    budget_tokens, budget, mapped_model
-                );
                 thinking_config["thinkingBudget"] = json!(budget);
             }
 
@@ -1022,18 +1022,20 @@ fn build_generation_config(
         // Ensure max_tokens > thinking.budget_tokens (strict inequality required by Claude API)
         if let Some(thinking) = &claude_req.thinking {
             if let Some(budget) = thinking.budget_tokens {
-                let actual_budget = if has_web_search || mapped_model.contains("gemini-2.5-flash") {
+                // [CRITICAL] Use same clamping logic as thinkingConfig
+                let is_flash_model = has_web_search || claude_req.model.contains("gemini-2.5-flash");
+                let clamped_budget = if is_flash_model {
                     budget.min(24576)
                 } else {
                     budget
                 };
 
                 // Claude API requirement: max_tokens must be STRICTLY greater than budget_tokens
-                if max_tokens <= actual_budget {
-                    let adjusted = actual_budget + 100;
+                if max_tokens <= clamped_budget {
+                    let adjusted = clamped_budget + 100;
                     tracing::warn!(
-                        "[Generation-Config] max_tokens ({}) must be > thinking.budget_tokens ({}). Auto-adjusting to {}",
-                        max_tokens, actual_budget, adjusted
+                        "[Generation-Config] max_tokens ({}) <= budget_tokens ({}). Auto-adjusting to {}",
+                        max_tokens, clamped_budget, adjusted
                     );
                     adjusted
                 } else {
@@ -1051,17 +1053,6 @@ fn build_generation_config(
     };
 
     config["maxOutputTokens"] = json!(max_output_tokens);
-
-    // [DEBUG] Log generation config for troubleshooting
-    tracing::info!(
-        "[Generation-Config] Final config: maxOutputTokens={}, thinking_enabled={}, has_thinking_config={}",
-        max_output_tokens,
-        is_thinking_enabled,
-        config.get("thinkingConfig").is_some()
-    );
-    if let Some(thinking_cfg) = config.get("thinkingConfig") {
-        tracing::info!("[Generation-Config] thinkingConfig: {}", serde_json::to_string(&thinking_cfg).unwrap_or_default());
-    }
 
     // [优化] 设置全局停止序列,防止流式输出冗余
     config["stopSequences"] = json!([
