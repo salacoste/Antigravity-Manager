@@ -20,6 +20,13 @@ pub struct UpstreamClient {
 
 impl UpstreamClient {
     pub fn new(proxy_config: Option<crate::proxy::config::UpstreamProxyConfig>) -> Self {
+        // [DEBUG] Allow overriding user agent via environment variable
+        // Updated to 1.13.3 to match current Google Antigravity version
+        let user_agent = std::env::var("CLAUDE_USER_AGENT")
+            .unwrap_or_else(|_| "antigravity/1.13.3 darwin/arm64".to_string());
+
+        tracing::info!("🔧 UpstreamClient User-Agent: {}", user_agent);
+
         let mut builder = Client::builder()
             // Connection settings (优化连接复用，减少建立开销)
             .connect_timeout(Duration::from_secs(20))
@@ -27,7 +34,7 @@ impl UpstreamClient {
             .pool_idle_timeout(Duration::from_secs(90))  // 空闲连接保持 90 秒
             .tcp_keepalive(Duration::from_secs(60))      // TCP 保活探测 60 秒
             .timeout(Duration::from_secs(600))
-            .user_agent("antigravity/1.11.9 windows/amd64");
+            .user_agent(user_agent);
 
         if let Some(config) = proxy_config {
             if config.enabled && !config.url.is_empty() {
@@ -89,10 +96,25 @@ impl UpstreamClient {
             header::HeaderValue::from_str(&format!("Bearer {}", access_token))
                 .map_err(|e| e.to_string())?,
         );
+
+        // [DEBUG] Allow overriding user agent via environment variable
+        // Updated to 1.13.3 to match current Google Antigravity version
+        let user_agent = std::env::var("CLAUDE_USER_AGENT")
+            .unwrap_or_else(|_| "antigravity/1.13.3 darwin/arm64".to_string());
         headers.insert(
             header::USER_AGENT,
-            header::HeaderValue::from_static("antigravity/1.11.9 windows/amd64"),
+            header::HeaderValue::from_str(&user_agent)
+                .map_err(|e| e.to_string())?,
         );
+
+        // [DEBUG] Add additional headers for testing
+        if let Ok(test_variant) = std::env::var("X_TEST_VARIANT") {
+            headers.insert(
+                header::HeaderName::from_static("x-test-variant"),
+                header::HeaderValue::from_str(&test_variant)
+                    .unwrap_or_else(|_| header::HeaderValue::from_static("unknown")),
+            );
+        }
 
         let mut last_err: Option<String> = None;
 
@@ -100,6 +122,51 @@ impl UpstreamClient {
         for (idx, base_url) in V1_INTERNAL_BASE_URL_FALLBACKS.iter().enumerate() {
             let url = Self::build_url(base_url, method, query_string);
             let has_next = idx + 1 < V1_INTERNAL_BASE_URL_FALLBACKS.len();
+
+            // [DEBUG] Log full request details before sending
+            tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            tracing::error!("🔍 UPSTREAM REQUEST DEBUG");
+            tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            tracing::error!("📍 URL: {}", url);
+            tracing::error!("🔧 Method: POST");
+            tracing::error!("📋 Headers:");
+            for (key, value) in headers.iter() {
+                if let Ok(v) = value.to_str() {
+                    if key.as_str().to_lowercase() == "authorization" {
+                        let masked = if v.len() > 20 {
+                            format!("Bearer {}...{}", &v[7..17], &v[v.len()-4..])
+                        } else {
+                            "Bearer ***".to_string()
+                        };
+                        tracing::error!("  {}: {}", key, masked);
+                    } else {
+                        tracing::error!("  {}: {}", key, v);
+                    }
+                }
+            }
+            tracing::error!("📦 Body Structure:");
+            if let Some(obj) = body.as_object() {
+                tracing::error!("  project: {:?}", obj.get("project"));
+                tracing::error!("  requestId: {:?}", obj.get("requestId"));
+                tracing::error!("  model: {:?}", obj.get("model"));
+                tracing::error!("  userAgent: {:?}", obj.get("userAgent"));
+                tracing::error!("  requestType: {:?}", obj.get("requestType"));
+                if let Some(req) = obj.get("request").and_then(|r| r.as_object()) {
+                    tracing::error!("  request.contents.len: {:?}", req.get("contents").and_then(|c| c.as_array()).map(|a| a.len()));
+                    tracing::error!("  request.systemInstruction: {}", req.contains_key("systemInstruction"));
+                    tracing::error!("  request.generationConfig: {}", req.contains_key("generationConfig"));
+                    tracing::error!("  request.tools: {}", req.contains_key("tools"));
+                }
+            }
+            tracing::error!("📄 Full Body (first 500 chars):");
+            let body_str = serde_json::to_string_pretty(&body).unwrap_or_default();
+            let preview = if body_str.len() > 500 {
+                format!("{}...", &body_str[..500])
+            } else {
+                body_str
+            };
+            tracing::error!("{}", preview);
+            tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
             let response = self
                 .http_client
@@ -112,6 +179,33 @@ impl UpstreamClient {
             match response {
                 Ok(resp) => {
                     let status = resp.status();
+
+                    // [DEBUG] Log response details
+                    tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    tracing::error!("📥 UPSTREAM RESPONSE DEBUG");
+                    tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    tracing::error!("🔢 Status: {}", status);
+                    tracing::error!("📋 Response Headers:");
+                    for (key, value) in resp.headers().iter() {
+                        if let Ok(v) = value.to_str() {
+                            tracing::error!("  {}: {}", key, v);
+                        }
+                    }
+
+                    // [DEBUG] For 429 errors, capture error body
+                    if status == StatusCode::TOO_MANY_REQUESTS {
+                        tracing::error!("❌❌❌ 429 RATE LIMIT ERROR DETECTED! ❌❌❌");
+                        // Try to read error body
+                        let body_bytes = resp.bytes().await.unwrap_or_default();
+                        let body_str = String::from_utf8_lossy(&body_bytes);
+                        tracing::error!("📄 Error Body: {}", body_str);
+                        tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+                        // Return error since we consumed the body
+                        return Err(format!("429 Rate Limit: {}", body_str));
+                    }
+                    tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
                     if status.is_success() {
                         if idx > 0 {
                             tracing::info!(
@@ -192,9 +286,13 @@ impl UpstreamClient {
             header::HeaderValue::from_str(&format!("Bearer {}", access_token))
                 .map_err(|e| e.to_string())?,
         );
+        // Updated to 1.13.3 to match current Google Antigravity version
+        let user_agent = std::env::var("CLAUDE_USER_AGENT")
+            .unwrap_or_else(|_| "antigravity/1.13.3 darwin/arm64".to_string());
         headers.insert(
             header::USER_AGENT,
-            header::HeaderValue::from_static("antigravity/1.11.9 windows/amd64"),
+            header::HeaderValue::from_str(&user_agent)
+                .map_err(|e| format!("Invalid user agent: {}", e))?,
         );
 
         let mut last_err: Option<String> = None;
