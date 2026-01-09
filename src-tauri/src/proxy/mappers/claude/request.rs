@@ -251,7 +251,7 @@ pub fn transform_claude_request_in(
     }
 
     // 4. Generation Config & Thinking (Pass final is_thinking_enabled)
-    let generation_config = build_generation_config(claude_req, has_web_search_tool, is_thinking_enabled);
+    let generation_config = build_generation_config(claude_req, has_web_search_tool, is_thinking_enabled, &mapped_model);
 
     // 2. Contents (Messages)
     let contents = build_contents(
@@ -932,7 +932,8 @@ fn build_tools(tools: &Option<Vec<Tool>>, has_web_search: bool) -> Result<Option
 fn build_generation_config(
     claude_req: &ClaudeRequest,
     has_web_search: bool,
-    is_thinking_enabled: bool
+    is_thinking_enabled: bool,
+    mapped_model: &str
 ) -> Value {
     let mut config = json!({});
 
@@ -970,19 +971,31 @@ fn build_generation_config(
 
     // Effort level mapping (Claude API v2.0.67+)
     // Maps Claude's output_config.effort to Gemini's effortLevel
+    // [FIX] Only set effortLevel for Gemini models, not Claude models
+    // Claude models via Google API don't support effortLevel parameter
     if let Some(output_config) = &claude_req.output_config {
         if let Some(effort) = &output_config.effort {
-            config["effortLevel"] = json!(match effort.to_lowercase().as_str() {
-                "high" => "HIGH",
-                "medium" => "MEDIUM",
-                "low" => "LOW",
-                _ => "HIGH" // Default to HIGH for unknown values
-            });
-            tracing::debug!(
-                "[Generation-Config] Effort level set: {} -> {}",
-                effort,
-                config["effortLevel"]
-            );
+            // Check if this is a Gemini model (not Claude)
+            let is_gemini_model = !mapped_model.contains("claude");
+
+            if is_gemini_model {
+                config["effortLevel"] = json!(match effort.to_lowercase().as_str() {
+                    "high" => "HIGH",
+                    "medium" => "MEDIUM",
+                    "low" => "LOW",
+                    _ => "HIGH" // Default to HIGH for unknown values
+                });
+                tracing::debug!(
+                    "[Generation-Config] Effort level set for Gemini model: {} -> {}",
+                    effort,
+                    config["effortLevel"]
+                );
+            } else {
+                tracing::debug!(
+                    "[Generation-Config] Skipping effortLevel for Claude model (unsupported): {}",
+                    mapped_model
+                );
+            }
         }
     }
 
@@ -992,7 +1005,40 @@ fn build_generation_config(
     }*/
 
     // max_tokens 映射为 maxOutputTokens
-    config["maxOutputTokens"] = json!(64000);
+    // [FIX] Respect claude_req.max_tokens and ensure max_tokens > budget_tokens
+    let max_output_tokens = if let Some(max_tokens) = claude_req.max_tokens {
+        // Ensure max_tokens > thinking.budget_tokens (strict inequality required by Claude API)
+        if let Some(thinking) = &claude_req.thinking {
+            if let Some(budget) = thinking.budget_tokens {
+                let actual_budget = if has_web_search || mapped_model.contains("gemini-2.5-flash") {
+                    budget.min(24576)
+                } else {
+                    budget
+                };
+
+                // Claude API requirement: max_tokens must be STRICTLY greater than budget_tokens
+                if max_tokens <= actual_budget {
+                    let adjusted = actual_budget + 100;
+                    tracing::warn!(
+                        "[Generation-Config] max_tokens ({}) must be > thinking.budget_tokens ({}). Auto-adjusting to {}",
+                        max_tokens, actual_budget, adjusted
+                    );
+                    adjusted
+                } else {
+                    max_tokens
+                }
+            } else {
+                max_tokens
+            }
+        } else {
+            max_tokens
+        }
+    } else {
+        // Fallback to default if client doesn't specify
+        64000
+    };
+
+    config["maxOutputTokens"] = json!(max_output_tokens);
 
     // [优化] 设置全局停止序列,防止流式输出冗余
     config["stopSequences"] = json!([

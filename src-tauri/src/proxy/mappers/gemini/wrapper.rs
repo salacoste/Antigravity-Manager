@@ -171,12 +171,6 @@ mod tests {
         assert!(result.get("candidates").is_some());
         assert!(result.get("response").is_none());
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
 
     #[test]
     fn test_antigravity_identity_injection_with_role() {
