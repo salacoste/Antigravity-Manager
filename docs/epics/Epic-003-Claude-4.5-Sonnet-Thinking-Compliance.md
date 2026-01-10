@@ -148,7 +148,7 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 
 **Stories**:
 11. [Story-003-04](../stories/Story-003-04-extended-session-metadata.md): Add Extended Session Metadata (1h)
-12. CLAUDE-THINKING-001-12: Compliance Monitoring Dashboard (1h)
+12. [Story-003-12](../stories/Story-003-12-compliance-monitoring-dashboard.md): Compliance Monitoring Dashboard (1h)
 
 **Success Criteria**:
 - workspace_id and cloudaicompanion_project fields supported
@@ -284,3 +284,5 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 | 2026-01-10 | Story-003-09 (Flexible Tool Configuration Modes) created | BMad Master |
 | 2026-01-10 | Story-003-10 (Grounding Configuration) created | BMad Master |
 | 2026-01-10 | Story-003-11 (Tool Mode Testing) created - P2 phase complete | BMad Master |
+| 2026-01-10 | Story-003-12 (Compliance Monitoring Dashboard) created | BMad Master |
+| 2026-01-10 | **Epic-003 documentation complete** - All 12 stories documented (17.5h total) | BMad Master |
