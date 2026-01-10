@@ -1,7 +1,7 @@
-# Story CLAUDE-THINKING-001-04: Add Extended Session Metadata Fields
+# Story Epic-003-04: Add Extended Session Metadata Fields
 
-**Story ID**: CLAUDE-THINKING-001-04
-**Epic**: [CLAUDE-THINKING-001 - Claude 4.5 Sonnet Thinking Compliance](../epics/claude-4-5-sonnet-thinking-compliance-epic.md)
+**Story ID**: Epic-003-04
+**Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P3 (Low) - 📌 **Completes FR2 (Request Metadata)**
 **Estimate**: 1 story point (1 hour)
 **Status**: To Do
@@ -211,7 +211,7 @@ fn test_metadata_with_all_fields() {
 ## Dependencies
 
 **Depends On**:
-- CLAUDE-THINKING-001-03: ideType metadata (base structure)
+- Epic-003-03: ideType metadata (base structure)
 
 **Completes**:
 - 🎯 FR2: Request Metadata (all metadata fields implemented)

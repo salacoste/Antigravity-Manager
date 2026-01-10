@@ -1,7 +1,7 @@
-# Story CLAUDE-THINKING-001-01: Add Model ID Constant and Helper Function
+# Story Epic-003-01: Add Model ID Constant and Helper Function
 
-**Story ID**: CLAUDE-THINKING-001-01
-**Epic**: [CLAUDE-THINKING-001 - Claude 4.5 Sonnet Thinking Compliance](../epics/claude-4-5-sonnet-thinking-compliance-epic.md)
+**Story ID**: Epic-003-01
+**Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P0 (Critical)
 **Estimate**: 2 story points (1.5 hours)
 **Status**: In Progress
@@ -200,7 +200,7 @@ fn test_request_includes_model_id() {
 **Depends On**: None (first story in epic)
 
 **Blocks**:
-- CLAUDE-THINKING-001-02: API/Model Provider constants (builds on this foundation)
+- Epic-003-02: API/Model Provider constants (builds on this foundation)
 
 **Related**:
 - Part of FR1: Model Provider Information (along with Stories #2)
@@ -238,11 +238,11 @@ fn test_request_includes_model_id() {
 ## Related Stories
 
 **Next in Sequence**:
-- CLAUDE-THINKING-001-02: Add API Provider and Model Provider Constants
+- Epic-003-02: Add API Provider and Model Provider Constants
 
 **Same FR Group** (FR1: Model Provider Information):
-- CLAUDE-THINKING-001-01: Model ID (this story)
-- CLAUDE-THINKING-001-02: API/Model Provider
+- Epic-003-01: Model ID (this story)
+- Epic-003-02: API/Model Provider
 
 ---
 

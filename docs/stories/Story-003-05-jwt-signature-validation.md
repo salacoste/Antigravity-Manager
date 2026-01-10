@@ -1,7 +1,7 @@
-# Story CLAUDE-THINKING-001-05: Implement JWT Signature Validation
+# Story Epic-003-05: Implement JWT Signature Validation
 
-**Story ID**: CLAUDE-THINKING-001-05
-**Epic**: [CLAUDE-THINKING-001 - Claude 4.5 Sonnet Thinking Compliance](../epics/claude-4-5-sonnet-thinking-compliance-epic.md)
+**Story ID**: Epic-003-05
+**Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P0 (Critical) - 🔐 **LAST P0 STORY - Completes Critical Phase**
 **Estimate**: 3 story points (2 hours)
 **Status**: To Do
@@ -356,9 +356,9 @@ fn test_valid_jwt_signature_preserved() {
 ## Dependencies
 
 **Depends On**:
-- CLAUDE-THINKING-001-01: Model ID (request structure)
-- CLAUDE-THINKING-001-02: Providers (complete request format)
-- CLAUDE-THINKING-001-03: Metadata (anti-detection compliance)
+- Epic-003-01: Model ID (request structure)
+- Epic-003-02: Providers (complete request format)
+- Epic-003-03: Metadata (anti-detection compliance)
 
 **Completes**:
 - 🎯 **FR3**: JWT Signature Validation
@@ -487,11 +487,11 @@ After this story is complete:
 ## Related Stories
 
 **Previous** (P0):
-- CLAUDE-THINKING-001-04: Extended Session Metadata
+- Epic-003-04: Extended Session Metadata
 
 **Next** (P1 Phase):
-- CLAUDE-THINKING-001-06: Budget Constraint Warnings (0.5h)
-- CLAUDE-THINKING-001-07: Position Enforcement Logging (1h)
+- Epic-003-06: Budget Constraint Warnings (0.5h)
+- Epic-003-07: Position Enforcement Logging (1h)
 
 ---
 

@@ -1,7 +1,7 @@
-# Story QUOTA-001-01: Quota API Integration
+# Story Epic-001-01: Quota API Integration
 
-**Story ID**: QUOTA-001-01
-**Epic**: [QUOTA-001 - Proactive Quota Monitoring](../epics/proactive-quota-monitoring-epic.md)
+**Story ID**: Epic-001-01
+**Epic**: [Epic-001 - Proactive Quota Monitoring](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 **Priority**: P0 (Critical)
 **Estimate**: 5 story points
 **Status**: To Do
@@ -397,8 +397,8 @@ mod tests {
 - [Proactive Quota Monitoring PRD](../product-requirements/proactive-quota-monitoring-prd.md)
 
 **Related Stories**:
-- [QUOTA-001-02: Pre-Request Validation](QUOTA-001-02-pre-request-validation.md) - Uses quota data from this story
-- [QUOTA-001-05: Quota Cache](QUOTA-001-05-quota-cache.md) - Storage for fetched quota data
+- [Epic-001-02: Pre-Request Validation](Epic-001-02-pre-request-validation.md) - Uses quota data from this story
+- [Epic-001-05: Quota Cache](Epic-001-05-quota-cache.md) - Storage for fetched quota data
 
 ---
 

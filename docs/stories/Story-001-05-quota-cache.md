@@ -1,7 +1,7 @@
-# Story QUOTA-001-05: Quota Cache Implementation
+# Story Epic-001-05: Quota Cache Implementation
 
-**Story ID**: QUOTA-001-05
-**Epic**: [QUOTA-001](../epics/proactive-quota-monitoring-epic.md)
+**Story ID**: Epic-001-05
+**Epic**: [Epic-001](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 **Priority**: P1
 **Estimate**: 3 points
 **Status**: To Do
@@ -85,8 +85,8 @@ impl QuotaCache {
 
 ## Related Documents
 
-- [Epic QUOTA-001](../epics/proactive-quota-monitoring-epic.md)
-- [QUOTA-001-01: API Integration](QUOTA-001-01-quota-api-integration.md)
+- [Epic Epic-001](../epics/Epic-001-Proactive-Quota-Monitoring.md)
+- [Epic-001-01: API Integration](Epic-001-01-quota-api-integration.md)
 
 ---
 

@@ -1,12 +1,12 @@
-# Story QUOTA-001-02: Pre-Request Quota Validation
+# Story Epic-001-02: Pre-Request Quota Validation
 
-**Story ID**: QUOTA-001-02
-**Epic**: [QUOTA-001 - Proactive Quota Monitoring](../epics/proactive-quota-monitoring-epic.md)
+**Story ID**: Epic-001-02
+**Epic**: [Epic-001 - Proactive Quota Monitoring](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 **Priority**: P0 (Critical)
 **Estimate**: 3 story points
 **Status**: To Do
 **Assignee**: TBD
-**Dependencies**: QUOTA-001-01 (Quota API Integration)
+**Dependencies**: Epic-001-01 (Quota API Integration)
 
 ---
 
@@ -20,7 +20,7 @@
 
 ## Context
 
-After implementing quota fetching (QUOTA-001-01), we need to **use** this quota data to make intelligent decisions. Instead of blindly sending requests and handling 429 errors reactively, we should:
+After implementing quota fetching (Epic-001-01), we need to **use** this quota data to make intelligent decisions. Instead of blindly sending requests and handling 429 errors reactively, we should:
 
 1. Check `remainingFraction` **before** the request
 2. Switch accounts if quota is low (<10%)
@@ -354,15 +354,15 @@ async fn test_no_quota_data_proceeds_anyway();
 
 ## Related Documents
 
-**Epic**: [QUOTA-001 - Proactive Quota Monitoring](../epics/proactive-quota-monitoring-epic.md)
+**Epic**: [Epic-001 - Proactive Quota Monitoring](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 
 **Reverse Engineering References**:
 - [Quota Monitoring Strategies](../antigravity/api/quota-apis.md#monitoring-strategies)
 - [Best Practices](../antigravity/api/quota-apis.md#best-practices)
 
 **Related Stories**:
-- [QUOTA-001-01: Quota API Integration](QUOTA-001-01-quota-api-integration.md) (prerequisite)
-- [QUOTA-001-03: Background Monitoring](QUOTA-001-03-background-monitoring.md) (uses same cache)
+- [Epic-001-01: Quota API Integration](Epic-001-01-quota-api-integration.md) (prerequisite)
+- [Epic-001-03: Background Monitoring](Epic-001-03-background-monitoring.md) (uses same cache)
 
 ---
 

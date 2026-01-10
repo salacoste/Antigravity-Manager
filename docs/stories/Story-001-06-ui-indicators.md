@@ -1,11 +1,11 @@
-# Story QUOTA-001-06: Quota Health UI Indicators
+# Story Epic-001-06: Quota Health UI Indicators
 
-**Story ID**: QUOTA-001-06
-**Epic**: [QUOTA-001](../epics/proactive-quota-monitoring-epic.md)
+**Story ID**: Epic-001-06
+**Epic**: [Epic-001](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 **Priority**: P2
 **Estimate**: 3 points
 **Status**: To Do
-**Dependencies**: QUOTA-001-03
+**Dependencies**: Epic-001-03
 
 ---
 
@@ -60,7 +60,7 @@ app.emit("quota://updated", QuotaUpdateEvent {
 
 ## Related Documents
 
-- [Epic QUOTA-001](../epics/proactive-quota-monitoring-epic.md)
+- [Epic Epic-001](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 
 ---
 

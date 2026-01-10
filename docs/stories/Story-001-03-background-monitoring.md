@@ -1,11 +1,11 @@
-# Story QUOTA-001-03: Background Quota Monitoring
+# Story Epic-001-03: Background Quota Monitoring
 
-**Story ID**: QUOTA-001-03
-**Epic**: [QUOTA-001 - Proactive Quota Monitoring](../epics/proactive-quota-monitoring-epic.md)
+**Story ID**: Epic-001-03
+**Epic**: [Epic-001 - Proactive Quota Monitoring](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 **Priority**: P1 (High)
 **Estimate**: 5 story points
 **Status**: To Do
-**Dependencies**: QUOTA-001-01, QUOTA-001-05
+**Dependencies**: Epic-001-01, Epic-001-05
 
 ---
 
@@ -158,8 +158,8 @@ pub async fn start_background_monitoring(&self) {
 
 ## Related Documents
 
-- [Epic QUOTA-001](../epics/proactive-quota-monitoring-epic.md)
-- [QUOTA-001-01: API Integration](QUOTA-001-01-quota-api-integration.md)
+- [Epic Epic-001](../epics/Epic-001-Proactive-Quota-Monitoring.md)
+- [Epic-001-01: API Integration](Epic-001-01-quota-api-integration.md)
 - [Quota APIs Reference](../antigravity/api/quota-apis.md)
 
 ---

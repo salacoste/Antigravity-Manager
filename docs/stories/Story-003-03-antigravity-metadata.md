@@ -1,7 +1,7 @@
-# Story CLAUDE-THINKING-001-03: Add ideType ANTIGRAVITY Metadata
+# Story Epic-003-03: Add ideType ANTIGRAVITY Metadata
 
-**Story ID**: CLAUDE-THINKING-001-03
-**Epic**: [CLAUDE-THINKING-001 - Claude 4.5 Sonnet Thinking Compliance](../epics/claude-4-5-sonnet-thinking-compliance-epic.md)
+**Story ID**: Epic-003-03
+**Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P0 (CRITICAL) - 🚨 **PRIMARY ANTI-DETECTION MARKER**
 **Estimate**: 3 story points (2 hours)
 **Status**: To Do
@@ -262,11 +262,11 @@ fn test_metadata_preserves_session_id() {
 ## Dependencies
 
 **Depends On**:
-- CLAUDE-THINKING-001-01: Model ID constants
-- CLAUDE-THINKING-001-02: Provider constants
+- Epic-003-01: Model ID constants
+- Epic-003-02: Provider constants
 
 **Blocks**:
-- CLAUDE-THINKING-001-04: Extended session metadata
+- Epic-003-04: Extended session metadata
 
 **Related**:
 - Part of FR2: Request Metadata

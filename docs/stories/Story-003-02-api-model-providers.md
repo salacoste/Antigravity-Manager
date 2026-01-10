@@ -1,7 +1,7 @@
-# Story CLAUDE-THINKING-001-02: Add API Provider and Model Provider Constants
+# Story Epic-003-02: Add API Provider and Model Provider Constants
 
-**Story ID**: CLAUDE-THINKING-001-02
-**Epic**: [CLAUDE-THINKING-001 - Claude 4.5 Sonnet Thinking Compliance](../epics/claude-4-5-sonnet-thinking-compliance-epic.md)
+**Story ID**: Epic-003-02
+**Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P0 (Critical)
 **Estimate**: 2 story points (1.5 hours)
 **Status**: To Do
@@ -226,10 +226,10 @@ fn test_request_includes_providers() {
 ## Dependencies
 
 **Depends On**:
-- CLAUDE-THINKING-001-01: Model ID implementation
+- Epic-003-01: Model ID implementation
 
 **Blocks**:
-- CLAUDE-THINKING-001-03: Metadata implementation
+- Epic-003-03: Metadata implementation
 
 **Related**:
 - Part of FR1: Model Provider Information (completes with Story #1)

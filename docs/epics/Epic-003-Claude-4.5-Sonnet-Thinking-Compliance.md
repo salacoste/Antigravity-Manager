@@ -1,6 +1,6 @@
 # Epic: Claude 4.5 Sonnet Thinking - 100% Compliance
 
-**Epic ID**: CLAUDE-THINKING-001
+**Epic ID**: Epic-003
 **Status**: In Progress
 **Priority**: P0 (Critical)
 **Target Release**: v3.4.0
@@ -103,11 +103,11 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 **Goal**: Achieve anti-detection compliance
 
 **Stories**:
-1. [CLAUDE-THINKING-001-01](../stories/CLAUDE-THINKING-001-01-model-id-constant.md): Add Model ID Constant (1.5h)
-2. [CLAUDE-THINKING-001-02](../stories/CLAUDE-THINKING-001-02-api-model-providers.md): Add API/Model Provider Constants (1.5h)
-3. [CLAUDE-THINKING-001-03](../stories/CLAUDE-THINKING-001-03-antigravity-metadata.md): Add ideType ANTIGRAVITY Metadata (2h)
-4. [CLAUDE-THINKING-001-04](../stories/CLAUDE-THINKING-001-04-extended-session-metadata.md): Add Extended Session Metadata (1h)
-5. [CLAUDE-THINKING-001-05](../stories/CLAUDE-THINKING-001-05-jwt-signature-validation.md): JWT Signature Validation (2h)
+1. [Story-003-01](../stories/Story-003-01-model-id-constant.md): Add Model ID Constant (1.5h)
+2. [Story-003-02](../stories/Story-003-02-api-model-providers.md): Add API/Model Provider Constants (1.5h)
+3. [Story-003-03](../stories/Story-003-03-antigravity-metadata.md): Add ideType ANTIGRAVITY Metadata (2h)
+4. [Story-003-04](../stories/Story-003-04-extended-session-metadata.md): Add Extended Session Metadata (1h)
+5. [Story-003-05](../stories/Story-003-05-jwt-signature-validation.md): JWT Signature Validation (2h)
 
 **Success Criteria**:
 - All requests include modelId: 334, apiProvider: 26, modelProvider: 3

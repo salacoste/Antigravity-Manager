@@ -1,7 +1,7 @@
-# Story QUOTA-001-04: Subscription Tier Detection and Prioritization
+# Story Epic-001-04: Subscription Tier Detection and Prioritization
 
-**Story ID**: QUOTA-001-04
-**Epic**: [QUOTA-001](../epics/proactive-quota-monitoring-epic.md)
+**Story ID**: Epic-001-04
+**Epic**: [Epic-001](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 **Priority**: P1 (High)
 **Estimate**: 3 points
 **Status**: To Do
@@ -122,7 +122,7 @@ fn calculate_account_score(account: &ProxyToken, quota: Option<f64>) -> f64 {
 ## Related Documents
 
 - [Subscription Tiers Reference](../antigravity/api/quota-apis.md#subscription-tiers)
-- [Epic QUOTA-001](../epics/proactive-quota-monitoring-epic.md)
+- [Epic Epic-001](../epics/Epic-001-Proactive-Quota-Monitoring.md)
 
 ---
 
