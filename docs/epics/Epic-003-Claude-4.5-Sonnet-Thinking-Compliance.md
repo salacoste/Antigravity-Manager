@@ -121,7 +121,7 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 **Stories**:
 6. [Story-003-06](../stories/Story-003-06-budget-constraint-warnings.md): Budget Constraint Warnings (0.5h)
 7. [Story-003-07](../stories/Story-003-07-position-enforcement-logging.md): Position Enforcement Logging (1h)
-8. CLAUDE-THINKING-001-08: Enhanced Violation Metrics (2h)
+8. [Story-003-08](../stories/Story-003-08-enhanced-violation-metrics.md): Enhanced Violation Metrics (2h)
 
 **Success Criteria**:
 - Warnings logged for all constraint violations
@@ -280,3 +280,4 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 | 2026-01-10 | Story-003-04 moved from P0 to P3 (correct priority alignment) | BMad Master |
 | 2026-01-10 | Story-003-06 (Budget Constraint Warnings) created | BMad Master |
 | 2026-01-10 | Story-003-07 (Position Enforcement Logging) created | BMad Master |
+| 2026-01-10 | Story-003-08 (Enhanced Violation Metrics) created - P1 phase complete | BMad Master |
