@@ -107,7 +107,7 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 2. [CLAUDE-THINKING-001-02](../stories/CLAUDE-THINKING-001-02-api-model-providers.md): Add API/Model Provider Constants (1.5h)
 3. [CLAUDE-THINKING-001-03](../stories/CLAUDE-THINKING-001-03-antigravity-metadata.md): Add ideType ANTIGRAVITY Metadata (2h)
 4. [CLAUDE-THINKING-001-04](../stories/CLAUDE-THINKING-001-04-extended-session-metadata.md): Add Extended Session Metadata (1h)
-5. CLAUDE-THINKING-001-05: JWT Signature Validation (2h)
+5. [CLAUDE-THINKING-001-05](../stories/CLAUDE-THINKING-001-05-jwt-signature-validation.md): JWT Signature Validation (2h)
 
 **Success Criteria**:
 - All requests include modelId: 334, apiProvider: 26, modelProvider: 3
@@ -275,3 +275,4 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 |------|--------|--------|
 | 2026-01-10 | Epic created | BMad Master |
 | 2026-01-10 | Stories 1-4 documented | BMad Master |
+| 2026-01-10 | Story 5 (JWT validation) added - P0 phase complete | BMad Master |
