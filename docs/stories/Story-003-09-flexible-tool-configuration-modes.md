@@ -18,6 +18,27 @@
 
 ---
 
+## 📋 Developer Review Feedback (2026-01-11)
+
+**Review Status**: ⭐⭐⭐⭐⭐ (5/5) - Story quality EXCELLENT
+
+**Completeness**: 95% (4 minor gaps identified, 0 critical)
+
+**Changes Applied**:
+1. ✅ **GAP #1**: Added AC-13 for tool_choice validation without tools
+2. ✅ **GAP #2**: Added OpenAI format compatibility note (out of scope clarification)
+3. ✅ **GAP #3**: Documented allowedFunctionNames single tool limitation
+4. ⚠️ **GAP #4**: NONE mode optimization marked as optional (no changes)
+5. ✅ **GAP #5**: Added AC-14 for optional mode usage metrics (P3)
+
+**New Acceptance Criteria**: 12 → 14 AC (AC-13 + AC-14 added)
+
+**New Tests**: 9 → 11+ unit tests (2 for AC-13, 1 optional for AC-14)
+
+**Ready for Implementation**: ✅ YES (after review improvements)
+
+---
+
 ## Context
 
 ### Current Situation
@@ -756,9 +777,242 @@ fn test_invalid_tool_name_passthrough() {
 
 ---
 
+### AC-13: tool_choice Validation Without Tools ⚠️
+
+**Given** a request with tool_choice but NO tools array
+**When** I validate the request
+**Then** it should:
+- ✅ Log WARNING when tool_choice is Auto/Any/Tool but tools is None
+- ✅ Ignore tool_choice and proceed with request (no toolConfig)
+- ✅ NOT return validation error (let upstream handle)
+- ✅ Log message: `[Tool-Config] ⚠️ tool_choice specified but no tools provided, ignoring tool_choice`
+
+**Rationale**:
+- Client may send invalid configuration
+- Proxy should be permissive (upstream validates)
+- Warning helps debugging
+
+**Validation**:
+```rust
+#[test]
+fn test_tool_choice_without_tools_validation() {
+    let claude_req = ClaudeRequest {
+        model: "claude-4.5-sonnet-thinking".to_string(),
+        messages: vec![],
+        tools: None,  // ❌ No tools
+        tool_choice: Some(ToolChoice::Any),  // ❌ But forcing tool usage
+        // ... other fields
+    };
+
+    let inner_request = map_claude_to_vertex_ai(&claude_req, /* ... */);
+
+    // Should ignore tool_choice when no tools present
+    assert!(inner_request.get("toolConfig").is_none());
+    assert!(inner_request.get("tools").is_none());
+
+    // Check logs contain warning (test logger required)
+    // Expected: "[Tool-Config] ⚠️ tool_choice specified but no tools provided"
+}
+
+#[test]
+fn test_tool_choice_none_without_tools_valid() {
+    let claude_req = ClaudeRequest {
+        model: "claude-4.5-sonnet-thinking".to_string(),
+        messages: vec![],
+        tools: None,
+        tool_choice: Some(ToolChoice::None),  // ✅ None is valid even without tools
+        // ... other fields
+    };
+
+    let inner_request = map_claude_to_vertex_ai(&claude_req, /* ... */);
+
+    // None mode is fine without tools - no config needed
+    assert!(inner_request.get("toolConfig").is_none());
+    // Should NOT log warning for None mode
+}
+```
+
+**Implementation Note**:
+```rust
+// In build_tool_config() or map_claude_to_vertex_ai()
+if let Some(tool_choice) = &claude_req.tool_choice {
+    if claude_req.tools.is_none() {
+        // Log warning for Auto/Any/Tool modes (not for None)
+        if !matches!(tool_choice, ToolChoice::None) {
+            tracing::warn!(
+                "[Tool-Config] ⚠️ tool_choice {:?} specified but no tools provided, ignoring tool_choice",
+                tool_choice
+            );
+        }
+        // Don't create toolConfig, proceed without tools
+        return None;
+    }
+}
+```
+
+---
+
+### AC-14: Mode Usage Metrics (Optional P3) 📊
+
+**Given** tool_choice modes are being used in requests
+**When** requests are processed over time
+**Then** it should:
+- ✅ Track usage count per mode (AUTO/ANY/NONE/VALIDATED/Tool)
+- ✅ Store in ProxyStats or separate ToolModeMetrics struct
+- ✅ Expose via monitoring API or logs
+- ✅ Reset with proxy service restart
+
+**Priority**: P3 (Nice to have for production monitoring)
+
+**Rationale**:
+- Understand which modes clients actually use
+- Identify if certain modes cause issues
+- Inform future optimization decisions
+
+**Data Structure** (Optional):
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ToolModeMetrics {
+    pub auto_count: u64,
+    pub any_count: u64,
+    pub none_count: u64,
+    pub validated_count: u64,  // Backward compat mode
+    pub tool_forcing_count: u64,  // Tool{name} mode
+}
+
+impl ToolModeMetrics {
+    pub fn record_mode(&mut self, mode: &ToolChoice) {
+        match mode {
+            ToolChoice::Auto => self.auto_count += 1,
+            ToolChoice::Any => self.any_count += 1,
+            ToolChoice::None => self.none_count += 1,
+            ToolChoice::Tool { .. } => self.tool_forcing_count += 1,
+        }
+    }
+}
+
+// Add to ProxyStats
+pub struct ProxyStats {
+    // ... existing fields ...
+    pub tool_mode_metrics: ToolModeMetrics,  // 🆕 Optional
+}
+```
+
+**Validation** (If Implemented):
+```rust
+#[test]
+fn test_mode_metrics_tracking() {
+    let mut metrics = ToolModeMetrics::default();
+
+    metrics.record_mode(&ToolChoice::Auto);
+    metrics.record_mode(&ToolChoice::Any);
+    metrics.record_mode(&ToolChoice::Tool { name: "test".to_string() });
+
+    assert_eq!(metrics.auto_count, 1);
+    assert_eq!(metrics.any_count, 1);
+    assert_eq!(metrics.tool_forcing_count, 1);
+    assert_eq!(metrics.none_count, 0);
+}
+```
+
+**Implementation Note**: This AC is **OPTIONAL** and can be deferred to a future story if metrics infrastructure is not ready. Mark as P3 (Low Priority) enhancement.
+
+---
+
+## Implementation Notes
+
+### OpenAI API Format Compatibility
+
+**Note**: This story focuses **ONLY on Claude API format** for tool_choice.
+
+**Claude API Format** (this story):
+```json
+{
+  "tool_choice": {
+    "type": "auto",  // or "any", "none", "tool"
+    "name": "get_weather"  // only for type: "tool"
+  }
+}
+```
+
+**OpenAI API Format** (NOT in scope):
+```json
+{
+  "tool_choice": "auto"  // String format
+}
+// OR
+{
+  "tool_choice": {
+    "type": "function",
+    "function": {"name": "get_weather"}
+  }
+}
+```
+
+**Current Status**:
+- ✅ OpenAI handler (`handlers/openai.rs`) uses `tool_choice: Option<Value>` (generic)
+- ✅ OpenAI mapper already handles string format conversion
+- ❌ No coordination needed between formats (separate mappers)
+
+**Recommendation**: OpenAI ↔ Claude tool_choice format coordination is **out of scope** for this story. If needed, create separate story for OpenAI tool_choice mapping.
+
+---
+
+### allowedFunctionNames Limitation
+
+**Current Implementation**: Supports forcing **SINGLE tool only** via `Tool { name: String }`.
+
+**Gemini Protocol**: Actually supports **multiple tools** via:
+```json
+{
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "VALIDATED",
+      "allowedFunctionNames": ["tool1", "tool2", "tool3"]  // ✅ Array supported
+    }
+  }
+}
+```
+
+**Our API Design**:
+```rust
+pub enum ToolChoice {
+    Auto,
+    Any,
+    None,
+    Tool { name: String },  // ❌ Single tool only
+}
+```
+
+**Rationale for Single Tool**:
+- ✅ **Simpler API**: Matches Claude API spec (single tool forcing)
+- ✅ **Most common use case**: Force ONE specific tool, not subset
+- ✅ **Can extend later**: Add `Tools { names: Vec<String> }` variant if needed
+- ✅ **Protocol compliant**: Single tool is valid subset of Gemini spec
+
+**Limitation**:
+Cannot force model to choose from subset of tools (e.g., "use either tool1 OR tool2, but not tool3").
+
+**Future Enhancement** (if needed):
+```rust
+pub enum ToolChoice {
+    Auto,
+    Any,
+    None,
+    Tool { name: String },        // Force single tool
+    Tools { names: Vec<String> }, // 🆕 Force subset of tools
+}
+```
+
+**Decision**: Keep single tool forcing for now. **No client has requested** multiple tool forcing. Can add later without breaking changes.
+
+---
+
 ## Testing Strategy
 
-### Unit Tests (9 tests)
+### Unit Tests (11+ tests)
+
+**Updated Test Count**: 11 core tests + 1 optional (AC-14 metrics)
 
 **File**: `src-tauri/src/proxy/mappers/claude/request_tests.rs`
 
@@ -955,6 +1209,59 @@ mod tool_choice_tests {
             .is_none());
     }
 
+    #[test]
+    fn test_tool_choice_without_tools_validation() {
+        // AC-13: Test tool_choice validation when no tools provided
+        let mut claude_req = create_test_claude_request();
+        claude_req.tools = None;  // ❌ No tools
+        claude_req.tool_choice = Some(ToolChoice::Any);  // ❌ But forcing tool usage
+
+        let config = create_test_config();
+        let inner_request = map_claude_to_vertex_ai(&claude_req, &config, "test-trace");
+
+        // Should ignore tool_choice when no tools present
+        assert!(inner_request.get("toolConfig").is_none());
+        assert!(inner_request.get("tools").is_none());
+
+        // Note: Log warning validation requires test logger setup
+        // Expected log: "[Tool-Config] ⚠️ tool_choice specified but no tools provided"
+    }
+
+    #[test]
+    fn test_tool_choice_none_without_tools_valid() {
+        // AC-13: Test that None mode is valid even without tools
+        let mut claude_req = create_test_claude_request();
+        claude_req.tools = None;
+        claude_req.tool_choice = Some(ToolChoice::None);  // ✅ None is valid without tools
+
+        let config = create_test_config();
+        let inner_request = map_claude_to_vertex_ai(&claude_req, &config, "test-trace");
+
+        // None mode is fine without tools - no config needed
+        assert!(inner_request.get("toolConfig").is_none());
+        // Should NOT log warning for None mode (only Auto/Any/Tool)
+    }
+
+    #[test]
+    fn test_mode_metrics_tracking() {
+        // AC-14: Test optional mode usage metrics (if implemented)
+        let mut metrics = ToolModeMetrics::default();
+
+        metrics.record_mode(&ToolChoice::Auto);
+        metrics.record_mode(&ToolChoice::Any);
+        metrics.record_mode(&ToolChoice::None);
+        metrics.record_mode(&ToolChoice::Tool { name: "test".to_string() });
+
+        assert_eq!(metrics.auto_count, 1);
+        assert_eq!(metrics.any_count, 1);
+        assert_eq!(metrics.none_count, 1);
+        assert_eq!(metrics.tool_forcing_count, 1);
+        assert_eq!(metrics.validated_count, 0);
+
+        // Note: This test is OPTIONAL (AC-14 is P3)
+        // Skip if ToolModeMetrics not implemented
+    }
+
     // Test helpers
     fn create_test_claude_request() -> ClaudeRequest {
         ClaudeRequest {
@@ -1136,11 +1443,11 @@ mod tool_choice_integration_tests {
 - [ ] ✅ Code formatted with rustfmt
 
 ### Testing
-- [ ] ✅ All 9 unit tests passing
+- [ ] ✅ All 11+ unit tests passing (9 original + 2 AC-13 + 1 optional AC-14)
 - [ ] ✅ All 2 integration tests passing
 - [ ] ✅ Manual testing completed for all modes
 - [ ] ✅ Backward compatibility validated
-- [ ] ✅ Edge cases tested (no tools, invalid names)
+- [ ] ✅ Edge cases tested (no tools, invalid names, tool_choice without tools)
 
 ### Documentation
 - [ ] ✅ Code comments added for ToolChoice enum
@@ -1263,9 +1570,10 @@ mod tool_choice_integration_tests {
 
 **Phase 4 Optimization**:
 - Add client-side tool name validation (optional)
-- Add metrics for mode usage distribution
-- Add dashboard visualization of mode selection
-- Support OpenAI tool_choice format conversion (if needed)
+- ✅ Add metrics for mode usage distribution ← **Moved to AC-14**
+- Add dashboard visualization of mode selection (depends on AC-14)
+- ✅ OpenAI format compatibility ← **Documented in Implementation Notes (out of scope)**
+- Add `Tools { names: Vec<String> }` variant for multiple tool forcing (low priority)
 
 ---
 
@@ -1276,14 +1584,17 @@ mod tool_choice_integration_tests {
 | File | Lines Changed | Change Type | Description |
 |------|---------------|-------------|-------------|
 | `models.rs` | +60 | Addition | ToolChoice enum, ClaudeRequest field |
+| `models.rs` | +35 | Addition | ToolModeMetrics struct (AC-14, optional) |
 | `request.rs` | +25 | Modification | Tool config building logic |
-| `request_tests.rs` | +220 | Addition | 9 unit tests |
+| `request.rs` | +15 | Addition | tool_choice validation without tools (AC-13) |
+| `request_tests.rs` | +220 | Addition | 9 original unit tests |
+| `request_tests.rs` | +60 | Addition | 3 new tests (AC-13 + AC-14) |
 | `claude_tests.rs` | +90 | Addition | 2 integration tests |
 
 **Total Changes**:
-- **Production Code**: ~85 lines
-- **Test Code**: ~310 lines
-- **Test/Code Ratio**: 3.6:1 (high test coverage)
+- **Production Code**: ~125 lines (~135 with optional AC-14)
+- **Test Code**: ~370 lines
+- **Test/Code Ratio**: 3.0:1 (high test coverage)
 
 ### New Files
 None (all changes to existing files)
@@ -1295,6 +1606,12 @@ None (all changes to existing files)
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-01-10 | Story created with comprehensive analysis | BMad Master |
+| 2026-01-11 | Added AC-13: tool_choice validation without tools (GAP #1) | BMad Master |
+| 2026-01-11 | Added AC-14: Mode usage metrics tracking (GAP #5, optional P3) | BMad Master |
+| 2026-01-11 | Added Implementation Notes: OpenAI format compatibility (GAP #2) | BMad Master |
+| 2026-01-11 | Added Implementation Notes: allowedFunctionNames limitation (GAP #3) | BMad Master |
+| 2026-01-11 | Updated test count: 9 → 11+ tests (with 1 optional) | BMad Master |
+| 2026-01-11 | Updated File Impact Analysis with new test additions | BMad Master |
 
 ---
 
