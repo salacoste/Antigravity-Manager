@@ -134,7 +134,7 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 
 **Stories**:
 9. [Story-003-09](../stories/Story-003-09-flexible-tool-configuration-modes.md): Flexible Tool Configuration Modes (2h)
-10. CLAUDE-THINKING-001-10: Grounding Configuration (1h)
+10. [Story-003-10](../stories/Story-003-10-grounding-configuration.md): Grounding Configuration (1h)
 11. CLAUDE-THINKING-001-11: Tool Mode Testing (2h)
 
 **Success Criteria**:
@@ -282,3 +282,4 @@ Achieve **100% compliance** with Google Antigravity v1.13.3 through:
 | 2026-01-10 | Story-003-07 (Position Enforcement Logging) created | BMad Master |
 | 2026-01-10 | Story-003-08 (Enhanced Violation Metrics) created - P1 phase complete | BMad Master |
 | 2026-01-10 | Story-003-09 (Flexible Tool Configuration Modes) created | BMad Master |
+| 2026-01-10 | Story-003-10 (Grounding Configuration) created | BMad Master |
