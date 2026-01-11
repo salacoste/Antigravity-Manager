@@ -202,6 +202,13 @@ pub struct ProxyConfig {
     /// 实验性功能配置
     #[serde(default)]
     pub experimental: ExperimentalConfig,
+
+    /// Gemini Image Generation Safety Settings
+    /// Supported values: "OFF", "LOW", "MEDIUM", "HIGH"
+    /// Default: "OFF" (backward compatibility)
+    /// Environment variable: GEMINI_IMAGE_SAFETY_THRESHOLD
+    #[serde(default)]
+    pub safety_threshold: Option<String>,
 }
 
 /// 上游代理配置
@@ -229,6 +236,7 @@ impl Default for ProxyConfig {
             zai: ZaiConfig::default(),
             scheduling: crate::proxy::sticky_config::StickySessionConfig::default(),
             experimental: ExperimentalConfig::default(),
+            safety_threshold: None, // Default: OFF for backward compatibility
         }
     }
 }

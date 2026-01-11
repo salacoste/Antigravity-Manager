@@ -9,10 +9,34 @@ use crate::proxy::mappers::openai::{
     transform_openai_request, transform_openai_response, OpenAIRequest,
 };
 // use crate::proxy::upstream::client::UpstreamClient; // 通过 state 获取
+use crate::proxy::cache::{generate_cache_key, CachedImage};
+use crate::proxy::errors::{categorize_error, format_error_message, hash_prompt};
 use crate::proxy::server::AppState;
 
 const MAX_RETRY_ATTEMPTS: usize = 3;
 use crate::proxy::session_manager::SessionManager;
+
+/// Helper function: Convert safety threshold level to Gemini API threshold value
+///
+/// # Arguments
+/// * `config_threshold` - Optional safety threshold from config/request ("OFF"|"LOW"|"MEDIUM"|"HIGH")
+///
+/// # Returns
+/// Gemini API threshold value:
+/// - "OFF" → "OFF" (no filtering)
+/// - "LOW" → "BLOCK_ONLY_HIGH" (block only high-risk content)
+/// - "MEDIUM" → "BLOCK_MEDIUM_AND_ABOVE" (block medium and high-risk)
+/// - "HIGH" → "BLOCK_LOW_AND_ABOVE" (block all except low-risk)
+/// - None/Invalid → "OFF" (default, backward compatibility)
+fn get_safety_threshold(config_threshold: Option<&str>) -> &'static str {
+    match config_threshold {
+        Some("OFF") => "OFF",
+        Some("LOW") => "BLOCK_ONLY_HIGH",
+        Some("MEDIUM") => "BLOCK_MEDIUM_AND_ABOVE",
+        Some("HIGH") => "BLOCK_LOW_AND_ABOVE",
+        _ => "OFF", // Default: backward compatibility
+    }
+}
 
 pub async fn handle_chat_completions(
     State(state): State<AppState>,
@@ -760,6 +784,9 @@ pub async fn handle_images_generations(
     State(state): State<AppState>,
     Json(body): Json<Value>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Track generation time for error logging
+    let start_time = std::time::Instant::now();
+
     // 1. 解析请求参数
     let prompt = body.get("prompt").and_then(|v| v.as_str()).ok_or((
         StatusCode::BAD_REQUEST,
@@ -792,6 +819,20 @@ pub async fn handle_images_generations(
         .and_then(|v| v.as_str())
         .unwrap_or("vivid");
 
+    // AC-3: Extract safety_threshold from request (per-request override)
+    let request_safety = body.get("safety_threshold").and_then(|v| v.as_str());
+
+    // AC-1: Get config-level safety threshold (environment variable)
+    let config_safety = state
+        .safety_threshold
+        .read()
+        .await
+        .as_deref()
+        .map(String::from);
+
+    // AC-3: Request-level override has priority over config-level
+    let final_safety_threshold = request_safety.map(String::from).or(config_safety);
+
     info!(
         "[Images] Received request: model={}, prompt={:.50}..., n={}, size={}, quality={}, style={}",
         model,
@@ -801,6 +842,47 @@ pub async fn handle_images_generations(
         quality,
         style
     );
+
+    // [AC-1] Generate cache key from request parameters
+    let cache_key = generate_cache_key(model, prompt, Some(quality), Some(style));
+
+    // [AC-2] Try cache lookup (single image only - n=1)
+    if n == 1 {
+        if let Some(ref cache) = state.image_cache {
+            match cache.get(&cache_key).await {
+                Ok(Some(cached)) => {
+                    info!(
+                        "[Images] 🎯 Cache hit for model={}, prompt_hash={}",
+                        model, cached.prompt_hash
+                    );
+
+                    // Return cached response in OpenAI format
+                    let openai_response = json!({
+                        "created": cached.created_at,
+                        "data": [{
+                            "b64_json": cached.b64_json
+                        }]
+                    });
+
+                    return Ok(Json(openai_response));
+                }
+                Ok(None) => {
+                    debug!(
+                        "[Images] Cache miss for model={}, prompt_hash={}",
+                        model,
+                        hash_prompt(prompt)
+                    );
+                }
+                Err(e) => {
+                    // Cache error - log and continue with generation
+                    tracing::warn!(
+                        "[Images] Cache lookup error (continuing with generation): {}",
+                        e
+                    );
+                }
+            }
+        }
+    }
 
     // 2. 解析尺寸为宽高比
     let aspect_ratio = match size {
@@ -843,6 +925,9 @@ pub async fn handle_images_generations(
 
     info!("✓ Using account: {} for image generation", email);
 
+    // AC-2: Convert safety threshold to Gemini API format
+    let safety_threshold = get_safety_threshold(final_safety_threshold.as_deref());
+
     // 4. 并发发送请求 (解决 candidateCount > 1 不支持的问题)
     let mut tasks = Vec::new();
 
@@ -853,6 +938,7 @@ pub async fn handle_images_generations(
         let final_prompt = final_prompt.clone();
         let aspect_ratio = aspect_ratio.to_string();
         let _response_format = response_format.to_string();
+        let safety_threshold = safety_threshold; // Pass to async task
 
         tasks.push(tokio::spawn(async move {
             let gemini_body = json!({
@@ -872,12 +958,13 @@ pub async fn handle_images_generations(
                             "aspectRatio": aspect_ratio
                         }
                     },
+                    // AC-2 & AC-3: Dynamic safety settings (config/request override)
                     "safetySettings": [
-                        { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF" },
-                        { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF" },
-                        { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF" },
-                        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF" },
-                        { "category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF" },
+                        { "category": "HARM_CATEGORY_HARASSMENT", "threshold": safety_threshold },
+                        { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": safety_threshold },
+                        { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": safety_threshold },
+                        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": safety_threshold },
+                        { "category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": safety_threshold },
                     ]
                 }
             });
@@ -942,14 +1029,74 @@ pub async fn handle_images_generations(
                     }
                 }
                 Err(e) => {
-                    tracing::error!("[Images] Task {} failed: {}", idx, e);
+                    // Enhanced structured error logging
+                    let generation_time_ms = start_time.elapsed().as_millis() as u64;
+
+                    // Parse status code and error text from error message
+                    let (status_code, error_text) = if e.contains("Upstream error") {
+                        // Format: "Upstream error 429: error details"
+                        let parts: Vec<&str> = e.splitn(3, ' ').collect();
+                        let code = if parts.len() > 2 {
+                            parts[2].trim_end_matches(':').parse::<u16>().unwrap_or(500)
+                        } else {
+                            500
+                        };
+                        let text = if let Some(pos) = e.find(": ") {
+                            &e[pos + 2..]
+                        } else {
+                            &e
+                        };
+                        (code, text)
+                    } else {
+                        (500, e.as_str())
+                    };
+
+                    let category = categorize_error(status_code, error_text);
+
+                    error!(
+                        error_type = category.as_str(),
+                        account_email = %email,
+                        model = %model,
+                        prompt_hash = %hash_prompt(&final_prompt),
+                        generation_time_ms = generation_time_ms,
+                        aspect_ratio = %aspect_ratio,
+                        quality = %quality,
+                        style = %style,
+                        n = n,
+                        safety_threshold = %safety_threshold,
+                        status_code = status_code,
+                        task_index = idx,
+                        "{}",
+                        format_error_message(category, status_code, error_text)
+                    );
+
                     errors.push(e);
                 }
             },
             Err(e) => {
-                let err_msg = format!("Task join error: {}", e);
-                tracing::error!("[Images] Task {} join error: {}", idx, e);
-                errors.push(err_msg);
+                // Enhanced structured error logging for task join errors
+                let generation_time_ms = start_time.elapsed().as_millis() as u64;
+                let error_text = format!("Task join error: {}", e);
+                let category = categorize_error(500, &error_text);
+
+                error!(
+                    error_type = category.as_str(),
+                    account_email = %email,
+                    model = %model,
+                    prompt_hash = %hash_prompt(&final_prompt),
+                    generation_time_ms = generation_time_ms,
+                    aspect_ratio = %aspect_ratio,
+                    quality = %quality,
+                    style = %style,
+                    n = n,
+                    safety_threshold = %safety_threshold,
+                    status_code = 500,
+                    task_index = idx,
+                    "{}",
+                    format_error_message(category, 500, &error_text)
+                );
+
+                errors.push(error_text);
             }
         }
     }
@@ -960,7 +1107,27 @@ pub async fn handle_images_generations(
         } else {
             "No images generated".to_string()
         };
-        tracing::error!("[Images] All {} requests failed. Errors: {}", n, error_msg);
+
+        // Enhanced structured error logging for complete failure
+        let generation_time_ms = start_time.elapsed().as_millis() as u64;
+        let category = categorize_error(502, &error_msg);
+
+        error!(
+            error_type = category.as_str(),
+            account_email = %email,
+            model = %model,
+            prompt_hash = %hash_prompt(&final_prompt),
+            generation_time_ms = generation_time_ms,
+            aspect_ratio = %aspect_ratio,
+            quality = %quality,
+            style = %style,
+            n = n,
+            safety_threshold = %safety_threshold,
+            status_code = 502,
+            "{}",
+            format_error_message(category, 502, &error_msg)
+        );
+
         return Err((StatusCode::BAD_GATEWAY, error_msg));
     }
 
@@ -980,6 +1147,46 @@ pub async fn handle_images_generations(
         n
     );
 
+    // [AC-3] Store in cache (single successful image only - n=1)
+    if n == 1 && images.len() == 1 {
+        if let Some(ref cache) = state.image_cache {
+            // Extract b64_json from first image
+            if let Some(b64_data) = images[0].get("b64_json").and_then(|v| v.as_str()) {
+                let cached_image = CachedImage {
+                    b64_json: b64_data.to_string(),
+                    model: model.to_string(),
+                    created_at: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                    prompt_hash: hash_prompt(&final_prompt),
+                    quality: quality.to_string(),
+                    style: style.to_string(),
+                };
+
+                match cache
+                    .set(
+                        &cache_key,
+                        cached_image,
+                        std::time::Duration::from_secs(3600),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        debug!(
+                            "[Images] ✓ Cached image for model={}, prompt_hash={}",
+                            model,
+                            hash_prompt(&final_prompt)
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!("[Images] Failed to cache image (non-critical): {}", e);
+                    }
+                }
+            }
+        }
+    }
+
     // 6. 构建 OpenAI 格式响应
     let openai_response = json!({
         "created": chrono::Utc::now().timestamp(),
@@ -993,6 +1200,9 @@ pub async fn handle_images_edits(
     State(state): State<AppState>,
     mut multipart: axum::extract::Multipart,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // Track generation time for error logging
+    let start_time = std::time::Instant::now();
+
     tracing::info!("[Images] Received edit request");
 
     let mut image_data = None;
@@ -1002,6 +1212,7 @@ pub async fn handle_images_edits(
     let mut size = "1024x1024".to_string();
     let mut response_format = "b64_json".to_string(); // Default to b64_json for better compatibility with tools handling edits
     let mut model = "gemini-3-pro-image".to_string();
+    let mut request_safety: Option<String> = None; // AC-3: Per-request safety override
 
     while let Some(field) = multipart
         .next_field()
@@ -1045,6 +1256,13 @@ pub async fn handle_images_edits(
                     model = val;
                 }
             }
+        } else if name == "safety_threshold" {
+            // AC-3: Per-request safety override for image editing
+            if let Ok(val) = field.text().await {
+                if !val.is_empty() {
+                    request_safety = Some(val);
+                }
+            }
         }
     }
 
@@ -1065,6 +1283,69 @@ pub async fn handle_images_edits(
         response_format
     );
 
+    // [AC-4] Generate cache key for edit operations
+    // Note: Image editing cache keys include hash of image data for uniqueness
+    let image_hash = if let Some(ref img_data) = image_data {
+        // Use first 16 chars of image data hash
+        let image_portion = if img_data.len() > 64 {
+            &img_data[0..64]
+        } else {
+            img_data.as_str()
+        };
+        hash_prompt(image_portion)
+    } else {
+        "no_image".to_string()
+    };
+
+    let cache_key = format!(
+        "img-edit:{}:{}:{}:{}",
+        model,
+        image_hash,
+        hash_prompt(&prompt),
+        mask_data.is_some()
+    );
+
+    // [AC-4] Try cache lookup for edit operations (single image only - n=1)
+    if n == 1 {
+        if let Some(ref cache) = state.image_cache {
+            match cache.get(&cache_key).await {
+                Ok(Some(cached)) => {
+                    info!(
+                        "[Images] 🎯 Cache hit for edit operation, model={}, prompt_hash={}",
+                        model, cached.prompt_hash
+                    );
+
+                    // Return cached response in OpenAI format
+                    let data_field = if response_format == "url" {
+                        json!([{
+                            "url": format!("data:image/png;base64,{}", cached.b64_json)
+                        }])
+                    } else {
+                        json!([{
+                            "b64_json": cached.b64_json
+                        }])
+                    };
+
+                    let openai_response = json!({
+                        "created": cached.created_at,
+                        "data": data_field
+                    });
+
+                    return Ok(Json(openai_response));
+                }
+                Ok(None) => {
+                    debug!(
+                        "[Images] Cache miss for edit operation, prompt_hash={}",
+                        hash_prompt(&prompt)
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("[Images] Cache lookup error for edit (continuing): {}", e);
+                }
+            }
+        }
+    }
+
     // FIX: Client Display Issue
     // Cherry Studio (and potentially others) might accept Data URI for generations but display raw text for edits
     // if 'url' format is used with a data-uri.
@@ -1076,12 +1357,22 @@ pub async fn handle_images_edits(
     // But if users see raw text, it means client defaulted to 'url' or we defaulted to 'url'.
     // Let's keep the log to confirm.
 
+    // AC-1 & AC-3: Determine safety threshold (request override > config)
+    let config_safety = state
+        .safety_threshold
+        .read()
+        .await
+        .as_deref()
+        .map(String::from);
+    let final_safety_threshold = request_safety.or(config_safety);
+    let safety_threshold = get_safety_threshold(final_safety_threshold.as_deref());
+
     // 1. 获取 Upstream
     let upstream = state.upstream.clone();
     let token_manager = state.token_manager;
     // Fix: Proper get_token call with correct signature and unwrap (using image_gen quota)
     // 🆕 传递模型参数实现 model-aware rate limiting (image edit)
-    let (access_token, project_id, _email) = match token_manager
+    let (access_token, project_id, email) = match token_manager
         .get_token("image_gen", false, None, Some(&model))
         .await
     {
@@ -1096,6 +1387,9 @@ pub async fn handle_images_edits(
 
     // 2. 映射配置
     let mut contents_parts = Vec::new();
+
+    // Capture mask presence before moving mask_data
+    let has_mask = mask_data.is_some();
 
     contents_parts.push(json!({
         "text": format!("Edit this image: {}", prompt)
@@ -1139,12 +1433,13 @@ pub async fn handle_images_edits(
                 "topP": 0.95,
                 "topK": 40
             },
+            // AC-2 & AC-3: Dynamic safety settings (config/request override)
             "safetySettings": [
-                { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "OFF" },
-                { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "OFF" },
-                { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "OFF" },
-                { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "OFF" },
-                { "category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "OFF" },
+                { "category": "HARM_CATEGORY_HARASSMENT", "threshold": safety_threshold },
+                { "category": "HARM_CATEGORY_HATE_SPEECH", "threshold": safety_threshold },
+                { "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": safety_threshold },
+                { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": safety_threshold },
+                { "category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": safety_threshold },
             ]
         }
     });
@@ -1215,14 +1510,76 @@ pub async fn handle_images_edits(
                     }
                 }
                 Err(e) => {
-                    tracing::error!("[Images] Task {} failed: {}", idx, e);
+                    // Enhanced structured error logging
+                    let generation_time_ms = start_time.elapsed().as_millis() as u64;
+
+                    // Parse status code and error text from error message
+                    let (status_code, error_text) = if e.contains("Upstream error") {
+                        // Format: "Upstream error 429: error details"
+                        let parts: Vec<&str> = e.splitn(3, ' ').collect();
+                        let code = if parts.len() > 2 {
+                            parts[2].trim_end_matches(':').parse::<u16>().unwrap_or(500)
+                        } else {
+                            500
+                        };
+                        let text = if let Some(pos) = e.find(": ") {
+                            &e[pos + 2..]
+                        } else {
+                            &e
+                        };
+                        (code, text)
+                    } else {
+                        (500, e.as_str())
+                    };
+
+                    let category = categorize_error(status_code, error_text);
+
+                    error!(
+                        error_type = category.as_str(),
+                        account_email = %email,
+                        model = %model,
+                        prompt_hash = %hash_prompt(&prompt),
+                        generation_time_ms = generation_time_ms,
+                        operation = "image_edit",
+                        size = %size,
+                        n = n,
+                        has_mask = has_mask,
+                        response_format = %response_format,
+                        safety_threshold = %safety_threshold,
+                        status_code = status_code,
+                        task_index = idx,
+                        "{}",
+                        format_error_message(category, status_code, error_text)
+                    );
+
                     errors.push(e);
                 }
             },
             Err(e) => {
-                let err_msg = format!("Task join error: {}", e);
-                tracing::error!("[Images] Task {} join error: {}", idx, e);
-                errors.push(err_msg);
+                // Enhanced structured error logging for task join errors
+                let generation_time_ms = start_time.elapsed().as_millis() as u64;
+                let error_text = format!("Task join error: {}", e);
+                let category = categorize_error(500, &error_text);
+
+                error!(
+                    error_type = category.as_str(),
+                    account_email = %email,
+                    model = %model,
+                    prompt_hash = %hash_prompt(&prompt),
+                    generation_time_ms = generation_time_ms,
+                    operation = "image_edit",
+                    size = %size,
+                    n = n,
+                    has_mask = has_mask,
+                    response_format = %response_format,
+                    safety_threshold = %safety_threshold,
+                    status_code = 500,
+                    task_index = idx,
+                    "{}",
+                    format_error_message(category, 500, &error_text)
+                );
+
+                errors.push(error_text);
             }
         }
     }
@@ -1233,11 +1590,28 @@ pub async fn handle_images_edits(
         } else {
             "No images generated".to_string()
         };
-        tracing::error!(
-            "[Images] All {} edit requests failed. Errors: {}",
-            n,
-            error_msg
+
+        // Enhanced structured error logging for complete failure
+        let generation_time_ms = start_time.elapsed().as_millis() as u64;
+        let category = categorize_error(502, &error_msg);
+
+        error!(
+            error_type = category.as_str(),
+            account_email = %email,
+            model = %model,
+            prompt_hash = %hash_prompt(&prompt),
+            generation_time_ms = generation_time_ms,
+            operation = "image_edit",
+            size = %size,
+            n = n,
+            has_mask = has_mask,
+            response_format = %response_format,
+            safety_threshold = %safety_threshold,
+            status_code = 502,
+            "{}",
+            format_error_message(category, 502, &error_msg)
         );
+
         return Err((StatusCode::BAD_GATEWAY, error_msg));
     }
 
@@ -1256,10 +1630,185 @@ pub async fn handle_images_edits(
         n
     );
 
+    // [AC-4] Store edited image in cache (single successful image only - n=1)
+    if n == 1 && images.len() == 1 {
+        if let Some(ref cache) = state.image_cache {
+            // Extract b64_json from first image (handle both b64_json and url formats)
+            let b64_data = if let Some(b64) = images[0].get("b64_json").and_then(|v| v.as_str()) {
+                Some(b64.to_string())
+            } else if let Some(url) = images[0].get("url").and_then(|v| v.as_str()) {
+                // Extract base64 from data URI format: data:image/png;base64,{data}
+                if let Some(pos) = url.find("base64,") {
+                    Some(url[pos + 7..].to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(b64_data) = b64_data {
+                let cached_image = CachedImage {
+                    b64_json: b64_data,
+                    model: model.to_string(),
+                    created_at: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                    prompt_hash: hash_prompt(&prompt),
+                    quality: "standard".to_string(), // Edits don't have quality parameter
+                    style: "natural".to_string(),    // Edits don't have style parameter
+                };
+
+                match cache
+                    .set(
+                        &cache_key,
+                        cached_image,
+                        std::time::Duration::from_secs(3600),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        debug!(
+                            "[Images] ✓ Cached edited image for model={}, prompt_hash={}",
+                            model,
+                            hash_prompt(&prompt)
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "[Images] Failed to cache edited image (non-critical): {}",
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     let openai_response = json!({
         "created": chrono::Utc::now().timestamp(),
         "data": images
     });
 
     Ok(Json(openai_response))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // AC-4: Unit Tests for Safety Settings Configuration
+
+    #[test]
+    fn test_safety_threshold_off() {
+        // Default OFF behavior (backward compatibility)
+        let result = get_safety_threshold(None);
+        assert_eq!(result, "OFF", "Default threshold should be OFF");
+
+        let result = get_safety_threshold(Some("OFF"));
+        assert_eq!(result, "OFF", "Explicit OFF should return OFF");
+    }
+
+    #[test]
+    fn test_safety_threshold_low() {
+        // LOW maps to BLOCK_ONLY_HIGH
+        let result = get_safety_threshold(Some("LOW"));
+        assert_eq!(
+            result, "BLOCK_ONLY_HIGH",
+            "LOW should map to BLOCK_ONLY_HIGH"
+        );
+    }
+
+    #[test]
+    fn test_safety_threshold_medium() {
+        // MEDIUM maps to BLOCK_MEDIUM_AND_ABOVE
+        let result = get_safety_threshold(Some("MEDIUM"));
+        assert_eq!(
+            result, "BLOCK_MEDIUM_AND_ABOVE",
+            "MEDIUM should map to BLOCK_MEDIUM_AND_ABOVE"
+        );
+    }
+
+    #[test]
+    fn test_safety_threshold_high() {
+        // HIGH maps to BLOCK_LOW_AND_ABOVE
+        let result = get_safety_threshold(Some("HIGH"));
+        assert_eq!(
+            result, "BLOCK_LOW_AND_ABOVE",
+            "HIGH should map to BLOCK_LOW_AND_ABOVE"
+        );
+    }
+
+    #[test]
+    fn test_safety_threshold_invalid() {
+        // Invalid values default to OFF
+        let result = get_safety_threshold(Some("INVALID"));
+        assert_eq!(result, "OFF", "Invalid threshold should default to OFF");
+
+        let result = get_safety_threshold(Some(""));
+        assert_eq!(
+            result, "OFF",
+            "Empty string threshold should default to OFF"
+        );
+
+        let result = get_safety_threshold(Some("low")); // lowercase
+        assert_eq!(
+            result, "OFF",
+            "Lowercase 'low' should default to OFF (case-sensitive)"
+        );
+    }
+
+    #[test]
+    fn test_safety_threshold_request_override() {
+        // This test validates the override logic conceptually
+        // In actual implementation, request-level "HIGH" should override config-level "MEDIUM"
+
+        let config_threshold = Some("MEDIUM");
+        let request_threshold = Some("HIGH");
+
+        // Simulate: request_threshold.or(config_threshold)
+        let final_threshold = request_threshold.or(config_threshold);
+        assert_eq!(
+            final_threshold,
+            Some("HIGH"),
+            "Request-level override should take priority over config"
+        );
+
+        let result = get_safety_threshold(final_threshold);
+        assert_eq!(
+            result, "BLOCK_LOW_AND_ABOVE",
+            "Final threshold should be HIGH (BLOCK_LOW_AND_ABOVE)"
+        );
+
+        // Test when request is None, config should be used
+        let request_threshold: Option<&str> = None;
+        let config_threshold = Some("MEDIUM");
+
+        let final_threshold = request_threshold.or(config_threshold);
+        assert_eq!(
+            final_threshold,
+            Some("MEDIUM"),
+            "Config-level should be used when request is None"
+        );
+
+        let result = get_safety_threshold(final_threshold);
+        assert_eq!(
+            result, "BLOCK_MEDIUM_AND_ABOVE",
+            "Final threshold should be MEDIUM (BLOCK_MEDIUM_AND_ABOVE)"
+        );
+
+        // Test when both are None
+        let request_threshold: Option<&str> = None;
+        let config_threshold: Option<&str> = None;
+
+        let final_threshold = request_threshold.or(config_threshold);
+        assert_eq!(final_threshold, None, "Both None should result in None");
+
+        let result = get_safety_threshold(final_threshold);
+        assert_eq!(
+            result, "OFF",
+            "When both are None, default to OFF (backward compatibility)"
+        );
+    }
 }

@@ -9,7 +9,9 @@ pub mod token_manager;
 
 // 新架构模块
 pub mod audio; // 音频处理模块 (PR #311)
+pub mod cache; // 响应缓存 (Story-007-04)
 pub mod common; // 公共工具
+pub mod errors; // 错误处理工具 (Story-007-03)
 pub mod handlers; // API 端点处理器
 pub mod mappers; // 协议转换器
 pub mod middleware; // Axum 中间件
