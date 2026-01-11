@@ -1,13 +1,13 @@
+mod commands;
+pub mod error;
 mod models;
 mod modules;
-mod commands;
+mod proxy; // 反代服务模块
 mod utils;
-mod proxy;  // 反代服务模块
-pub mod error;
 
-use tauri::Manager;
 use modules::logger;
-use tracing::{info, error};
+use tauri::Manager;
+use tracing::{error, info};
 
 // 测试命令
 #[tauri::command]
@@ -19,7 +19,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     // 初始化日志
     logger::init_logger();
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -29,20 +29,20 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app.get_webview_window("main")
-                .map(|window| {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    #[cfg(target_os = "macos")]
-                    app.set_activation_policy(tauri::ActivationPolicy::Regular).unwrap_or(());
-                });
+            let _ = app.get_webview_window("main").map(|window| {
+                let _ = window.show();
+                let _ = window.set_focus();
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Regular)
+                    .unwrap_or(());
+            });
         }))
         .manage(commands::proxy::ProxyServiceState::new())
         .setup(|app| {
             info!("Setup starting...");
             modules::tray::create_tray(app.handle())?;
             info!("Tray created");
-            
+
             // 自动启动反代服务
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -55,7 +55,9 @@ pub fn run() {
                             config.proxy,
                             state,
                             handle.clone(),
-                        ).await {
+                        )
+                        .await
+                        {
                             error!("自动启动反代服务失败: {}", e);
                         } else {
                             info!("反代服务自动启动成功");
@@ -63,7 +65,7 @@ pub fn run() {
                     }
                 }
             });
-            
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -72,7 +74,10 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 {
                     use tauri::Manager;
-                    window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory).unwrap_or(());
+                    window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Accessory)
+                        .unwrap_or(());
                 }
                 api.prevent_close();
             }
@@ -116,6 +121,8 @@ pub fn run() {
             commands::proxy::stop_proxy_service,
             commands::proxy::get_proxy_status,
             commands::proxy::get_proxy_stats,
+            commands::proxy::get_violation_metrics, // 🆕 Story #8
+            commands::proxy::reset_violation_metrics, // 🆕 Story #12
             commands::proxy::get_proxy_logs,
             commands::proxy::set_proxy_monitor_enabled,
             commands::proxy::clear_proxy_logs,
@@ -143,7 +150,9 @@ pub fn run() {
                     let _ = window.show();
                     let _ = window.unminimize();
                     let _ = window.set_focus();
-                    app_handle.set_activation_policy(tauri::ActivationPolicy::Regular).unwrap_or(());
+                    app_handle
+                        .set_activation_policy(tauri::ActivationPolicy::Regular)
+                        .unwrap_or(());
                 }
             }
         });

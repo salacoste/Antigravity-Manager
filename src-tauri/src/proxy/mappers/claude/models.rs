@@ -29,6 +29,10 @@ pub struct ClaudeRequest {
     /// Output configuration for effort level (Claude API v2.0.67+)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_config: Option<OutputConfig>,
+
+    // 🆕 Story #9: Tool calling mode configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<ToolChoice>,
 }
 
 /// Thinking 配置
@@ -100,9 +104,7 @@ pub enum ContentBlock {
     },
 
     #[serde(rename = "redacted_thinking")]
-    RedactedThinking {
-        data: String,
-    },
+    RedactedThinking { data: String },
 
     #[serde(rename = "tool_use")]
     ToolUse {
@@ -149,8 +151,8 @@ pub struct ImageSource {
 pub struct DocumentSource {
     #[serde(rename = "type")]
     pub source_type: String, // "base64"
-    pub media_type: String,  // e.g. "application/pdf"
-    pub data: String,        // base64 data
+    pub media_type: String, // e.g. "application/pdf"
+    pub data: String,       // base64 data
 }
 
 /// Tool - supports both client tools (with input_schema) and server tools (like web_search)
@@ -204,10 +206,20 @@ impl Tool {
 }
 
 /// Metadata
+/// Extended in Story #4 to support Cloud AI Companion integration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
+    /// User ID for session tracking (Story #3)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
+
+    /// Workspace ID for Cloud AI Companion (Story #4 - Optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+
+    /// Cloud AI Companion Project ID (Story #4 - Optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cloudaicompanion_project: Option<String>,
 }
 
 /// Output Configuration (Claude API v2.0.67+)
@@ -217,6 +229,53 @@ pub struct OutputConfig {
     /// Effort level: "high", "medium", "low"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
+}
+
+// ========== Story #9: Tool Configuration Modes ==========
+
+/// Tool calling configuration (Claude API)
+/// Defines how the model should use tools in requests
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ToolChoice {
+    /// Let the model decide when to use tools (maps to AUTO mode)
+    Auto,
+
+    /// Force the model to use at least one tool (maps to ANY mode)
+    Any,
+
+    /// Disable all tool calling for this request (maps to NONE mode)
+    #[serde(rename = "none")]
+    None,
+
+    /// Force usage of a specific tool (maps to VALIDATED mode with allowedFunctionNames)
+    Tool { name: String },
+}
+
+impl Default for ToolChoice {
+    fn default() -> Self {
+        ToolChoice::Auto
+    }
+}
+
+impl ToolChoice {
+    /// Convert to Gemini Protocol mode string
+    pub fn to_gemini_mode(&self) -> &'static str {
+        match self {
+            ToolChoice::Auto => "AUTO",
+            ToolChoice::Any => "ANY",
+            ToolChoice::None => "NONE",
+            ToolChoice::Tool { .. } => "VALIDATED",
+        }
+    }
+
+    /// Get specific tool name if Tool variant
+    pub fn get_tool_name(&self) -> Option<&str> {
+        match self {
+            ToolChoice::Tool { name } => Some(name.as_str()),
+            _ => None,
+        }
+    }
 }
 
 /// Claude API 响应
@@ -417,4 +476,50 @@ pub struct SearchEntryPoint {
     #[serde(rename = "renderedContent")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rendered_content: Option<String>,
+}
+
+// ========== Story #8: Violation Tracking ==========
+
+/// 🆕 Story #8 Step 7: ViolationInfo structure
+/// Передаёт информацию о thinking violations из mapper в handler
+/// для последующей записи в ProxyMonitor metrics
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ViolationInfo {
+    /// Budget constraint violation detected (maxTokens ≤ thinkingBudget)
+    /// Story #6 integration point
+    pub budget_violation: bool,
+
+    /// Position enforcement violation detected (thinking not first)
+    /// Story #7 integration point
+    pub position_violation: bool,
+
+    /// Index where position violation occurred (for histogram)
+    pub position_index: Option<usize>,
+
+    /// Role of message with position violation ("user" or "model")
+    pub position_role: Option<String>,
+}
+
+impl ViolationInfo {
+    /// Create new empty ViolationInfo (no violations)
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check if any violation occurred
+    pub fn has_violations(&self) -> bool {
+        self.budget_violation || self.position_violation
+    }
+
+    /// Record budget violation
+    pub fn record_budget_violation(&mut self) {
+        self.budget_violation = true;
+    }
+
+    /// Record position violation with context
+    pub fn record_position_violation(&mut self, index: usize, role: &str) {
+        self.position_violation = true;
+        self.position_index = Some(index);
+        self.position_role = Some(role.to_string());
+    }
 }

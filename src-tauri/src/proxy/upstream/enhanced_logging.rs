@@ -36,7 +36,7 @@ pub fn log_request_details(
             // Mask authorization token for security
             if key.as_str().to_lowercase() == "authorization" {
                 let masked = if v.len() > 20 {
-                    format!("{}...{}", &v[..10], &v[v.len()-4..])
+                    format!("{}...{}", &v[..10], &v[v.len() - 4..])
                 } else {
                     "Bearer ***".to_string()
                 };
@@ -79,10 +79,7 @@ pub fn log_request_details(
 }
 
 /// Log response details after receiving
-pub async fn log_response_details(
-    response: &Response,
-    context: &str,
-) {
+pub async fn log_response_details(response: &Response, context: &str) {
     if !is_debug_enabled() {
         return;
     }
@@ -103,11 +100,7 @@ pub async fn log_response_details(
 }
 
 /// Log 429 error details with quota information
-pub fn log_429_error_details(
-    status: u16,
-    body: &str,
-    headers: &reqwest::header::HeaderMap,
-) {
+pub fn log_429_error_details(status: u16, body: &str, headers: &reqwest::header::HeaderMap) {
     if status != 429 {
         return;
     }
@@ -170,10 +163,7 @@ pub fn log_429_error_details(
 }
 
 /// Compare request with reference (for debugging)
-pub fn compare_with_reference(
-    current_ua: &str,
-    current_request_type: &str,
-) -> Vec<String> {
+pub fn compare_with_reference(current_ua: &str, current_request_type: &str) -> Vec<String> {
     let mut suggestions = Vec::new();
 
     // Reference values from working Google Antigravity
@@ -261,16 +251,10 @@ mod tests {
 
     #[test]
     fn test_compare_with_reference() {
-        let suggestions = compare_with_reference(
-            "antigravity/1.11.9 windows/amd64",
-            "agent"
-        );
+        let suggestions = compare_with_reference("antigravity/1.11.9 windows/amd64", "agent");
         assert!(!suggestions.is_empty(), "Should detect version mismatch");
 
-        let suggestions = compare_with_reference(
-            "antigravity/1.13.3 darwin/arm64",
-            "agent"
-        );
+        let suggestions = compare_with_reference("antigravity/1.13.3 darwin/arm64", "agent");
         assert!(suggestions.is_empty(), "Should match reference");
     }
 
@@ -281,7 +265,7 @@ mod tests {
             "agent",
             "claude-sonnet-4-5",
             200,
-            HashMap::new()
+            HashMap::new(),
         );
         assert!(report.contains("DIAGNOSTIC REPORT"));
         assert!(report.contains("claude-sonnet-4-5"));

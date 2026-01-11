@@ -1,6 +1,6 @@
 // OpenAI Handler
 use axum::{extract::Json, extract::State, http::StatusCode, response::IntoResponse};
-use base64::Engine as _; 
+use base64::Engine as _;
 use bytes::Bytes;
 use serde_json::{json, Value};
 use tracing::{debug, error, info}; // Import Engine trait for encode method
@@ -72,7 +72,12 @@ pub async fn handle_chat_completions(
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
         // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, attempt > 0, Some(&session_id), Some(&mapped_model))
+            .get_token(
+                &config.request_type,
+                attempt > 0,
+                Some(&session_id),
+                Some(&mapped_model),
+            )
             .await
         {
             Ok(t) => t,
@@ -99,11 +104,11 @@ pub async fn handle_chat_completions(
         // [AUTO-CONVERSION] 非 Stream 请求自动转换为 Stream 以享受更宽松的配额
         let force_stream_internally = !client_wants_stream;
         let actual_stream = client_wants_stream || force_stream_internally;
-        
+
         if force_stream_internally {
             info!("[OpenAI] 🔄 Auto-converting non-stream request to stream for better quota");
         }
-        
+
         let method = if actual_stream {
             "streamGenerateContent"
         } else {
@@ -139,7 +144,7 @@ pub async fn handle_chat_completions(
                 let gemini_stream = response.bytes_stream();
                 let openai_stream =
                     create_openai_sse_stream(Box::pin(gemini_stream), openai_req.model.clone());
-                
+
                 // 判断客户端期望的格式
                 if client_wants_stream {
                     // 客户端本就要 Stream，直接返回 SSE
@@ -157,7 +162,7 @@ pub async fn handle_chat_completions(
                     // 客户端要非 Stream，需要收集完整响应并转换为 JSON
                     use crate::proxy::mappers::openai::collect_openai_stream_to_json;
                     use futures::StreamExt;
-                    
+
                     // 转换为 io::Error stream
                     let sse_stream = openai_stream.map(|result| -> Result<Bytes, std::io::Error> {
                         match result {
@@ -165,14 +170,25 @@ pub async fn handle_chat_completions(
                             Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
                         }
                     });
-                    
+
                     match collect_openai_stream_to_json(sse_stream).await {
                         Ok(full_response) => {
                             info!("[OpenAI] ✓ Stream collected and converted to JSON");
-                            return Ok((StatusCode::OK, [("X-Account-Email", email.as_str()), ("X-Mapped-Model", mapped_model.as_str())], Json(full_response)).into_response());
+                            return Ok((
+                                StatusCode::OK,
+                                [
+                                    ("X-Account-Email", email.as_str()),
+                                    ("X-Mapped-Model", mapped_model.as_str()),
+                                ],
+                                Json(full_response),
+                            )
+                                .into_response());
                         }
                         Err(e) => {
-                            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Stream collection error: {}", e)));
+                            return Err((
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Stream collection error: {}", e),
+                            ));
                         }
                     }
                 }
@@ -184,13 +200,28 @@ pub async fn handle_chat_completions(
                 .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Parse error: {}", e)))?;
 
             let openai_response = transform_openai_response(&gemini_resp);
-            return Ok((StatusCode::OK, [("X-Account-Email", email.as_str()), ("X-Mapped-Model", mapped_model.as_str())], Json(openai_response)).into_response());
+            return Ok((
+                StatusCode::OK,
+                [
+                    ("X-Account-Email", email.as_str()),
+                    ("X-Mapped-Model", mapped_model.as_str()),
+                ],
+                Json(openai_response),
+            )
+                .into_response());
         }
 
         // 处理特定错误并重试
         let status_code = status.as_u16();
-        let retry_after = response.headers().get("Retry-After").and_then(|h| h.to_str().ok()).map(|s| s.to_string());
-        let error_text = response.text().await.unwrap_or_else(|_| format!("HTTP {}", status_code));
+        let retry_after = response
+            .headers()
+            .get("Retry-After")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| format!("HTTP {}", status_code));
         last_error = format!("HTTP {}: {}", status_code, error_text);
 
         // [New] 打印错误报文日志
@@ -203,7 +234,13 @@ pub async fn handle_chat_completions(
         // 429/529/503 智能处理
         if status_code == 429 || status_code == 529 || status_code == 503 || status_code == 500 {
             // 记录限流信息 (全局同步) - 🆕 传递模型实现 model-level rate limiting
-            token_manager.mark_rate_limited(&email, status_code, retry_after.as_deref(), &error_text, Some(&mapped_model));
+            token_manager.mark_rate_limited(
+                &email,
+                status_code,
+                retry_after.as_deref(),
+                &error_text,
+                Some(&mapped_model),
+            );
 
             // 1. 优先尝试解析 RetryInfo (由 Google Cloud 直接下发)
             if let Some(delay_ms) = crate::proxy::upstream::retry::parse_retry_delay(&error_text) {
@@ -575,16 +612,18 @@ pub async fn handle_completions(
         );
 
         // 🆕 传递模型参数实现 model-aware rate limiting
-        let (access_token, project_id, email) =
-            match token_manager.get_token(&config.request_type, false, None, Some(&mapped_model)).await {
-                Ok(t) => t,
-                Err(e) => {
-                    return Err((
-                        StatusCode::SERVICE_UNAVAILABLE,
-                        format!("Token error: {}", e),
-                    ))
-                }
-            };
+        let (access_token, project_id, email) = match token_manager
+            .get_token(&config.request_type, false, None, Some(&mapped_model))
+            .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                return Err((
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("Token error: {}", e),
+                ))
+            }
+        };
 
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
@@ -695,18 +734,19 @@ pub async fn handle_completions(
 pub async fn handle_list_models(State(state): State<AppState>) -> impl IntoResponse {
     use crate::proxy::common::model_mapping::get_all_dynamic_models;
 
-    let model_ids = get_all_dynamic_models(
-        &state.custom_mapping,
-    ).await;
+    let model_ids = get_all_dynamic_models(&state.custom_mapping).await;
 
-    let data: Vec<_> = model_ids.into_iter().map(|id| {
-        json!({
-            "id": id,
-            "object": "model",
-            "created": 1706745600,
-            "owned_by": "antigravity"
+    let data: Vec<_> = model_ids
+        .into_iter()
+        .map(|id| {
+            json!({
+                "id": id,
+                "object": "model",
+                "created": 1706745600,
+                "owned_by": "antigravity"
+            })
         })
-    }).collect();
+        .collect();
 
     Json(json!({
         "object": "list",
@@ -788,7 +828,9 @@ pub async fn handle_images_generations(
     let token_manager = state.token_manager;
 
     // 🆕 传递模型参数实现 model-aware rate limiting (image generation)
-    let (access_token, project_id, email) = match token_manager.get_token("image_gen", false, None, Some(model)).await
+    let (access_token, project_id, email) = match token_manager
+        .get_token("image_gen", false, None, Some(model))
+        .await
     {
         Ok(t) => t,
         Err(e) => {
@@ -1039,7 +1081,9 @@ pub async fn handle_images_edits(
     let token_manager = state.token_manager;
     // Fix: Proper get_token call with correct signature and unwrap (using image_gen quota)
     // 🆕 传递模型参数实现 model-aware rate limiting (image edit)
-    let (access_token, project_id, _email) = match token_manager.get_token("image_gen", false, None, Some(&model)).await
+    let (access_token, project_id, _email) = match token_manager
+        .get_token("image_gen", false, None, Some(&model))
+        .await
     {
         Ok(t) => t,
         Err(e) => {

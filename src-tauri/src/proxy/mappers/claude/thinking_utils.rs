@@ -1,4 +1,4 @@
-use super::models::{Message, MessageContent, ContentBlock};
+use super::models::{ContentBlock, Message, MessageContent};
 use tracing::info;
 
 #[derive(Debug, Default)]
@@ -27,11 +27,14 @@ pub fn analyze_conversation_state(messages: &[Message]) -> ConversationState {
     // Check if the very last message is a Tool Result (User role with ToolResult block)
     if let Some(last_msg) = messages.last() {
         if last_msg.role == "user" {
-           if let MessageContent::Array(blocks) = &last_msg.content {
-               if blocks.iter().any(|b| matches!(b, ContentBlock::ToolResult { .. })) {
-                   state.in_tool_loop = true;
-               }
-           }
+            if let MessageContent::Array(blocks) = &last_msg.content {
+                if blocks
+                    .iter()
+                    .any(|b| matches!(b, ContentBlock::ToolResult { .. }))
+                {
+                    state.in_tool_loop = true;
+                }
+            }
         }
     }
 
@@ -72,9 +75,11 @@ pub fn close_tool_loop_for_thinking(messages: &mut Vec<Message>, model: &str) {
 
     if let Some(idx) = assistant_idx {
         if let Some(msg) = messages.get(idx) {
-             if let MessageContent::Array(blocks) = &msg.content {
-                 has_thinking = blocks.iter().any(|b| matches!(b, ContentBlock::Thinking { .. }));
-             }
+            if let MessageContent::Array(blocks) = &msg.content {
+                has_thinking = blocks
+                    .iter()
+                    .any(|b| matches!(b, ContentBlock::Thinking { .. }));
+            }
         }
     }
 
@@ -92,7 +97,10 @@ pub fn close_tool_loop_for_thinking(messages: &mut Vec<Message>, model: &str) {
         if messages.len() >= 2 {
             let removed_count = 2;
             messages.truncate(messages.len() - removed_count);
-            info!("[Thinking-Recovery] Removed {} messages (broken tool loop pair)", removed_count);
+            info!(
+                "[Thinking-Recovery] Removed {} messages (broken tool loop pair)",
+                removed_count
+            );
         }
     }
 }

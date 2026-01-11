@@ -10,7 +10,7 @@
 mod tests {
     use crate::proxy::common::model_mapping::{map_claude_model_to_gemini, resolve_model_route};
     use crate::proxy::mappers::claude::models::{
-        ClaudeRequest, Message, MessageContent, ThinkingConfig
+        ClaudeRequest, Message, MessageContent, ThinkingConfig,
     };
     use crate::proxy::mappers::claude::request::transform_claude_request_in;
     use serde_json::json;
@@ -174,12 +174,10 @@ mod tests {
     fn create_basic_request(model: &str, with_thinking: bool) -> ClaudeRequest {
         ClaudeRequest {
             model: model.to_string(),
-            messages: vec![
-                Message {
-                    role: "user".to_string(),
-                    content: MessageContent::String("Test message".to_string()),
-                }
-            ],
+            messages: vec![Message {
+                role: "user".to_string(),
+                content: MessageContent::String("Test message".to_string()),
+            }],
             system: None,
             tools: None,
             stream: false,
@@ -197,6 +195,7 @@ mod tests {
             },
             metadata: None,
             output_config: None,
+            tool_choice: None,
         }
     }
 
@@ -208,7 +207,7 @@ mod tests {
 
         assert!(result.is_ok(), "Request should succeed");
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
 
         // Проверяем model routing
         assert_eq!(
@@ -223,13 +222,8 @@ mod tests {
             !thinking_config.is_null(),
             "thinkingConfig должен присутствовать для Claude thinking models"
         );
-        assert_eq!(
-            thinking_config["includeThoughts"].as_bool(),
-            Some(true)
-        );
-        assert!(
-            thinking_config["thinkingBudget"].as_i64().unwrap() > 0
-        );
+        assert_eq!(thinking_config["includeThoughts"].as_bool(), Some(true));
+        assert!(thinking_config["thinkingBudget"].as_i64().unwrap() > 0);
     }
 
     /// Test Claude Sonnet WITHOUT thinking
@@ -240,7 +234,7 @@ mod tests {
 
         assert!(result.is_ok(), "Request should succeed");
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
 
         // Проверяем model routing
         assert_eq!(
@@ -265,7 +259,7 @@ mod tests {
 
         assert!(result.is_ok(), "Request should succeed");
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
 
         // Проверяем model routing - БЕЗ -thinking суффикса!
         assert_eq!(
@@ -280,10 +274,7 @@ mod tests {
             !thinking_config.is_null(),
             "thinkingConfig должен присутствовать для Gemini с enabled thinking"
         );
-        assert_eq!(
-            thinking_config["includeThoughts"].as_bool(),
-            Some(true)
-        );
+        assert_eq!(thinking_config["includeThoughts"].as_bool(), Some(true));
     }
 
     /// Test Gemini WITHOUT thinking
@@ -294,7 +285,7 @@ mod tests {
 
         assert!(result.is_ok(), "Request should succeed");
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
 
         // Проверяем model routing
         assert_eq!(
@@ -319,7 +310,7 @@ mod tests {
 
         assert!(result.is_ok(), "Request should succeed");
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
 
         // Haiku должен роутиться в Gemini Pro High БЕЗ -thinking
         assert_eq!(
@@ -352,7 +343,7 @@ mod tests {
         let result = transform_claude_request_in(&req, "test-project");
         assert!(result.is_ok());
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
         let budget = body["request"]["generationConfig"]["thinkingConfig"]["thinkingBudget"]
             .as_i64()
             .unwrap();
@@ -376,7 +367,7 @@ mod tests {
         let result = transform_claude_request_in(&req, "test-project");
         assert!(result.is_ok());
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
         let budget = body["request"]["generationConfig"]["thinkingConfig"]["thinkingBudget"]
             .as_i64()
             .unwrap();
@@ -400,7 +391,7 @@ mod tests {
         let result = transform_claude_request_in(&req, "test-project");
         assert!(result.is_ok());
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
         let budget = body["request"]["generationConfig"]["thinkingConfig"]["thinkingBudget"]
             .as_i64()
             .unwrap();
@@ -424,13 +415,10 @@ mod tests {
 
         assert!(result.is_ok());
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
 
         // Model сохраняется с -thinking суффиксом
-        assert_eq!(
-            body["model"].as_str(),
-            Some("claude-sonnet-4-5-thinking")
-        );
+        assert_eq!(body["model"].as_str(), Some("claude-sonnet-4-5-thinking"));
 
         // Но thinkingConfig НЕ должен быть установлен
         let thinking_config = body["request"]["generationConfig"]["thinkingConfig"].clone();
@@ -452,7 +440,7 @@ mod tests {
         let result = transform_claude_request_in(&req, "test-project");
         assert!(result.is_ok());
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
         let thinking_config = body["request"]["generationConfig"]["thinkingConfig"].clone();
 
         assert!(
@@ -474,7 +462,7 @@ mod tests {
         let result = transform_claude_request_in(&req, "test-project");
         assert!(result.is_ok());
 
-        let body = result.unwrap();
+        let (body, _violations) = result.unwrap();
         let max_tokens = body["request"]["generationConfig"]["maxOutputTokens"]
             .as_i64()
             .unwrap();
