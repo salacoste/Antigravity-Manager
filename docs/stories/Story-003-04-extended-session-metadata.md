@@ -4,8 +4,10 @@
 **Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P3 (Low) - 📌 **Completes FR2 (Request Metadata)**
 **Estimate**: 1 story point (1 hour)
-**Status**: To Do
-**Assignee**: TBD
+**Status**: ✅ IMPLEMENTED [SHARED]
+**Cross-Epic**: Also serves Epic-004 (Story-004-06)
+**Assignee**: Completed
+**Updated**: 2026-01-11 (Added [SHARED] tag)
 
 ---
 

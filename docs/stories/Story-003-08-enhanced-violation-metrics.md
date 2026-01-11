@@ -4,8 +4,10 @@
 **Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P1 (High) - 📌 **Completes Phase 2 (Strict Validation)**
 **Estimate**: 2 story points (2 hours)
-**Status**: To Do
-**Assignee**: TBD
+**Status**: ✅ IMPLEMENTED [THINKING-SPECIFIC]
+**Implementation**: models.rs:489-527, 4 integration tests (request.rs:2884-3099)
+**Assignee**: Completed
+**Updated**: 2026-01-11 (Verified implementation)
 
 ---
 

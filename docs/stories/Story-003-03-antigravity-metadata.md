@@ -4,8 +4,10 @@
 **Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P0 (CRITICAL) - 🚨 **PRIMARY ANTI-DETECTION MARKER**
 **Estimate**: 3 story points (2 hours)
-**Status**: To Do
-**Assignee**: TBD
+**Status**: ✅ IMPLEMENTED [SHARED]
+**Cross-Epic**: Also serves Epic-004 (Story-004-02)
+**Assignee**: Completed
+**Updated**: 2026-01-11 (Added [SHARED] tag)
 
 ---
 

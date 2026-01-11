@@ -4,8 +4,10 @@
 **Epic**: [Epic-003](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md) - Claude 4.5 Sonnet Thinking - 100% Compliance
 **Priority**: P2 (High - Testing)
 **Estimated Effort**: 2 hours
-**Status**: Pending
+**Status**: ⚠️ BLOCKED (Story-003-10 NOT IMPLEMENTED)
+**Blocker**: Story-003-10 geminiSettings implementation required
 **Created**: 2026-01-10
+**Updated**: 2026-01-11 (Fixed false assumption about Story-003-10)
 **Owner**: Engineering Team
 
 ---
@@ -30,10 +32,11 @@ This story validates **Phase 3 (Feature Parity)** implementation:
 - ✅ allowedFunctionNames for tool forcing
 
 **Story-003-10** (Grounding Configuration):
-- ✅ geminiSettings.recitationPolicy always present
-- ✅ action="BLOCK", threshold="LOW"
+- ❌ geminiSettings.recitationPolicy NOT IMPLEMENTED
+- ❌ action="BLOCK", threshold="LOW" NOT IMPLEMENTED
+- ⚠️ **CRITICAL**: Story-003-10 must be implemented before this story
 
-**Compliance Target**: 95% → **100%**
+**Compliance Target**: 95% → **100%** (blocked by Story-003-10)
 
 ### Why Comprehensive Testing is Critical
 
@@ -55,22 +58,21 @@ This story validates **Phase 3 (Feature Parity)** implementation:
 
 ### Current Situation
 
-**Implementation Complete** (Stories 009, 010):
-- ✅ ToolChoice enum implemented
-- ✅ Tool mode mapping implemented
-- ✅ geminiSettings added to all requests
+**Implementation Status**:
+- ✅ **Story-003-09**: ToolChoice enum and mode mapping IMPLEMENTED
+- ❌ **Story-003-10**: geminiSettings NOT IMPLEMENTED (CRITICAL BLOCKER)
 
-**Testing Needed**:
+**Testing Needed** (BLOCKED until Story-003-10 complete):
 - ❌ No end-to-end validation of tool modes
 - ❌ No integration testing with live Vertex AI
 - ❌ No compliance verification against RE spec
 - ❌ No manual testing scenarios documented
 
-**Risk Without Testing**:
-- ⚠️ Tool modes may not work correctly end-to-end
-- ⚠️ geminiSettings may have incorrect format
-- ⚠️ Backend may reject requests
-- ⚠️ Compliance score may not reach 100%
+**Risk Without Story-003-10 Implementation**:
+- 🚨 **BLOCKER**: geminiSettings missing from all requests
+- 🚨 **CRITICAL**: Anti-detection fingerprint (requests identifiable as non-Antigravity)
+- ⚠️ Compliance score stuck at 95% (cannot reach 100%)
+- ⚠️ Testing Story-003-11 is premature without Story-003-10
 
 ---
 
@@ -835,11 +837,13 @@ mod tool_mode_tests {
 ## Dependencies
 
 ### Upstream Dependencies (Must Be Complete)
-- ✅ **Story-003-09**: Flexible Tool Configuration Modes (COMPLETE)
-- ✅ **Story-003-10**: Grounding Configuration (COMPLETE)
-- ✅ **Story-003-01 to 003-08**: All previous stories (COMPLETE)
+- ✅ **Story-003-09**: Flexible Tool Configuration Modes (IMPLEMENTED)
+- ❌ **Story-003-10**: Grounding Configuration (NOT IMPLEMENTED - BLOCKER)
+- ⚠️ **Story-003-01 to 003-08**: Implementation status UNKNOWN (needs verification)
 
-**Why**: This story validates implementations from Stories 009 and 010.
+**CRITICAL BLOCKER**: Story-003-10 geminiSettings implementation MUST be completed before Story-003-11 testing can proceed.
+
+**Why**: This story validates implementations from Stories 009 and 010. Without Story-003-10, testing is incomplete and compliance cannot reach 100%.
 
 ### Downstream Dependencies
 - **Story-003-12**: Compliance Monitoring Dashboard (will display test results)

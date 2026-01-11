@@ -4,8 +4,10 @@
 **Epic**: [Epic-003 - Claude 4.5 Sonnet Thinking Compliance](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md)
 **Priority**: P1 (High) - 📌 **Enhances Gap #4 (Budget Constraint)**
 **Estimate**: 0.5 story points (0.5 hours)
-**Status**: To Do
-**Assignee**: TBD
+**Status**: ✅ IMPLEMENTED [THINKING-SPECIFIC]
+**Implementation**: request.rs:1527-1541
+**Assignee**: Completed
+**Updated**: 2026-01-11 (Verified implementation)
 
 ---
 

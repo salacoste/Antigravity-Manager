@@ -2,11 +2,29 @@
 
 **Story ID**: Story-003-10
 **Epic**: [Epic-003](../epics/Epic-003-Claude-4.5-Sonnet-Thinking-Compliance.md) - Claude 4.5 Sonnet Thinking - 100% Compliance
-**Priority**: P2 (Medium)
-**Estimated Effort**: 1 hour
-**Status**: Pending
+**Priority**: P0 (CRITICAL - Compliance Blocker)
+**Estimated Effort**: 1 hour (~15 lines of code + 3 tests)
+**Status**: ❌ NOT IMPLEMENTED (CRITICAL GAP) [SHARED]
+**Cross-Epic**: Also blocks Epic-004 (Story-004-05)
+**Impact**: BLOCKS 100% compliance (currently 95%)
+**Blocks**: Story-003-11 (Tool Mode Testing)
 **Created**: 2026-01-10
+**Updated**: 2026-01-11 (Added [SHARED] tag, NOT IMPLEMENTED)
 **Owner**: Engineering Team
+
+---
+
+## 🚨 CRITICAL WARNING
+
+**This feature is NOT IMPLEMENTED and is CRITICAL for anti-detection compliance.**
+
+**Evidence**: `grep -r "geminiSettings\|recitationPolicy" src-tauri/` returns **NO MATCHES**
+
+**Impact**:
+- ❌ All requests missing geminiSettings field
+- ❌ Clear fingerprint that proxy is not genuine Antigravity
+- ❌ Compliance stuck at 95% (cannot reach 100%)
+- ❌ Story-003-11 testing BLOCKED until this is implemented
 
 ---
 
@@ -93,7 +111,13 @@ if let Some(tools_val) = tools {
 - **Protocol Compliance**: Request structure differs from Antigravity baseline
 - **Anti-Detection Risk**: **HIGH** - Missing field is a clear fingerprint that our proxy is not genuine Antigravity
 
-**Priority**: P2 - Medium priority for feature parity, **HIGH priority for anti-detection**
+**Priority**: P0 - **CRITICAL** - Blocks compliance for both Epic-003 AND Epic-004
+
+**Cross-Epic Impact**:
+- ❌ **Story-003-10** (This Story): NOT IMPLEMENTED for model 334
+- ❌ **Story-004-05**: NOT IMPLEMENTED for model 333
+- 🔗 Same code applies to both models (100% shared implementation)
+- 🚨 Affects ALL Claude 4.5 Sonnet requests (thinking and standard)
 
 ---
 
