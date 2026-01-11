@@ -123,6 +123,11 @@ pub fn run() {
             commands::proxy::get_proxy_stats,
             commands::proxy::get_violation_metrics, // 🆕 Story #8
             commands::proxy::reset_violation_metrics, // 🆕 Story #12
+            commands::proxy::get_cache_metrics, // 🆕 Story-008-02
+            commands::proxy::get_cache_hit_rate, // 🆕 Story-008-02
+            commands::proxy::get_top_cache_signatures, // 🆕 Story-008-02
+            commands::proxy::get_cache_cost_savings, // 🆕 Story-008-02
+            commands::proxy::clear_cache_metrics, // 🆕 Story-008-02
             commands::proxy::get_proxy_logs,
             commands::proxy::set_proxy_monitor_enabled,
             commands::proxy::clear_proxy_logs,

@@ -1,10 +1,14 @@
 use std::collections::HashMap;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, SystemTime};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant, SystemTime};
 
 // Node.js proxy uses 2 hours TTL
 const SIGNATURE_TTL: Duration = Duration::from_secs(2 * 60 * 60);
 const MIN_SIGNATURE_LENGTH: usize = 50;
+
+// Story-008-02: Global cache monitor for observability
+use crate::proxy::cache_monitor::CacheMonitor;
+use tokio::runtime::Handle;
 
 /// Cache entry with timestamp for TTL
 #[derive(Clone, Debug)]
@@ -26,9 +30,18 @@ impl<T> CacheEntry<T> {
     }
 }
 
+/// Global cache monitor singleton
+/// Story-008-02: Observability integration
+fn get_cache_monitor() -> &'static Arc<CacheMonitor> {
+    static INSTANCE: OnceLock<Arc<CacheMonitor>> = OnceLock::new();
+    INSTANCE.get_or_init(|| Arc::new(CacheMonitor::new()))
+}
+
 /// Double-layer signature cache to handle:
 /// 1. Signature recovery for tool calls (when clients strip them)
 /// 2. Cross-model compatibility checks (preventing Claude signatures on Gemini models)
+///
+/// Story-008-02: Now with comprehensive metrics tracking
 pub struct SignatureCache {
     /// Layer 1: Tool Use ID -> Thinking Signature
     /// Key: tool_use_id (e.g., "toolu_01...")
@@ -56,10 +69,13 @@ impl SignatureCache {
     }
 
     /// Store a tool call signature
+    /// Story-008-02: Now tracks write times for monitoring
     pub fn cache_tool_signature(&self, tool_use_id: &str, signature: String) {
         if signature.len() < MIN_SIGNATURE_LENGTH {
             return;
         }
+
+        let start = Instant::now();
 
         if let Ok(mut cache) = self.tool_signatures.lock() {
             tracing::debug!(
@@ -67,6 +83,16 @@ impl SignatureCache {
                 tool_use_id
             );
             cache.insert(tool_use_id.to_string(), CacheEntry::new(signature));
+
+            let write_time = start.elapsed().as_secs_f64() * 1000.0; // Convert to ms
+
+            // Record write operation
+            let monitor = get_cache_monitor();
+            if let Ok(handle) = Handle::try_current() {
+                handle.spawn(async move {
+                    monitor.record_write(write_time).await;
+                });
+            }
 
             // Clean up expired entries occasionally (simple approach: unexpected check)
             // In a production system we might want a dedicated background task
@@ -77,18 +103,46 @@ impl SignatureCache {
     }
 
     /// Retrieve a signature for a tool_use_id
+    /// Story-008-02: Now tracks cache hits/misses for monitoring
     pub fn get_tool_signature(&self, tool_use_id: &str) -> Option<String> {
+        let start = Instant::now();
+
         if let Ok(cache) = self.tool_signatures.lock() {
             if let Some(entry) = cache.get(tool_use_id) {
                 if !entry.is_expired() {
+                    let lookup_time = start.elapsed().as_secs_f64() * 1000.0; // Convert to ms
+
                     tracing::debug!(
-                        "[SignatureCache] Hit tool signature for id: {}",
-                        tool_use_id
+                        "[SignatureCache] Hit tool signature for id: {} ({}ms)",
+                        tool_use_id,
+                        lookup_time
                     );
-                    return Some(entry.data.clone());
+
+                    // Record cache hit
+                    let monitor = get_cache_monitor();
+                    let signature = entry.data.clone();
+                    let sig_for_monitor = signature.clone();
+                    if let Ok(handle) = Handle::try_current() {
+                        handle.spawn(async move {
+                            monitor.record_hit(&sig_for_monitor, lookup_time, None).await;
+                        });
+                    }
+
+                    return Some(signature);
                 }
             }
         }
+
+        // Record cache miss
+        tracing::debug!("[SignatureCache] Miss tool signature for id: {}", tool_use_id);
+        let monitor = get_cache_monitor();
+        let id = tool_use_id.to_string();
+        if let Ok(handle) = Handle::try_current() {
+            handle.spawn(async move {
+                monitor.record_miss(&id).await;
+            });
+        }
+
         None
     }
 
@@ -113,16 +167,40 @@ impl SignatureCache {
     }
 
     /// Get model family for a signature
+    /// Story-008-02: Now tracks cache hits/misses for monitoring
     pub fn get_signature_family(&self, signature: &str) -> Option<String> {
+        let start = Instant::now();
+
         if let Ok(cache) = self.thinking_families.lock() {
             if let Some(entry) = cache.get(signature) {
                 if !entry.is_expired() {
+                    let lookup_time = start.elapsed().as_secs_f64() * 1000.0;
+
+                    // Record cache hit
+                    let monitor = get_cache_monitor();
+                    let sig = signature.to_string();
+                    if let Ok(handle) = Handle::try_current() {
+                        handle.spawn(async move {
+                            monitor.record_hit(&sig, lookup_time, None).await;
+                        });
+                    }
+
                     return Some(entry.data.clone());
                 } else {
                     tracing::debug!("[SignatureCache] Signature family entry expired");
                 }
             }
         }
+
+        // Record cache miss
+        let monitor = get_cache_monitor();
+        let sig = signature.to_string();
+        if let Ok(handle) = Handle::try_current() {
+            handle.spawn(async move {
+                monitor.record_miss(&sig).await;
+            });
+        }
+
         None
     }
 
@@ -134,6 +212,12 @@ impl SignatureCache {
         if let Ok(mut cache) = self.thinking_families.lock() {
             cache.clear();
         }
+    }
+
+    /// Get the global cache monitor for metrics access
+    /// Story-008-02: Public accessor for monitoring subsystem
+    pub fn get_monitor() -> &'static Arc<CacheMonitor> {
+        get_cache_monitor()
     }
 }
 
