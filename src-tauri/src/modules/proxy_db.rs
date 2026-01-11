@@ -49,6 +49,9 @@ pub fn init_db() -> Result<(), String> {
     // 🆕 Story #8: Run migration for proxy_stats table
     migrate_stats_table()?;
 
+    // 🆕 Story-008-02: Run migration for cache_metrics tables
+    migrate_cache_metrics_table()?;
+
     Ok(())
 }
 
@@ -279,4 +282,279 @@ pub fn save_stats(stats: &crate::proxy::monitor::ProxyStats) -> Result<(), Strin
     .map_err(|e| format!("Failed to save proxy stats: {}", e))?;
 
     Ok(())
+}
+
+// ========== Story-008-02: Cache Metrics Database Integration ==========
+
+/// Create cache_metrics table for signature cache monitoring
+/// Story-008-02 AC5: Dashboard integration requires persistence
+pub fn migrate_cache_metrics_table() -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    // Check if cache_metrics table exists
+    let has_cache_metrics: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cache_metrics'",
+            [],
+            |row| {
+                let count: i32 = row.get(0)?;
+                Ok(count > 0)
+            },
+        )
+        .unwrap_or(false);
+
+    if has_cache_metrics {
+        tracing::info!("[ProxyDB] cache_metrics table already exists");
+        return Ok(());
+    }
+
+    // Create cache_metrics table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS cache_metrics (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            hit_count INTEGER DEFAULT 0,
+            miss_count INTEGER DEFAULT 0,
+            hit_rate REAL DEFAULT 0.0,
+            total_cost_saved REAL DEFAULT 0.0,
+            savings_percentage REAL DEFAULT 0.0,
+            lookup_p50 REAL DEFAULT 0.0,
+            lookup_p95 REAL DEFAULT 0.0,
+            lookup_p99 REAL DEFAULT 0.0,
+            write_p95 REAL DEFAULT 0.0,
+            memory_usage INTEGER DEFAULT 0,
+            total_operations INTEGER DEFAULT 0,
+            degradation_alert INTEGER DEFAULT 0,
+            updated_at INTEGER
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create cache_metrics table: {}", e))?;
+
+    // Create signature_stats table for top signatures tracking
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS signature_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            signature TEXT NOT NULL,
+            signature_hash TEXT UNIQUE NOT NULL,
+            reuse_count INTEGER DEFAULT 0,
+            first_cached INTEGER NOT NULL,
+            last_used INTEGER NOT NULL,
+            cost_saved REAL DEFAULT 0.0,
+            avg_lookup_time REAL DEFAULT 0.0,
+            high_value INTEGER DEFAULT 0
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create signature_stats table: {}", e))?;
+
+    // Create index on reuse_count for top signatures query
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reuse_count ON signature_stats (reuse_count DESC)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create reuse_count index: {}", e))?;
+
+    // Insert initial cache_metrics row
+    conn.execute("INSERT OR IGNORE INTO cache_metrics (id) VALUES (1)", [])
+        .map_err(|e| format!("Failed to insert initial cache_metrics row: {}", e))?;
+
+    tracing::info!("[ProxyDB] Successfully migrated cache_metrics tables");
+    Ok(())
+}
+
+/// Save cache metrics to database
+/// Story-008-02 AC5: Persist metrics for dashboard
+pub fn save_cache_metrics(metrics: &crate::proxy::cache_monitor::CacheMetrics) -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let now = chrono::Utc::now().timestamp();
+
+    conn.execute(
+        "INSERT OR REPLACE INTO cache_metrics (
+            id,
+            hit_count,
+            miss_count,
+            hit_rate,
+            total_cost_saved,
+            savings_percentage,
+            lookup_p50,
+            lookup_p95,
+            lookup_p99,
+            write_p95,
+            memory_usage,
+            total_operations,
+            degradation_alert,
+            updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            1, // Single-row table, always id=1
+            metrics.hit_count as i64,
+            metrics.miss_count as i64,
+            metrics.hit_rate,
+            metrics.cost_savings.total_saved,
+            metrics.cost_savings.savings_percentage,
+            metrics.performance.lookup_p50,
+            metrics.performance.lookup_p95,
+            metrics.performance.lookup_p99,
+            metrics.performance.write_p95,
+            metrics.performance.memory_usage as i64,
+            metrics.performance.total_operations as i64,
+            if metrics.performance.degradation_alert { 1 } else { 0 },
+            now,
+        ],
+    )
+    .map_err(|e| format!("Failed to save cache metrics: {}", e))?;
+
+    Ok(())
+}
+
+/// Load cache metrics from database
+/// Story-008-02 AC5: Load persisted metrics for dashboard
+pub fn load_cache_metrics() -> Result<crate::proxy::cache_monitor::CacheMetrics, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let metrics_result = conn.query_row(
+        "SELECT hit_count, miss_count, hit_rate,
+                total_cost_saved, savings_percentage,
+                lookup_p50, lookup_p95, lookup_p99, write_p95,
+                memory_usage, total_operations, degradation_alert,
+                updated_at
+         FROM cache_metrics WHERE id = 1",
+        [],
+        |row| {
+            use crate::proxy::cache_monitor::{CacheMetrics, CostSavings, PerformanceMetrics};
+
+            let hit_count: i64 = row.get(0)?;
+            let miss_count: i64 = row.get(1)?;
+            let degradation_flag: i64 = row.get(11)?;
+            let updated_timestamp: i64 = row.get(12)?;
+
+            Ok(CacheMetrics {
+                hit_count: hit_count as u64,
+                miss_count: miss_count as u64,
+                hit_rate: row.get(2)?,
+                top_signatures: Vec::new(), // Loaded separately
+                cost_savings: CostSavings {
+                    total_saved: row.get(3)?,
+                    savings_percentage: row.get(4)?,
+                    per_account: std::collections::HashMap::new(),
+                    per_user: std::collections::HashMap::new(),
+                    hourly_savings: Vec::new(),
+                    daily_savings: Vec::new(),
+                },
+                performance: PerformanceMetrics {
+                    lookup_p50: row.get(5)?,
+                    lookup_p95: row.get(6)?,
+                    lookup_p99: row.get(7)?,
+                    write_p95: row.get(8)?,
+                    memory_usage: row.get::<_, i64>(9)? as u64,
+                    total_operations: row.get::<_, i64>(10)? as u64,
+                    degradation_alert: degradation_flag != 0,
+                },
+                updated_at: chrono::DateTime::from_timestamp(updated_timestamp, 0)
+                    .unwrap_or_else(chrono::Utc::now),
+            })
+        },
+    );
+
+    match metrics_result {
+        Ok(metrics) => Ok(metrics),
+        Err(_) => {
+            // Return default metrics if table doesn't exist yet
+            Ok(crate::proxy::cache_monitor::CacheMetrics::default())
+        }
+    }
+}
+
+/// Save signature stats to database
+/// Story-008-02 AC2: Persist top signatures for analysis
+pub fn save_signature_stats(
+    stats: &[crate::proxy::cache_monitor::SignatureStats],
+) -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    for stat in stats {
+        // Use simple hash of signature as unique key
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        stat.signature.hash(&mut hasher);
+        let sig_hash = format!("{:x}", hasher.finish());
+
+        conn.execute(
+            "INSERT OR REPLACE INTO signature_stats (
+                signature_hash,
+                signature,
+                reuse_count,
+                first_cached,
+                last_used,
+                cost_saved,
+                avg_lookup_time,
+                high_value
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                sig_hash,
+                stat.signature,
+                stat.reuse_count as i64,
+                stat.first_cached.timestamp(),
+                stat.last_used.timestamp(),
+                stat.cost_saved,
+                stat.avg_lookup_time,
+                if stat.high_value { 1 } else { 0 },
+            ],
+        )
+        .map_err(|e| format!("Failed to save signature stats: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Load top signature stats from database
+/// Story-008-02 AC2: Load persisted signature analytics
+pub fn load_top_signatures(limit: usize) -> Result<Vec<crate::proxy::cache_monitor::SignatureStats>, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT signature, reuse_count, first_cached, last_used,
+                    cost_saved, avg_lookup_time, high_value
+             FROM signature_stats
+             ORDER BY reuse_count DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let stats_iter = stmt
+        .query_map([limit], |row| {
+            use crate::proxy::cache_monitor::SignatureStats;
+
+            let first_cached_ts: i64 = row.get(2)?;
+            let last_used_ts: i64 = row.get(3)?;
+            let high_value_flag: i64 = row.get(6)?;
+
+            Ok(SignatureStats {
+                signature: row.get(0)?,
+                reuse_count: row.get::<_, i64>(1)? as u64,
+                first_cached: chrono::DateTime::from_timestamp(first_cached_ts, 0)
+                    .unwrap_or_else(chrono::Utc::now),
+                last_used: chrono::DateTime::from_timestamp(last_used_ts, 0)
+                    .unwrap_or_else(chrono::Utc::now),
+                cost_saved: row.get(4)?,
+                avg_lookup_time: row.get(5)?,
+                high_value: high_value_flag != 0,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut stats = Vec::new();
+    for stat in stats_iter {
+        stats.push(stat.map_err(|e| e.to_string())?);
+    }
+    Ok(stats)
 }

@@ -468,3 +468,82 @@ pub async fn clear_proxy_session_bindings(
         Err("服务未运行".to_string())
     }
 }
+
+// ========== Story-008-02: Cache Metrics API Commands ==========
+
+/// Get comprehensive cache metrics
+/// Story-008-02 AC5: Dashboard integration
+#[tauri::command]
+pub async fn get_cache_metrics() -> Result<crate::proxy::cache_monitor::CacheMetrics, String> {
+    let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
+    let mut metrics = monitor.export_metrics().await;
+
+    // Load top signatures from database if available
+    if let Ok(db_signatures) = crate::modules::proxy_db::load_top_signatures(10) {
+        if !db_signatures.is_empty() {
+            metrics.top_signatures = db_signatures;
+        }
+    }
+
+    // Save metrics to database (async, non-blocking)
+    let metrics_clone = metrics.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::modules::proxy_db::save_cache_metrics(&metrics_clone) {
+            tracing::error!("Failed to save cache metrics to DB: {}", e);
+        }
+
+        // Save top signatures separately
+        if !metrics_clone.top_signatures.is_empty() {
+            if let Err(e) = crate::modules::proxy_db::save_signature_stats(&metrics_clone.top_signatures) {
+                tracing::error!("Failed to save signature stats to DB: {}", e);
+            }
+        }
+    });
+
+    Ok(metrics)
+}
+
+/// Get current cache hit rate
+/// Story-008-02 AC1: Hit rate monitoring
+#[tauri::command]
+pub async fn get_cache_hit_rate() -> Result<f32, String> {
+    let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
+    Ok(monitor.get_hit_rate().await)
+}
+
+/// Get top N most reused signatures
+/// Story-008-02 AC2: Signature reuse analysis
+#[tauri::command]
+pub async fn get_top_cache_signatures(
+    limit: Option<usize>,
+) -> Result<Vec<crate::proxy::cache_monitor::SignatureStats>, String> {
+    let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
+    let limit = limit.unwrap_or(10);
+
+    // Try to load from database first for historical data
+    if let Ok(db_signatures) = crate::modules::proxy_db::load_top_signatures(limit) {
+        if !db_signatures.is_empty() {
+            return Ok(db_signatures);
+        }
+    }
+
+    // Fallback to in-memory data
+    Ok(monitor.get_top_signatures(limit).await)
+}
+
+/// Get cost savings analysis
+/// Story-008-02 AC3: Cost attribution
+#[tauri::command]
+pub async fn get_cache_cost_savings() -> Result<crate::proxy::cache_monitor::CostSavings, String> {
+    let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
+    Ok(monitor.calculate_cost_savings().await)
+}
+
+/// Clear cache metrics (for testing or reset)
+/// Story-008-02: Metrics management
+#[tauri::command]
+pub async fn clear_cache_metrics() -> Result<(), String> {
+    let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
+    monitor.clear().await;
+    Ok(())
+}

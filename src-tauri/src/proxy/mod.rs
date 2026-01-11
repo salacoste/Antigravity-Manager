@@ -10,6 +10,7 @@ pub mod token_manager;
 // 新架构模块
 pub mod audio; // 音频处理模块 (PR #311)
 pub mod cache; // 响应缓存 (Story-007-04)
+pub mod cache_monitor; // Signature cache monitoring (Story-008-02)
 pub mod common; // 公共工具
 pub mod errors; // 错误处理工具 (Story-007-03)
 pub mod handlers; // API 端点处理器
@@ -19,11 +20,11 @@ pub mod monitor; // 监控
 pub mod providers; // Extra upstream providers (z.ai, etc.)
 pub mod rate_limit; // 限流跟踪
 pub mod session_manager; // 会话指纹管理
-pub mod signature_cache;
+pub mod signature_cache; // Signature Cache (v3.3.16)
 pub mod sticky_config; // 粘性调度配置
 pub mod upstream; // 上游客户端
 pub mod zai_vision_mcp; // Built-in Vision MCP server state
-pub mod zai_vision_tools; // Built-in Vision MCP tools (z.ai vision API) // Signature Cache (v3.3.16)
+pub mod zai_vision_tools; // Built-in Vision MCP tools (z.ai vision API)
 
 pub use config::ProxyAuthMode;
 pub use config::ProxyConfig;
