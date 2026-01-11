@@ -257,8 +257,9 @@ pub struct CacheMonitor {
 
 impl CacheMonitor {
     /// Create a new cache monitor
+    /// Story-012-03: Restore metrics from database on startup
     pub fn new() -> Self {
-        Self {
+        let monitor = Self {
             metrics: Arc::new(RwLock::new(CacheMetrics::default())),
             signatures: Arc::new(RwLock::new(HashMap::new())),
             lookup_times: Arc::new(RwLock::new(VecDeque::new())),
@@ -267,7 +268,39 @@ impl CacheMonitor {
             hourly_savings: Arc::new(RwLock::new(VecDeque::new())),
             daily_savings: Arc::new(RwLock::new(VecDeque::new())),
             baseline_p95: Arc::new(RwLock::new(0.0)),
+        };
+
+        // Story-012-03: Restore metrics from database
+        match crate::modules::proxy_db::load_cache_metrics() {
+            Ok(saved) => {
+                // Use try_write() to avoid blocking within async runtime
+                // Constructor is called from both sync and async contexts
+                match monitor.metrics.try_write() {
+                    Ok(mut metrics) => {
+                        let hit_count = saved.hit_count;
+                        let miss_count = saved.miss_count;
+                        *metrics = saved;
+                        tracing::info!(
+                            "[CacheMonitor] Restored cache metrics: hits={}, misses={}, hit_rate={:.2}%",
+                            hit_count,
+                            miss_count,
+                            metrics.hit_rate * 100.0
+                        );
+                    }
+                    Err(_) => {
+                        tracing::warn!("[CacheMonitor] Failed to acquire metrics lock during restoration (lock busy)");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::info!(
+                    "[CacheMonitor] No saved metrics found (first run or empty database): {}. Using defaults.",
+                    e
+                );
+            }
         }
+
+        monitor
     }
 
     /// Record a cache hit

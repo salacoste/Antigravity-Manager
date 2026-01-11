@@ -8,4 +8,5 @@ pub mod gemini_3_e2e_protocol_tests;
 pub mod gemini_3_edge_cases_tests;
 pub mod gemini_3_flash_integration_tests;
 pub mod gemini_3_performance_tests;
+pub mod openai_reasoning_effort_tests; // Code Review Fix: OpenAI reasoning_effort mapping tests
 pub mod thinking_models;
