@@ -66,6 +66,13 @@ function Settings() {
                 }));
             })
             .catch(err => console.error('Failed to load update settings:', err));
+
+        // 获取真实的开机自启状态
+        invoke<boolean>('is_auto_launch_enabled')
+            .then(enabled => {
+                setFormData(prev => ({ ...prev, auto_launch: enabled }));
+            })
+            .catch(err => console.error('Failed to get auto launch status:', err));
     }, [loadConfig]);
 
     useEffect(() => {
