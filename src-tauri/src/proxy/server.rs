@@ -30,6 +30,8 @@ pub struct AppState {
     pub zai_vision_mcp: Arc<crate::proxy::zai_vision_mcp::ZaiVisionMcpState>,
     pub monitor: Arc<crate::proxy::monitor::ProxyMonitor>,
     pub experimental: Arc<RwLock<crate::proxy::config::ExperimentalConfig>>,
+    /// Story-007-02: Gemini Image Generation Safety Settings
+    pub safety_threshold: Arc<RwLock<Option<String>>>,
 }
 
 /// Axum 服务器实例
@@ -105,6 +107,11 @@ impl AxumServer {
             zai_vision_mcp: zai_vision_mcp_state,
             monitor: monitor.clone(),
             experimental: experimental_state,
+            // Story-007-02: Initialize safety_threshold from environment variable
+            // GEMINI_IMAGE_SAFETY_THRESHOLD can be set to OFF|LOW|MEDIUM|HIGH
+            safety_threshold: Arc::new(RwLock::new(
+                std::env::var("GEMINI_IMAGE_SAFETY_THRESHOLD").ok()
+            )),
         };
 
         // 构建路由 - 使用新架构的 handlers！
