@@ -10,7 +10,6 @@ use crate::proxy::mappers::signature_store::get_thought_signature;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use tauri::Emitter;
 
 // Model ID constants from Google Antigravity v1.13.3
 // Reference: docs/antigravity/workflows/models/claude/claude-4.5-sonnet-thinking-workflow.md:161-166
@@ -23,10 +22,12 @@ const CLAUDE_4_5_SONNET_MODEL_ID: u32 = 333;
 // Discovery method: Documentation analysis (2026-01-11) - No explicit Model IDs found for Gemini 3.x
 // Unlike Claude models (333, 334) and Gemini 2.5 models (246, 312, 313, etc.),
 // Gemini 3.x models (high/low/flash) do not have distinct Model IDs in Antigravity v1.13.3
+//
+// IMPORTANT: Thinking variants (Pro High Thinking, Pro Low Thinking) use the SAME model ID
+// as their base variants. Thinking is activated via `thinkingBudget` parameter, NOT
+// separate model IDs. This is the architectural decision from Epic-009 Story-009-03.
 const GEMINI_3_PRO_HIGH_MODEL_ID: u32 = 0; // Name-based routing
-const GEMINI_3_PRO_HIGH_THINKING_MODEL_ID: u32 = 0; // Same as base (thinking via parameter)
 const GEMINI_3_PRO_LOW_MODEL_ID: u32 = 0; // Name-based routing (Story-009-02)
-const GEMINI_3_PRO_LOW_THINKING_MODEL_ID: u32 = 0; // Same as base (thinking via parameter)
 
 // API Provider constants
 // Reference: docs/antigravity/workflows/models/claude/claude-4.5-sonnet-thinking-workflow.md:161-166
@@ -57,26 +58,6 @@ pub fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
 }
 
-/// Emit model fallback event to UI
-fn emit_model_fallback_event(original_model: &str, fallback_model: &str) -> Result<(), String> {
-    if let Some(app) = APP_HANDLE.get() {
-        let payload = serde_json::json!({
-            "original_model": original_model,
-            "fallback_model": fallback_model,
-            "reason": "High timeout rate (93.7%) with Claude Opus Thinking - see issue #497"
-        });
-
-        app.emit("proxy://model-fallback", payload)
-            .map_err(|e| format!("Failed to emit model fallback event: {}", e))?;
-
-        tracing::debug!(
-            "[Model-Fallback-Event] Emitted UI notification: {} -> {}",
-            original_model,
-            fallback_model
-        );
-    }
-    Ok(())
-}
 
 // ===== Safety Settings Configuration =====
 
