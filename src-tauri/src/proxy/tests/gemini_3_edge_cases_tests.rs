@@ -317,7 +317,11 @@ mod edge_case_tests {
 
                     // Also test detection
                     let is_gemini_3 = is_gemini_3_model(model);
-                    assert!(is_gemini_3, "Model {} should be detected as Gemini 3", model);
+                    assert!(
+                        is_gemini_3,
+                        "Model {} should be detected as Gemini 3",
+                        model
+                    );
                 }
             });
             handles.push(handle);

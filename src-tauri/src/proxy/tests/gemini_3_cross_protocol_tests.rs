@@ -71,8 +71,7 @@ mod cross_protocol_tests {
 
         // OpenAI auto-injection (default MEDIUM)
         let openai_req = create_openai_request("gemini-3-flash");
-        let openai_result =
-            transform_openai_request(&openai_req, "test-project", "gemini-3-flash");
+        let openai_result = transform_openai_request(&openai_req, "test-project", "gemini-3-flash");
         assert!(openai_result.is_ok());
 
         // Claude with explicit budget
@@ -84,7 +83,8 @@ mod cross_protocol_tests {
         let (claude_body, _) = claude_result.unwrap();
 
         // Both should map budget 15000 to MEDIUM
-        let claude_level = claude_body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+        let claude_level = claude_body["request"]["generationConfig"]["thinkingConfig"]
+            ["thinkingLevel"]
             .as_str()
             .unwrap();
         assert_eq!(
@@ -114,7 +114,8 @@ mod cross_protocol_tests {
         assert!(claude_result.is_ok());
 
         let (claude_body, _) = claude_result.unwrap();
-        let claude_level = claude_body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+        let claude_level = claude_body["request"]["generationConfig"]["thinkingConfig"]
+            ["thinkingLevel"]
             .as_str()
             .unwrap();
         assert_eq!(
@@ -146,7 +147,8 @@ mod cross_protocol_tests {
 
         // Test Flash
         let openai_flash = create_openai_request("gemini-3-flash");
-        let result_flash = transform_openai_request(&openai_flash, "test-project", "gemini-3-flash");
+        let result_flash =
+            transform_openai_request(&openai_flash, "test-project", "gemini-3-flash");
         assert!(result_flash.is_ok());
 
         let body = result_flash.unwrap();
@@ -157,8 +159,7 @@ mod cross_protocol_tests {
 
         // Test Pro
         let openai_pro = create_openai_request("gemini-3-pro-high");
-        let result_pro =
-            transform_openai_request(&openai_pro, "test-project", "gemini-3-pro-high");
+        let result_pro = transform_openai_request(&openai_pro, "test-project", "gemini-3-pro-high");
         assert!(result_pro.is_ok());
 
         let body = result_pro.unwrap();
@@ -176,8 +177,7 @@ mod cross_protocol_tests {
         assert!(claude_result.is_ok(), "Valid Claude request should pass");
 
         let openai_req = create_openai_request("gemini-3-flash");
-        let openai_result =
-            transform_openai_request(&openai_req, "test-project", "gemini-3-flash");
+        let openai_result = transform_openai_request(&openai_req, "test-project", "gemini-3-flash");
         assert!(openai_result.is_ok(), "Valid OpenAI request should pass");
     }
 

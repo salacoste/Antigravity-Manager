@@ -411,11 +411,7 @@ mod tests {
 
     #[test]
     fn test_format_error_safety_filter() {
-        let msg = format_error_message(
-            ErrorCategory::Api,
-            400,
-            "Content blocked by safety filter",
-        );
+        let msg = format_error_message(ErrorCategory::Api, 400, "Content blocked by safety filter");
         assert!(msg.contains("safety filter"));
         assert!(msg.contains("safety_threshold"));
         assert!(msg.contains("GEMINI_IMAGE_SAFETY_THRESHOLD"));
@@ -423,11 +419,7 @@ mod tests {
 
     #[test]
     fn test_format_error_service_unavailable() {
-        let msg = format_error_message(
-            ErrorCategory::Api,
-            503,
-            "Service temporarily unavailable",
-        );
+        let msg = format_error_message(ErrorCategory::Api, 503, "Service temporarily unavailable");
         assert!(msg.contains("Service unavailable"));
         assert!(msg.contains("retry automatically"));
     }

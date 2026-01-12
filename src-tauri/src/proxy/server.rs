@@ -73,7 +73,7 @@ impl AxumServer {
                     })
                     .unwrap_or_else(|| {
                         // Default: {data_dir}/image_cache/
-                        
+
                         dirs::data_local_dir()
                             .unwrap_or_else(|| std::path::PathBuf::from("."))
                             .join("com.lbjlaq.antigravity-tools")
@@ -185,14 +185,25 @@ impl AxumServer {
                 match budget_optimizer.get_pattern_store().write() {
                     Ok(mut store) => {
                         store.load_from_db(patterns.clone());
-                        tracing::info!("[Epic-008] ✓ Loaded {} budget patterns from database", patterns.len());
+                        tracing::info!(
+                            "[Epic-008] ✓ Loaded {} budget patterns from database",
+                            patterns.len()
+                        );
                     }
-                    Err(e) => tracing::warn!("[Epic-008] Failed to acquire pattern store lock: {}. Using defaults.", e),
+                    Err(e) => tracing::warn!(
+                        "[Epic-008] Failed to acquire pattern store lock: {}. Using defaults.",
+                        e
+                    ),
                 }
             }
-            Ok(_) => tracing::info!("[Epic-008] No budget patterns in database (first run or empty)"),
+            Ok(_) => {
+                tracing::info!("[Epic-008] No budget patterns in database (first run or empty)")
+            }
             Err(e) => {
-                tracing::warn!("[Epic-008] Failed to load budget patterns: {}. Using defaults.", e);
+                tracing::warn!(
+                    "[Epic-008] Failed to load budget patterns: {}. Using defaults.",
+                    e
+                );
             }
         }
 
@@ -370,7 +381,9 @@ impl AxumServer {
     ///
     /// Saves budget patterns to database every 5 minutes.
     /// Runs indefinitely in background, with graceful error handling.
-    fn start_pattern_persistence_task(optimizer: Arc<crate::proxy::budget_optimizer::BudgetOptimizer>) {
+    fn start_pattern_persistence_task(
+        optimizer: Arc<crate::proxy::budget_optimizer::BudgetOptimizer>,
+    ) {
         use std::time::Duration;
 
         tokio::spawn(async move {
@@ -383,7 +396,10 @@ impl AxumServer {
                 let patterns = match optimizer.get_pattern_store().read() {
                     Ok(store) => store.get_all_patterns(),
                     Err(e) => {
-                        tracing::error!("[Epic-008] Failed to read pattern store: {}. Skipping persistence.", e);
+                        tracing::error!(
+                            "[Epic-008] Failed to read pattern store: {}. Skipping persistence.",
+                            e
+                        );
                         continue;
                     }
                 };
@@ -398,11 +414,18 @@ impl AxumServer {
                 for pattern in patterns {
                     match crate::modules::proxy_db::save_budget_pattern(&pattern) {
                         Ok(_) => saved_count += 1,
-                        Err(e) => tracing::warn!("[Epic-008] Failed to save pattern {}: {}", &pattern.prompt_hash[..8], e),
+                        Err(e) => tracing::warn!(
+                            "[Epic-008] Failed to save pattern {}: {}",
+                            &pattern.prompt_hash[..8],
+                            e
+                        ),
                     }
                 }
 
-                tracing::info!("[Epic-008] ✓ Persisted {} budget patterns to database", saved_count);
+                tracing::info!(
+                    "[Epic-008] ✓ Persisted {} budget patterns to database",
+                    saved_count
+                );
             }
         });
     }

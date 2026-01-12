@@ -492,7 +492,9 @@ pub async fn get_cache_metrics() -> Result<crate::proxy::cache_monitor::CacheMet
 
         // Save top signatures separately
         if !metrics_clone.top_signatures.is_empty() {
-            if let Err(e) = crate::modules::proxy_db::save_signature_stats(&metrics_clone.top_signatures) {
+            if let Err(e) =
+                crate::modules::proxy_db::save_signature_stats(&metrics_clone.top_signatures)
+            {
                 tracing::error!("Failed to save signature stats to DB: {}", e);
             }
         }

@@ -74,10 +74,7 @@ mod cache_monitor_integration_tests {
             updated.hit_count, 3,
             "New hits should add to restored count"
         );
-        assert_eq!(
-            updated.miss_count, 1,
-            "Miss count should remain unchanged"
-        );
+        assert_eq!(updated.miss_count, 1, "Miss count should remain unchanged");
     }
 
     /// Test that empty database is handled gracefully (first run scenario)

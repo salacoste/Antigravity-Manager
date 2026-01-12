@@ -124,7 +124,9 @@ impl SignatureCache {
                     let sig_for_monitor = signature.clone();
                     if let Ok(handle) = Handle::try_current() {
                         handle.spawn(async move {
-                            monitor.record_hit(&sig_for_monitor, lookup_time, None).await;
+                            monitor
+                                .record_hit(&sig_for_monitor, lookup_time, None)
+                                .await;
                         });
                     }
 
@@ -134,7 +136,10 @@ impl SignatureCache {
         }
 
         // Record cache miss
-        tracing::debug!("[SignatureCache] Miss tool signature for id: {}", tool_use_id);
+        tracing::debug!(
+            "[SignatureCache] Miss tool signature for id: {}",
+            tool_use_id
+        );
         let monitor = get_cache_monitor();
         let id = tool_use_id.to_string();
         if let Ok(handle) = Handle::try_current() {

@@ -9,7 +9,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::proxy::mappers::openai::models::{OpenAIMessage, OpenAIRequest, OpenAIContent};
+    use crate::proxy::mappers::openai::models::{OpenAIContent, OpenAIMessage, OpenAIRequest};
     use crate::proxy::mappers::openai::request::transform_openai_request;
 
     fn create_test_request(model: &str, reasoning_effort: Option<String>) -> OpenAIRequest {
@@ -51,7 +51,8 @@ mod tests {
         assert!(result.is_ok());
 
         let body = result.unwrap();
-        let thinking_level = &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
+        let thinking_level =
+            &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
 
         assert_eq!(
             thinking_level.as_str().unwrap(),
@@ -67,7 +68,8 @@ mod tests {
         assert!(result.is_ok());
 
         let body = result.unwrap();
-        let thinking_level = &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
+        let thinking_level =
+            &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
 
         assert_eq!(
             thinking_level.as_str().unwrap(),
@@ -84,7 +86,8 @@ mod tests {
         assert!(result.is_ok());
 
         let body = result.unwrap();
-        let thinking_level = &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
+        let thinking_level =
+            &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
 
         assert_eq!(
             thinking_level.as_str().unwrap(),
@@ -100,7 +103,8 @@ mod tests {
         assert!(result.is_ok());
 
         let body = result.unwrap();
-        let thinking_level = &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
+        let thinking_level =
+            &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
 
         assert_eq!(
             thinking_level.as_str().unwrap(),
@@ -117,7 +121,8 @@ mod tests {
         assert!(result.is_ok());
 
         let body = result.unwrap();
-        let thinking_level = &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
+        let thinking_level =
+            &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
 
         assert_eq!(
             thinking_level.as_str().unwrap(),
@@ -134,7 +139,8 @@ mod tests {
         assert!(flash_result.is_ok());
 
         let flash_body = flash_result.unwrap();
-        let flash_level = &flash_body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
+        let flash_level =
+            &flash_body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
 
         assert_eq!(
             flash_level.as_str().unwrap(),
@@ -167,7 +173,8 @@ mod tests {
             assert!(result.is_ok());
 
             let body = result.unwrap();
-            let thinking_level = &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
+            let thinking_level =
+                &body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"];
 
             assert_eq!(
                 thinking_level.as_str().unwrap(),

@@ -254,7 +254,6 @@ pub enum ToolChoice {
     Tool { name: String },
 }
 
-
 impl ToolChoice {
     /// Convert to Gemini Protocol mode string
     pub fn to_gemini_mode(&self) -> &'static str {

@@ -10,8 +10,8 @@
 mod budget_pattern_integration_tests {
     use crate::modules::proxy_db;
     use crate::proxy::budget_optimizer::{BudgetOptimizer, BudgetPattern, ComplexityLevel};
-    use std::sync::Arc;
     use rusqlite::Connection;
+    use std::sync::Arc;
 
     /// Helper: Clear budget_patterns table for test isolation
     fn clear_budget_patterns_table() {
@@ -98,7 +98,11 @@ mod budget_pattern_integration_tests {
         {
             let pattern_store = optimizer.get_pattern_store();
             let store = pattern_store.read().unwrap();
-            assert_eq!(store.get_all_patterns().len(), 0, "Store should be empty initially");
+            assert_eq!(
+                store.get_all_patterns().len(),
+                0,
+                "Store should be empty initially"
+            );
         }
 
         // Record feedback
@@ -131,7 +135,10 @@ mod budget_pattern_integration_tests {
 
             let pattern = &patterns[0];
             assert_eq!(pattern.usage_count, 2, "Usage count should be 2");
-            assert_eq!(pattern.avg_budget, 17000, "Average budget should be (16000+18000)/2 = 17000");
+            assert_eq!(
+                pattern.avg_budget, 17000,
+                "Average budget should be (16000+18000)/2 = 17000"
+            );
         }
     }
 
@@ -206,7 +213,8 @@ mod budget_pattern_integration_tests {
             let retrieved = store.get_pattern("test_hash_12345");
             assert!(retrieved.is_some(), "Pattern should be retrievable");
             assert_eq!(
-                retrieved.unwrap().avg_budget, 16000,
+                retrieved.unwrap().avg_budget,
+                16000,
                 "Retrieved pattern should match saved pattern"
             );
         }
@@ -252,7 +260,11 @@ mod budget_pattern_integration_tests {
             let pattern_store = optimizer.get_pattern_store();
             let store = pattern_store.read().unwrap();
             let all_patterns = store.get_all_patterns();
-            assert_eq!(all_patterns.len(), 3, "Should have 3 patterns (1 saved + 2 loaded)");
+            assert_eq!(
+                all_patterns.len(),
+                3,
+                "Should have 3 patterns (1 saved + 2 loaded)"
+            );
 
             // Verify specific loaded patterns exist
             assert!(

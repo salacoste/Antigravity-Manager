@@ -1,5 +1,11 @@
 // OpenAI Handler
-use axum::{body::Body, extract::Json, extract::State, http::StatusCode, response::{IntoResponse, Response}};
+use axum::{
+    body::Body,
+    extract::Json,
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use base64::Engine as _;
 use bytes::Bytes;
 use serde_json::{json, Value};
@@ -79,10 +85,7 @@ pub async fn handle_chat_completions(
             &*state.custom_mapping.read().await,
         );
         // 将 OpenAI 工具转为 Value 数组以便探测联网
-        let tools_val: Option<Vec<Value>> = openai_req
-            .tools
-            .as_ref()
-            .map(|list| list.to_vec());
+        let tools_val: Option<Vec<Value>> = openai_req.tools.as_ref().map(|list| list.to_vec());
         let config = crate::proxy::mappers::common_utils::resolve_request_config(
             &openai_req.model,
             &mapped_model,
@@ -123,13 +126,16 @@ pub async fn handle_chat_completions(
                 return Ok(Response::builder()
                     .status(StatusCode::BAD_REQUEST)
                     .header("Content-Type", "application/json")
-                    .body(Body::from(json!({
-                        "error": {
-                            "message": e,
-                            "type": "invalid_request_error",
-                            "code": "validation_error"
-                        }
-                    }).to_string()))
+                    .body(Body::from(
+                        json!({
+                            "error": {
+                                "message": e,
+                                "type": "invalid_request_error",
+                                "code": "validation_error"
+                            }
+                        })
+                        .to_string(),
+                    ))
                     .unwrap());
             }
         };
@@ -253,7 +259,8 @@ pub async fn handle_chat_completions(
                     let prompt = feedback_utils::extract_openai_prompt(&request_clone);
                     if !prompt.is_empty() {
                         let budget_used = feedback_utils::extract_openai_budget(&response_clone);
-                        let quality_score = feedback_utils::calculate_openai_quality(&response_clone, budget_used);
+                        let quality_score =
+                            feedback_utils::calculate_openai_quality(&response_clone, budget_used);
 
                         optimizer.record_feedback(&prompt, budget_used, quality_score);
                         tracing::debug!(
@@ -666,10 +673,7 @@ pub async fn handle_completions(
             &*state.custom_mapping.read().await,
         );
         // 将 OpenAI 工具转为 Value 数组以便探测联网
-        let tools_val: Option<Vec<Value>> = openai_req
-            .tools
-            .as_ref()
-            .map(|list| list.to_vec());
+        let tools_val: Option<Vec<Value>> = openai_req.tools.as_ref().map(|list| list.to_vec());
         let config = crate::proxy::mappers::common_utils::resolve_request_config(
             &openai_req.model,
             &mapped_model,

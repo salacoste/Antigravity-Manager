@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// 调度模式枚举
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum SchedulingMode {
     /// 缓存优先 (Cache-first): 尽可能锁定同一账号，限流时优先等待，极大提升 Prompt Caching 命中率
     CacheFirst,
@@ -12,7 +11,6 @@ pub enum SchedulingMode {
     /// 性能优先 (Performance-first): 纯轮询模式 (Round-robin)，账号负载最均衡，但不利用缓存
     PerformanceFirst,
 }
-
 
 /// 粘性会话配置
 #[derive(Debug, Clone, Serialize, Deserialize)]

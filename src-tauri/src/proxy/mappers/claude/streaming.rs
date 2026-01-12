@@ -410,13 +410,16 @@ impl StreamingState {
             "end_turn"
         };
 
-        let usage = usage_metadata.map_or(Usage {
-            input_tokens: 0,
-            output_tokens: 0,
-            cache_read_input_tokens: None,
-            cache_creation_input_tokens: None,
-            server_tool_use: None,
-        }, to_claude_usage);
+        let usage = usage_metadata.map_or(
+            Usage {
+                input_tokens: 0,
+                output_tokens: 0,
+                cache_read_input_tokens: None,
+                cache_creation_input_tokens: None,
+                server_tool_use: None,
+            },
+            to_claude_usage,
+        );
 
         chunks.push(self.emit(
             "message_delta",
@@ -727,10 +730,10 @@ impl<'a> PartProcessor<'a> {
                 self.state
                     .emit_delta("thinking_delta", json!({ "thinking": "" })),
             );
-            chunks.push(self.state.emit_delta(
-                "signature_delta",
-                json!({ "signature": sig }),
-            ));
+            chunks.push(
+                self.state
+                    .emit_delta("signature_delta", json!({ "signature": sig })),
+            );
             chunks.extend(self.state.end_block());
 
             return chunks;

@@ -3,9 +3,9 @@
 
 use super::models::*;
 use crate::proxy::common::platform;
+use crate::proxy::mappers::common::gemini_api_validator::validate_gemini_request;
 use crate::proxy::mappers::common::gemini_detection::is_gemini_3_model;
 use crate::proxy::mappers::common::thinking_level_mapper::determine_thinking_level;
-use crate::proxy::mappers::common::gemini_api_validator::validate_gemini_request;
 use crate::proxy::mappers::signature_store::get_thought_signature;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -57,7 +57,6 @@ pub fn set_app_handle(app: tauri::AppHandle) {
 pub fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
 }
-
 
 // ===== Safety Settings Configuration =====
 
@@ -246,16 +245,13 @@ pub fn transform_claude_request_in(
     let claude_req = &cleaned_req; // 后续使用清理后的请求
 
     // 检测是否有联网工具 (server tool or built-in tool)
-    let has_web_search_tool = claude_req
-        .tools
-        .as_ref()
-        .is_some_and(|tools| {
-            tools.iter().any(|t| {
-                t.is_web_search()
-                    || t.name.as_deref() == Some("google_search")
-                    || t.type_.as_deref() == Some("web_search_20250305")
-            })
-        });
+    let has_web_search_tool = claude_req.tools.as_ref().is_some_and(|tools| {
+        tools.iter().any(|t| {
+            t.is_web_search()
+                || t.name.as_deref() == Some("google_search")
+                || t.type_.as_deref() == Some("web_search_20250305")
+        })
+    });
 
     // 用于存储 tool_use id -> name 映射
     let mut tool_id_to_name: HashMap<String, String> = HashMap::new();
@@ -471,8 +467,7 @@ pub fn transform_claude_request_in(
         let tool_choice = claude_req.tool_choice.as_ref();
 
         // Default to VALIDATED for backward compatibility
-        let mode = tool_choice
-            .map_or("VALIDATED", |tc| tc.to_gemini_mode());
+        let mode = tool_choice.map_or("VALIDATED", |tc| tc.to_gemini_mode());
 
         // Build function calling config
         let mut function_calling_config = json!({
@@ -844,10 +839,9 @@ fn build_contents(
 
         match &msg.content {
             MessageContent::String(text) => {
-                if text != "(no content)"
-                    && !text.trim().is_empty() {
-                        parts.push(json!({"text": text.trim()}));
-                    }
+                if text != "(no content)" && !text.trim().is_empty() {
+                    parts.push(json!({"text": text.trim()}));
+                }
             }
             MessageContent::Array(blocks) => {
                 for item in blocks {
@@ -1048,9 +1042,7 @@ fn build_contents(
                                 serde_json::Value::String(s) => s.clone(),
                                 serde_json::Value::Array(arr) => arr
                                     .iter()
-                                    .filter_map(|block| {
-                                        block.get("text").and_then(|v| v.as_str())
-                                    })
+                                    .filter_map(|block| block.get("text").and_then(|v| v.as_str()))
                                     .collect::<Vec<_>>()
                                     .join("\n"),
                                 _ => content.to_string(),
@@ -1530,7 +1522,8 @@ fn build_generation_config(
                     .unwrap_or(16000); // Fallback to default 16K if optimization fails
 
                 // Apply model-specific limits to optimal budget
-                let clamped_budget = if has_web_search || mapped_model.contains("gemini-2.5-flash") {
+                let clamped_budget = if has_web_search || mapped_model.contains("gemini-2.5-flash")
+                {
                     optimal_budget.min(24576)
                 } else if mapped_model.contains("claude") || mapped_model.contains("gemini") {
                     optimal_budget.min(32000)

@@ -536,8 +536,7 @@ mod tests {
         let (body_high, _) = result_high.unwrap();
 
         // EPIC-011: Gemini 3.x uses thinkingLevel (NOT thinkingBudget)
-        let level_low = body_low["request"]["generationConfig"]["thinkingConfig"]
-            ["thinkingLevel"]
+        let level_low = body_low["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
             .as_str()
             .unwrap();
         let level_high = body_high["request"]["generationConfig"]["thinkingConfig"]
@@ -551,7 +550,10 @@ mod tests {
             "Low tier level ({}) should equal High tier level ({})",
             level_low, level_high
         );
-        assert_eq!(level_low, "HIGH", "Both tiers should map to HIGH (budget 64000 → 32000 → HIGH)");
+        assert_eq!(
+            level_low, "HIGH",
+            "Both tiers should map to HIGH (budget 64000 → 32000 → HIGH)"
+        );
     }
 
     /// Test 3: Thinking configuration with 16000 budget for Low tier

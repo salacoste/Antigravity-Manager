@@ -24,7 +24,10 @@ pub fn extract_openai_prompt(request: &OpenAIRequest) -> String {
                         parts
                             .iter()
                             .filter_map(|part| {
-                                if let crate::proxy::mappers::openai::OpenAIContentBlock::Text { text } = part {
+                                if let crate::proxy::mappers::openai::OpenAIContentBlock::Text {
+                                    text,
+                                } = part
+                                {
                                     Some(text.clone())
                                 } else {
                                     None
@@ -56,10 +59,7 @@ pub fn extract_openai_budget(response_json: &serde_json::Value) -> u32 {
         for choice in choices {
             if let Some(message) = choice.get("message") {
                 // Check for reasoning_content
-                if let Some(reasoning) = message
-                    .get("reasoning_content")
-                    .and_then(|v| v.as_str())
-                {
+                if let Some(reasoning) = message.get("reasoning_content").and_then(|v| v.as_str()) {
                     // Rough estimate: 1 token ≈ 4 characters for English text
                     return (reasoning.len() / 4) as u32;
                 }
@@ -162,7 +162,9 @@ pub fn extract_claude_prompt(request_json: &Value) -> String {
                             parts
                                 .iter()
                                 .filter_map(|part| {
-                                    part.get("text").and_then(|v| v.as_str()).map(|s| s.to_string())
+                                    part.get("text")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string())
                                 })
                                 .collect::<Vec<_>>()
                                 .join(" ")
@@ -212,9 +214,7 @@ pub fn calculate_claude_quality(response_json: &Value, budget_used: u32) -> f32 
     let mut score: f32 = 0.7; // Neutral base
 
     // Check stop_reason
-    let stop_reason = response_json
-        .get("stop_reason")
-        .and_then(|v| v.as_str());
+    let stop_reason = response_json.get("stop_reason").and_then(|v| v.as_str());
 
     if stop_reason == Some("end_turn") {
         score += 0.1;
@@ -222,7 +222,12 @@ pub fn calculate_claude_quality(response_json: &Value, budget_used: u32) -> f32 
 
     // Check for cache usage (indicates efficiency)
     if let Some(usage) = response_json.get("usage") {
-        if usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0) > 0 {
+        if usage
+            .get("cache_read_input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            > 0
+        {
             score += 0.05; // Cache hit bonus
         }
     }

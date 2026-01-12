@@ -222,9 +222,8 @@ impl ComplexityClassifier {
         let prompt_lower = prompt.to_lowercase();
         let word_count = prompt.split_whitespace().count();
         let char_count = prompt.len();
-        let sentence_count = prompt.matches('.').count()
-            + prompt.matches('?').count()
-            + prompt.matches('!').count();
+        let sentence_count =
+            prompt.matches('.').count() + prompt.matches('?').count() + prompt.matches('!').count();
 
         // Check for deep indicators first (most specific)
         if self.has_deep_indicators(&prompt_lower) {
@@ -291,7 +290,7 @@ impl ComplexityClassifier {
             "architect a",
             "architectural review",
             "comprehensive security audit",
-            "comprehensive ",  // comprehensive anything is deep
+            "comprehensive ", // comprehensive anything is deep
             "research paper",
             "deep dive",
             "in-depth",
@@ -304,9 +303,9 @@ impl ComplexityClassifier {
             "multi-region",
             "scalability plan",
             "legacy modernization",
-            "100+",  // Large scale
+            "100+", // Large scale
             "1000+",
-            "-year",  // Multi-year planning
+            "-year", // Multi-year planning
         ];
 
         deep_keywords.iter().any(|kw| prompt.contains(*kw))
@@ -316,7 +315,7 @@ impl ComplexityClassifier {
     fn has_complex_indicators(&self, prompt: &str) -> bool {
         let complex_keywords = [
             "analyze ",
-            "compare ",  // Space after to avoid "comprehensive"
+            "compare ", // Space after to avoid "comprehensive"
             "evaluate ",
             "assess ",
             "trade-off",
@@ -324,7 +323,7 @@ impl ComplexityClassifier {
             "advantages and disadvantages",
             "reason about",
             "discuss ",
-            "design a ",  // Not "design a distributed" (that's deep)
+            "design a ", // Not "design a distributed" (that's deep)
             "debug ",
             "troubleshoot",
             "optimize ",
@@ -332,7 +331,10 @@ impl ComplexityClassifier {
             "code review",
         ];
 
-        let keyword_count = complex_keywords.iter().filter(|kw| prompt.contains(*kw)).count();
+        let keyword_count = complex_keywords
+            .iter()
+            .filter(|kw| prompt.contains(*kw))
+            .count();
 
         // Has complex keywords or comparative markers
         keyword_count >= 1 || prompt.contains(" vs ") || prompt.contains(" versus ")
@@ -811,8 +813,16 @@ mod tests {
             ("compare React and Vue with examples", 16000, 24000),
             ("debug slow API performance", 16000, 24000),
             // Deep (24000-32000)
-            ("design distributed tracing for 100+ microservices", 24000, 32000),
-            ("comprehensive security audit with recommendations", 24000, 32000),
+            (
+                "design distributed tracing for 100+ microservices",
+                24000,
+                32000,
+            ),
+            (
+                "comprehensive security audit with recommendations",
+                24000,
+                32000,
+            ),
             ("3-year technical roadmap for modernization", 24000, 32000),
         ];
 

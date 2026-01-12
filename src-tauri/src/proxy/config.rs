@@ -13,7 +13,6 @@ pub enum ProxyAuthMode {
     Auto,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[derive(Default)]
@@ -28,7 +27,6 @@ pub enum ZaiDispatchMode {
     /// Use z.ai only when the Google pool is unavailable.
     Fallback,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZaiModelDefaults {
@@ -53,8 +51,7 @@ impl Default for ZaiModelDefaults {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ZaiMcpConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -65,7 +62,6 @@ pub struct ZaiMcpConfig {
     #[serde(default)]
     pub vision_enabled: bool,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZaiConfig {

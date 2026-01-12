@@ -1,8 +1,17 @@
 # Epic Sequence Roadmap: Q1-Q2 2026
 
-**Planning Date**: 2026-01-11
-**Status**: ✅ Complete planning through Q2
-**Epic Range**: Epic-007 through Epic-015+
+⚠️ **ПРИМЕЧАНИЕ**: Это исторический документ планирования. Актуальные статусы и нумерация epic'ов см. в `MASTER-MODELS-TABLE.md`
+
+**Planning Date**: 2026-01-11 (исходное планирование)
+**Last Updated**: 2026-01-12 (обновление нумерации)
+**Status**: ⚠️ Частично устарело (Epic-011, Epic-012 завершены досрочно)
+
+**Актуальная Нумерация Epic'ов**:
+- Epic-011: API Migration ✅ COMPLETE (2026-01-12)
+- Epic-012: CI/CD Remediation ✅ COMPLETE (2026-01-12)
+- Epic-013: Gemini 3 Flash Phases 2+3 📋 READY
+- Epic-014: Audio Enhancement 📋 PLANNED
+- Epic-015: Gemini 2.5 Pro Thinking Optimization 📋 PLANNED (ранее планировался как Epic-008/012 в этом документе)
 
 ---
 
@@ -19,7 +28,7 @@
     ├─ Epic-009 (Low) ───────────┤                       │                  │
     │  Команда 2, 14 days     ✅ DONE                     │                  │
     │                             │                       │                  │
-    │  Epic-008 (Pro Thinking) ──┤                       │                  │
+    │  Epic-015 (Pro Thinking Opt) ──┤                       │                  │
     │  Команда 1, 3 weeks     ✅ DONE                     │                  │
     │                             │                       │                  │
     │                      Epic-011 (API Migration) ─────┤                  │
@@ -34,7 +43,7 @@ Q1 Start                   Milestone 1            Milestone 2         Q1 Complet
 
 **Q1 Achievements**:
 - ✅ Epic-007: Gemini 3 Pro Image (100%)
-- ✅ Epic-008: Gemini 2.5 Pro Thinking (100%)
+- ✅ Epic-015: Gemini 2.5 Pro Thinking (100%)
 - ✅ Epic-009: Gemini 3 Pro Low (100%)
 - 🔄 Epic-011: API Migration (Infrastructure)
 - 📋 Epic-010: Gemini 3 Flash Phase 1 (85% unblocked)
@@ -64,7 +73,7 @@ Q2 Start              Milestone 3             Milestone 4             Q2 Complet
 ```
 
 **Q2 Achievements** (Projected):
-- ✅ Epic-012: Pro Thinking Optimization (100%)
+- ✅ Epic-015: Pro Thinking Optimization (100%)
 - ✅ Epic-013: Flash Compliance Complete (95%+)
 - ✅ Epic-014: Audio Enhancement (95%+)
 - ✅ Epic-015: Research Phase (findings report)
@@ -78,15 +87,13 @@ Q2 Start              Milestone 3             Milestone 4             Q2 Complet
 | Epic ID | Model | Type | Priority | Status | Timeline | Team | Compliance | Risk |
 |---------|-------|------|----------|--------|----------|------|------------|------|
 | **Epic-007** | Gemini 3 Pro Image | Feature | 🔴 HIGH | ✅ DONE | 2026-01-11→21 | 3 dev | 86.7%→100% | LOW |
-| **Epic-008** | Gemini 2.5 Pro Think | Optimize | 🔴 HIGH | ✅ DONE | 2026-01-22→02-11 | 3 dev | 90.6%→100% | LOW |
 | **Epic-009** | Gemini 3 Pro Low | Feature | 🔴 HIGH | ✅ DONE | 2026-01-11→25 | 3 dev | 82.1%→100% | LOW |
-| **Epic-011** | API Migration | Infrastructure | 🚨 P0 | 🔄 IN WORK | 2026-02-17→03-03 | 3 dev | N/A (fix) | MED |
-| **Epic-010** | Gemini 3 Flash P1 | Feature | 🚨 P0 | 📋 NEXT | 2026-03-04→17 | 3 dev | 68.8%→85% | MED |
-| **Epic-012** | Pro Think Optimize | Optimize | 🔴 P1 | 📋 Q2 | 2026-04-01→18 | 3 dev | 90.6%→100% | LOW |
-| **Epic-013** | Flash P2+P3 | Feature | 🚨 P0 | 📋 Q2 | 2026-04-21→05-09 | 3 dev | 85%→95% | MED |
+| **Epic-011** | API Migration | Infrastructure | 🚨 P0 | ✅ COMPLETE | 2026-01-12 | 3 dev | 75/75 tests | LOW |
+| **Epic-012** | CI/CD Remediation | Infrastructure | 🚨 P0 | ✅ COMPLETE | 2026-01-12 | Dev | 362/362 tests | LOW |
+| **Epic-013** | Flash P2+P3 | Feature | 🚨 P0 | 📋 READY | 2026-04-21→05-09 | 3 dev | 85%→95% | MED |
 | **Epic-014** | Audio Enhancement | Feature | 🟡 P2 | 📋 Q2 | 2026-05-12→23 | 2 dev | 76.5%→95% | LOW |
-| **Epic-015** | Model IDs Research | Research | 🔴 P1 | 📋 Q2 | 2026-04-01→05 | 2 dev | UNKNOWN | HIGH |
-| **Epic-016** | Flash Lite Think | - | ⚫ CANCEL | ❌ DEPRECATED | - | - | 0% (invalid) | - |
+| **Epic-015** | Pro Think Optimize | Optimize | 🔴 P1 | 📋 Q2 | Q2 2026 | 3 dev | 90.6%→100% | LOW |
+| **Epic-016** | Model IDs Research | Research | 🔴 P1 | 📋 Q2 | 2026-04-01→05 | 2 dev | UNKNOWN | HIGH |
 
 ---
 
@@ -134,7 +141,7 @@ documentation_coverage:
 
 ## 🎯 Epic Details Quick Reference
 
-### Epic-012: Pro Thinking Optimization
+### Epic-015: Pro Thinking Optimization
 
 ```yaml
 model: "gemini-2.5-pro-thinking"
@@ -343,7 +350,7 @@ parallel_execution:
 **Week 3-5** (2026-01-22 → 2026-02-11):
 ```yaml
 sequential_execution:
-  team_1: "Epic-008 (Pro Thinking) → 2026-02-11 ✅"
+  team_1: "Epic-015 (Pro Thinking Opt) → 2026-02-11 ✅"
   team_2: "Buffer / Integration support"
 ```
 
@@ -525,7 +532,7 @@ approach: "One epic at a time, full team focus"
 timeline: "12 weeks"
 
 sequence:
-  april: "Epic-012 (Pro Thinking) - 3 weeks"
+  april: "Epic-015 (Pro Thinking) - 3 weeks"
   may: "Epic-013 (Flash P2+P3) - 3 weeks"
   june: "Epic-014 (Audio) - 2 weeks"
   parallel: "Epic-015 Research (week 1 only)"
@@ -574,7 +581,7 @@ timeline: "10 weeks"
 
 sequence:
   april:
-    main: "Epic-012 (Pro Thinking) - 3 weeks"
+    main: "Epic-015 (Pro Thinking) - 3 weeks"
     parallel: "Epic-015 Research - 1 week"
 
   may:

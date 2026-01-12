@@ -97,8 +97,14 @@ async fn test_comprehensive_metrics_export() {
     assert!(metrics.hit_count > 0, "Should have hits");
     assert!(metrics.miss_count > 0, "Should have misses");
     assert!(metrics.hit_rate > 0.0, "Hit rate should be calculated");
-    assert!(metrics.performance.total_operations > 0, "Operations should be tracked");
-    assert!(metrics.cost_savings.total_saved >= 0.0, "Cost savings should be calculated");
+    assert!(
+        metrics.performance.total_operations > 0,
+        "Operations should be tracked"
+    );
+    assert!(
+        metrics.cost_savings.total_saved >= 0.0,
+        "Cost savings should be calculated"
+    );
 }
 
 /// Test #4: Top signatures ranking
@@ -143,8 +149,14 @@ async fn test_top_signatures_ranking() {
 
     // Verify ranking
     assert!(top_sigs.len() >= 3, "Should have at least 3 signatures");
-    assert!(top_sigs[0].reuse_count >= top_sigs[1].reuse_count, "First should be most reused");
-    assert!(top_sigs[1].reuse_count >= top_sigs[2].reuse_count, "Ranking should be descending");
+    assert!(
+        top_sigs[0].reuse_count >= top_sigs[1].reuse_count,
+        "First should be most reused"
+    );
+    assert!(
+        top_sigs[1].reuse_count >= top_sigs[2].reuse_count,
+        "Ranking should be descending"
+    );
 }
 
 /// Test #5: Performance metrics tracking
@@ -178,6 +190,12 @@ async fn test_performance_metrics_tracking() {
     let metrics = monitor.export_metrics().await;
 
     // Verify performance metrics
-    assert!(metrics.performance.lookup_p95 >= 0.0, "P95 should be tracked");
-    assert!(metrics.performance.total_operations > 0, "Operations should be counted");
+    assert!(
+        metrics.performance.lookup_p95 >= 0.0,
+        "P95 should be tracked"
+    );
+    assert!(
+        metrics.performance.total_operations > 0,
+        "Operations should be counted"
+    );
 }

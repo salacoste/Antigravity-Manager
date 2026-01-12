@@ -190,10 +190,10 @@ mod budget_optimizer_tests {
 
         // Test 2: Technical complexity progression
         let queries = vec![
-            "what is rust",                                   // Simple
-            "explain rust ownership",                         // Moderate
-            "compare rust memory safety with C++",            // Complex
-            "analyze rust's borrow checker implementation",   // Deep
+            "what is rust",                                 // Simple
+            "explain rust ownership",                       // Moderate
+            "compare rust memory safety with C++",          // Complex
+            "analyze rust's borrow checker implementation", // Deep
         ];
 
         let technical_budgets: Vec<u32> = queries

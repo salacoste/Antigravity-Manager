@@ -157,7 +157,9 @@ pub async fn fetch_quota_inner(
 
                     // ✅ 特殊处理 403 Forbidden - 直接返回,不重试
                     if status == reqwest::StatusCode::FORBIDDEN {
-                        crate::modules::logger::log_warn("账号无权限 (403 Forbidden),标记为 forbidden 状态");
+                        crate::modules::logger::log_warn(
+                            "账号无权限 (403 Forbidden),标记为 forbidden 状态",
+                        );
                         let mut q = QuotaData::new();
                         q.is_forbidden = true;
                         q.subscription_tier = subscription_tier.clone();

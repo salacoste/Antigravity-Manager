@@ -84,9 +84,9 @@ fn has_valid_signature(block: &ContentBlock) -> bool {
             }
 
             // Has content + valid JWT signature with minimum length
-            signature.as_ref().is_some_and(|s| {
-                s.len() >= MIN_SIGNATURE_LENGTH && is_valid_jwt_format(s)
-            })
+            signature
+                .as_ref()
+                .is_some_and(|s| s.len() >= MIN_SIGNATURE_LENGTH && is_valid_jwt_format(s))
         }
         _ => true, // 非 thinking 块默认有效
     }
@@ -744,7 +744,7 @@ pub async fn handle_messages(
                     &mut msg.content
                 {
                     blocks.retain(|b| {
-                        !matches!(b, 
+                        !matches!(b,
                         crate::proxy::mappers::claude::models::ContentBlock::Thinking { .. } |
                         crate::proxy::mappers::claude::models::ContentBlock::RedactedThinking { .. }
                     )
@@ -1019,8 +1019,12 @@ pub async fn handle_messages(
 
                         let prompt = feedback_utils::extract_claude_prompt(&request_clone);
                         if !prompt.is_empty() {
-                            let budget_used = feedback_utils::extract_claude_budget(&response_clone);
-                            let quality_score = feedback_utils::calculate_claude_quality(&response_clone, budget_used);
+                            let budget_used =
+                                feedback_utils::extract_claude_budget(&response_clone);
+                            let quality_score = feedback_utils::calculate_claude_quality(
+                                &response_clone,
+                                budget_used,
+                            );
 
                             optimizer.record_feedback(&prompt, budget_used, quality_score);
                             tracing::debug!(
@@ -1117,7 +1121,7 @@ pub async fn handle_messages(
                     &mut msg.content
                 {
                     blocks.retain(|b| {
-                        !matches!(b, 
+                        !matches!(b,
                         crate::proxy::mappers::claude::models::ContentBlock::Thinking { .. } |
                         crate::proxy::mappers::claude::models::ContentBlock::RedactedThinking { .. }
                     )

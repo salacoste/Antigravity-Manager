@@ -3,8 +3,8 @@
 //! Validates that Gemini 3.x uses thinkingLevel API and Gemini 2.5 uses thinkingBudget API
 //! Catches API format mismatches before sending to upstream
 
-use serde_json::Value;
 use crate::proxy::mappers::common::gemini_detection::is_gemini_3_model;
+use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum GeminiApiValidationError {
@@ -26,16 +26,32 @@ impl std::fmt::Display for GeminiApiValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Gemini3WithBudget { model } => {
-                write!(f, "Gemini 3.x model '{}' must use thinkingLevel API, not thinkingBudget", model)
+                write!(
+                    f,
+                    "Gemini 3.x model '{}' must use thinkingLevel API, not thinkingBudget",
+                    model
+                )
             }
             Self::Gemini25WithLevel { model } => {
-                write!(f, "Gemini 2.5 model '{}' must use thinkingBudget API, not thinkingLevel", model)
+                write!(
+                    f,
+                    "Gemini 2.5 model '{}' must use thinkingBudget API, not thinkingLevel",
+                    model
+                )
             }
             Self::MissingThinkingConfig { model } => {
-                write!(f, "Thinking-enabled model '{}' missing thinkingConfig", model)
+                write!(
+                    f,
+                    "Thinking-enabled model '{}' missing thinkingConfig",
+                    model
+                )
             }
             Self::InvalidThinkingLevel { model, level } => {
-                write!(f, "Model '{}' has invalid thinkingLevel: '{}' (must be MINIMAL/LOW/MEDIUM/HIGH)", model, level)
+                write!(
+                    f,
+                    "Model '{}' has invalid thinkingLevel: '{}' (must be MINIMAL/LOW/MEDIUM/HIGH)",
+                    model, level
+                )
             }
         }
     }
@@ -82,7 +98,10 @@ pub fn validate_gemini_request(
         }
 
         // Validate thinkingLevel value
-        if let Some(level) = thinking_config.get("thinkingLevel").and_then(|v| v.as_str()) {
+        if let Some(level) = thinking_config
+            .get("thinkingLevel")
+            .and_then(|v| v.as_str())
+        {
             let valid_levels = if model.contains("-flash") {
                 // Flash: 4 levels
                 vec!["MINIMAL", "LOW", "MEDIUM", "HIGH"]
@@ -142,7 +161,10 @@ mod tests {
 
         let result = validate_gemini_request("gemini-3-pro-high", &request);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GeminiApiValidationError::Gemini3WithBudget { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GeminiApiValidationError::Gemini3WithBudget { .. }
+        ));
     }
 
     #[test]
@@ -172,7 +194,10 @@ mod tests {
 
         let result = validate_gemini_request("gemini-2.5-pro-thinking", &request);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GeminiApiValidationError::Gemini25WithLevel { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GeminiApiValidationError::Gemini25WithLevel { .. }
+        ));
     }
 
     #[test]
@@ -188,7 +213,10 @@ mod tests {
 
         let result = validate_gemini_request("gemini-3-flash", &request);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), GeminiApiValidationError::InvalidThinkingLevel { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            GeminiApiValidationError::InvalidThinkingLevel { .. }
+        ));
     }
 
     #[test]

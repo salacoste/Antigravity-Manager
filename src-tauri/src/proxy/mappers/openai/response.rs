@@ -52,10 +52,12 @@ pub fn transform_openai_response(gemini_response: &Value) -> OpenAIResponse {
                     if let Some(fc) = part.get("functionCall") {
                         let name = fc.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
                         let args = fc
-                            .get("args").map_or_else(|| "{}".to_string(), |v| v.to_string());
-                        let id = fc
-                            .get("id")
-                            .and_then(|v| v.as_str()).map_or_else(|| format!("{}-{}", name, uuid::Uuid::new_v4()), |s| s.to_string());
+                            .get("args")
+                            .map_or_else(|| "{}".to_string(), |v| v.to_string());
+                        let id = fc.get("id").and_then(|v| v.as_str()).map_or_else(
+                            || format!("{}-{}", name, uuid::Uuid::new_v4()),
+                            |s| s.to_string(),
+                        );
 
                         tool_calls.push(ToolCall {
                             id,

@@ -190,7 +190,10 @@ mod tests {
             .unwrap();
 
         // Budget 64000 should clamp to 32000, then map to HIGH
-        assert_eq!(level, "HIGH", "Budget >32000 should clamp to 32000, then map to HIGH");
+        assert_eq!(
+            level, "HIGH",
+            "Budget >32000 should clamp to 32000, then map to HIGH"
+        );
     }
 
     /// Test 6: Gemini 3 Pro with adaptive budget (typical use case)
@@ -371,8 +374,7 @@ mod tests {
         let (body_low, _) = result_low.unwrap();
         let (body_high, _) = result_high.unwrap();
 
-        let level_low = body_low["request"]["generationConfig"]["thinkingConfig"]
-            ["thinkingLevel"]
+        let level_low = body_low["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
             .as_str()
             .unwrap();
         let level_high = body_high["request"]["generationConfig"]["thinkingConfig"]
@@ -413,12 +415,14 @@ mod tests {
             ["thinkingLevel"]
             .as_str()
             .unwrap();
-        let level_pro = body_pro["request"]["generationConfig"]["thinkingConfig"]
-            ["thinkingLevel"]
+        let level_pro = body_pro["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
             .as_str()
             .unwrap();
 
-        assert_eq!(level_flash, "MINIMAL", "Flash with budget 0 should be MINIMAL");
+        assert_eq!(
+            level_flash, "MINIMAL",
+            "Flash with budget 0 should be MINIMAL"
+        );
         assert_eq!(level_pro, "LOW", "Pro with budget 0 should be LOW");
     }
 
@@ -497,7 +501,11 @@ mod tests {
             });
 
             let result = transform_claude_request_in(&req, "test-project");
-            assert!(result.is_ok(), "Budget {} should be clamped successfully", budget);
+            assert!(
+                result.is_ok(),
+                "Budget {} should be clamped successfully",
+                budget
+            );
 
             let (body, _) = result.unwrap();
             let level = body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
@@ -561,7 +569,11 @@ mod tests {
             });
 
             let result = transform_claude_request_in(&req, "test-project");
-            assert!(result.is_ok(), "Budget {} should be processed successfully", budget);
+            assert!(
+                result.is_ok(),
+                "Budget {} should be processed successfully",
+                budget
+            );
 
             let (body, _) = result.unwrap();
             let level = body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
@@ -595,10 +607,7 @@ mod tests {
             .as_str()
             .unwrap();
 
-        assert_eq!(
-            level_flash, "MEDIUM",
-            "Flash MUST support MEDIUM level"
-        );
+        assert_eq!(level_flash, "MEDIUM", "Flash MUST support MEDIUM level");
 
         // Test Pro High does NOT support MEDIUM (should use LOW)
         let mut req_pro_high = create_test_request("gemini-3-pro-high", true);
@@ -639,10 +648,7 @@ mod tests {
             .as_str()
             .unwrap();
 
-        assert_ne!(
-            level_pro_low, "MEDIUM",
-            "Pro Low MUST NOT use MEDIUM level"
-        );
+        assert_ne!(level_pro_low, "MEDIUM", "Pro Low MUST NOT use MEDIUM level");
         assert_eq!(
             level_pro_low, "LOW",
             "Pro Low should map budget 15000 to LOW (not MEDIUM)"

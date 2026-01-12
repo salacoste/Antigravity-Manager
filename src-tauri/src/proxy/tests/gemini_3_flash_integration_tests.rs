@@ -10,9 +10,7 @@
 mod flash_integration_tests {
     use crate::proxy::mappers::claude::models::{ClaudeRequest, MessageContent, ThinkingConfig};
     use crate::proxy::mappers::claude::request::transform_claude_request_in;
-    use crate::proxy::mappers::openai::models::{
-        OpenAIContent, OpenAIMessage, OpenAIRequest,
-    };
+    use crate::proxy::mappers::openai::models::{OpenAIContent, OpenAIMessage, OpenAIRequest};
     use crate::proxy::mappers::openai::request::transform_openai_request;
 
     // ==================================================================================
@@ -139,24 +137,28 @@ mod flash_integration_tests {
     #[test]
     fn test_flash_4_level_mapping_claude_protocol() {
         let test_cases = vec![
-            (2000, "MINIMAL"),  // 0-4000
-            (4000, "MINIMAL"),  // boundary
-            (4001, "LOW"),      // 4001-10000
-            (7000, "LOW"),      // middle
-            (10000, "LOW"),     // boundary
-            (10001, "MEDIUM"),  // 10001-20000 (Flash exclusive!)
-            (15000, "MEDIUM"),  // middle
-            (20000, "MEDIUM"),  // boundary
-            (20001, "HIGH"),    // 20001+
-            (25000, "HIGH"),    // high
-            (32000, "HIGH"),    // max
+            (2000, "MINIMAL"), // 0-4000
+            (4000, "MINIMAL"), // boundary
+            (4001, "LOW"),     // 4001-10000
+            (7000, "LOW"),     // middle
+            (10000, "LOW"),    // boundary
+            (10001, "MEDIUM"), // 10001-20000 (Flash exclusive!)
+            (15000, "MEDIUM"), // middle
+            (20000, "MEDIUM"), // boundary
+            (20001, "HIGH"),   // 20001+
+            (25000, "HIGH"),   // high
+            (32000, "HIGH"),   // max
         ];
 
         for (budget, expected_level) in test_cases {
             let req = create_claude_request("gemini-3-flash", Some(budget));
             let result = transform_claude_request_in(&req, "test-project");
 
-            assert!(result.is_ok(), "Transform should succeed for budget {}", budget);
+            assert!(
+                result.is_ok(),
+                "Transform should succeed for budget {}",
+                budget
+            );
 
             let (body, _) = result.unwrap();
             let thinking_config = &body["request"]["generationConfig"]["thinkingConfig"];
@@ -192,7 +194,8 @@ mod flash_integration_tests {
         assert!(flash_result.is_ok());
 
         let (flash_body, _) = flash_result.unwrap();
-        let flash_level = flash_body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+        let flash_level = flash_body["request"]["generationConfig"]["thinkingConfig"]
+            ["thinkingLevel"]
             .as_str()
             .unwrap();
         assert_eq!(
@@ -229,7 +232,10 @@ mod flash_integration_tests {
 
         let result = transform_claude_request_in(&req, "test-project");
 
-        assert!(result.is_ok(), "Transform should succeed for adaptive budget");
+        assert!(
+            result.is_ok(),
+            "Transform should succeed for adaptive budget"
+        );
 
         let (body, _) = result.unwrap();
         let thinking_config = &body["request"]["generationConfig"]["thinkingConfig"];
@@ -263,8 +269,24 @@ mod flash_integration_tests {
     #[test]
     fn test_pro_2_level_mapping_comparison() {
         let test_cases = vec![
-            ("gemini-3-pro-high", vec![(8000, "LOW"), (16000, "LOW"), (16001, "HIGH"), (25000, "HIGH")]),
-            ("gemini-3-pro-low", vec![(8000, "LOW"), (16000, "LOW"), (16001, "HIGH"), (25000, "HIGH")]),
+            (
+                "gemini-3-pro-high",
+                vec![
+                    (8000, "LOW"),
+                    (16000, "LOW"),
+                    (16001, "HIGH"),
+                    (25000, "HIGH"),
+                ],
+            ),
+            (
+                "gemini-3-pro-low",
+                vec![
+                    (8000, "LOW"),
+                    (16000, "LOW"),
+                    (16001, "HIGH"),
+                    (25000, "HIGH"),
+                ],
+            ),
         ];
 
         for (model, budgets) in test_cases {
@@ -272,7 +294,12 @@ mod flash_integration_tests {
                 let req = create_claude_request(model, Some(budget));
                 let result = transform_claude_request_in(&req, "test-project");
 
-                assert!(result.is_ok(), "Transform should succeed for {} budget {}", model, budget);
+                assert!(
+                    result.is_ok(),
+                    "Transform should succeed for {} budget {}",
+                    model,
+                    budget
+                );
 
                 let (body, _) = result.unwrap();
                 let thinking_config = &body["request"]["generationConfig"]["thinkingConfig"];
@@ -332,7 +359,10 @@ mod flash_integration_tests {
         let req = create_claude_request("gemini-2.5-flash", Some(16000));
         let result = transform_claude_request_in(&req, "test-project");
 
-        assert!(result.is_ok(), "Transform should succeed for Gemini 2.5 Flash");
+        assert!(
+            result.is_ok(),
+            "Transform should succeed for Gemini 2.5 Flash"
+        );
 
         let (body, _) = result.unwrap();
         let thinking_config = &body["request"]["generationConfig"]["thinkingConfig"];
@@ -381,8 +411,8 @@ mod flash_integration_tests {
     #[test]
     fn test_flash_budget_clamping() {
         let test_cases = vec![
-            (35000, "HIGH"), // Over max, clamps to 32000 → HIGH
-            (50000, "HIGH"), // Way over max → HIGH
+            (35000, "HIGH"),  // Over max, clamps to 32000 → HIGH
+            (50000, "HIGH"),  // Way over max → HIGH
             (100000, "HIGH"), // Extreme → HIGH
         ];
 
@@ -390,7 +420,11 @@ mod flash_integration_tests {
             let req = create_claude_request("gemini-3-flash", Some(budget));
             let result = transform_claude_request_in(&req, "test-project");
 
-            assert!(result.is_ok(), "Transform should succeed for budget {}", budget);
+            assert!(
+                result.is_ok(),
+                "Transform should succeed for budget {}",
+                budget
+            );
 
             let (body, _) = result.unwrap();
             let thinking_config = &body["request"]["generationConfig"]["thinkingConfig"];

@@ -368,7 +368,9 @@ pub fn migrate_cache_metrics_table() -> Result<(), String> {
 
 /// Save cache metrics to database
 /// Story-008-02 AC5: Persist metrics for dashboard
-pub fn save_cache_metrics(metrics: &crate::proxy::cache_monitor::CacheMetrics) -> Result<(), String> {
+pub fn save_cache_metrics(
+    metrics: &crate::proxy::cache_monitor::CacheMetrics,
+) -> Result<(), String> {
     let db_path = get_proxy_db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
@@ -404,7 +406,11 @@ pub fn save_cache_metrics(metrics: &crate::proxy::cache_monitor::CacheMetrics) -
             metrics.performance.write_p95,
             metrics.performance.memory_usage as i64,
             metrics.performance.total_operations as i64,
-            if metrics.performance.degradation_alert { 1 } else { 0 },
+            if metrics.performance.degradation_alert {
+                1
+            } else {
+                0
+            },
             now,
         ],
     )
@@ -519,7 +525,9 @@ pub fn save_signature_stats(
 
 /// Load top signature stats from database
 /// Story-008-02 AC2: Load persisted signature analytics
-pub fn load_top_signatures(limit: usize) -> Result<Vec<crate::proxy::cache_monitor::SignatureStats>, String> {
+pub fn load_top_signatures(
+    limit: usize,
+) -> Result<Vec<crate::proxy::cache_monitor::SignatureStats>, String> {
     let db_path = get_proxy_db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
@@ -650,7 +658,8 @@ pub fn save_budget_pattern(
 
 /// Load all budget patterns from database
 /// Story-008-01 AC3: Pattern persistence and retrieval
-pub fn load_budget_patterns() -> Result<Vec<crate::proxy::budget_optimizer::BudgetPattern>, String> {
+pub fn load_budget_patterns() -> Result<Vec<crate::proxy::budget_optimizer::BudgetPattern>, String>
+{
     let db_path = get_proxy_db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 

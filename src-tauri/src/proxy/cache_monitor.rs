@@ -314,9 +314,9 @@ impl CacheMonitor {
 
         // Track signature reuse
         let mut sigs = self.signatures.write().await;
-        let tracker = sigs.entry(signature.to_string()).or_insert_with(|| {
-            SignatureTracker::new(signature.to_string())
-        });
+        let tracker = sigs
+            .entry(signature.to_string())
+            .or_insert_with(|| SignatureTracker::new(signature.to_string()));
 
         // Estimate cost saved (example: $0.001 per cached request)
         let estimated_cost = 0.001;
@@ -340,7 +340,10 @@ impl CacheMonitor {
         // Track hourly/daily savings
         self.record_savings(estimated_cost).await;
 
-        tracing::debug!("[CacheMonitor] Hit recorded: lookup_time={:.2}ms", lookup_time);
+        tracing::debug!(
+            "[CacheMonitor] Hit recorded: lookup_time={:.2}ms",
+            lookup_time
+        );
     }
 
     /// Record a cache miss
@@ -350,7 +353,10 @@ impl CacheMonitor {
         metrics.miss_count += 1;
         metrics.hit_rate = self.calculate_hit_rate(metrics.hit_count, metrics.miss_count);
 
-        tracing::debug!("[CacheMonitor] Miss recorded, hit_rate={:.2}%", metrics.hit_rate * 100.0);
+        tracing::debug!(
+            "[CacheMonitor] Miss recorded, hit_rate={:.2}%",
+            metrics.hit_rate * 100.0
+        );
     }
 
     /// Record a cache write operation
@@ -362,7 +368,10 @@ impl CacheMonitor {
             times.pop_front();
         }
 
-        tracing::debug!("[CacheMonitor] Write recorded: write_time={:.2}ms", write_time);
+        tracing::debug!(
+            "[CacheMonitor] Write recorded: write_time={:.2}ms",
+            write_time
+        );
     }
 
     /// Calculate hit rate
@@ -386,9 +395,8 @@ impl CacheMonitor {
     pub async fn get_top_signatures(&self, limit: usize) -> Vec<SignatureStats> {
         let sigs = self.signatures.read().await;
 
-        let mut stats: Vec<SignatureStats> = sigs.values()
-            .map(|tracker| tracker.to_stats())
-            .collect();
+        let mut stats: Vec<SignatureStats> =
+            sigs.values().map(|tracker| tracker.to_stats()).collect();
 
         // Sort by reuse count descending
         stats.sort_by(|a, b| b.reuse_count.cmp(&a.reuse_count));
@@ -413,15 +421,9 @@ impl CacheMonitor {
             0.0
         };
 
-        let hourly_savings = self.hourly_savings.read().await
-            .iter()
-            .cloned()
-            .collect();
+        let hourly_savings = self.hourly_savings.read().await.iter().cloned().collect();
 
-        let daily_savings = self.daily_savings.read().await
-            .iter()
-            .cloned()
-            .collect();
+        let daily_savings = self.daily_savings.read().await.iter().cloned().collect();
 
         CostSavings {
             total_saved,
@@ -673,17 +675,23 @@ mod tests {
 
         let top = monitor.get_top_signatures(3).await;
         assert_eq!(top[0].reuse_count, 10); // sig3
-        assert_eq!(top[1].reuse_count, 5);  // sig1
-        assert_eq!(top[2].reuse_count, 3);  // sig2
+        assert_eq!(top[1].reuse_count, 5); // sig1
+        assert_eq!(top[2].reuse_count, 3); // sig2
     }
 
     #[tokio::test]
     async fn test_cost_attribution_per_account() {
         let monitor = CacheMonitor::new();
 
-        monitor.record_hit("sig1", 5.0, Some("account1@example.com")).await;
-        monitor.record_hit("sig2", 6.0, Some("account1@example.com")).await;
-        monitor.record_hit("sig3", 7.0, Some("account2@example.com")).await;
+        monitor
+            .record_hit("sig1", 5.0, Some("account1@example.com"))
+            .await;
+        monitor
+            .record_hit("sig2", 6.0, Some("account1@example.com"))
+            .await;
+        monitor
+            .record_hit("sig3", 7.0, Some("account2@example.com"))
+            .await;
 
         let savings = monitor.calculate_cost_savings().await;
 

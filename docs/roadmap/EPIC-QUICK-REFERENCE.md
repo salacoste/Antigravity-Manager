@@ -54,7 +54,7 @@ Week 1    Week 2    Week 3    Week 4    Week 5    Week 6    Week 7    Week 8    
 **Milestones**:
 - 📍 **Jan 21**: Epic-007 complete (Image 100%)
 - 📍 **Jan 25**: Epic-009 complete (Low 100%)
-- 📍 **Feb 11**: Epic-008 complete (Pro Thinking 100%)
+- 📍 **Feb 11**: Epic-015 planned (Pro Thinking 100%)
 - 📍 **Mar 3**: Epic-011 complete (API Migration ✅)
 - 📍 **Mar 17**: Epic-010 Phase 1 complete (Flash 85%)
 
@@ -83,7 +83,7 @@ Week 1    Week 2    Week 3    Week 4    Week 5    Week 6    Week 7    Week 8    
 
 **Milestones**:
 - 📍 **Apr 5**: Epic-015 research complete (findings report)
-- 📍 **Apr 18**: Epic-012 complete (Pro Thinking 100%)
+- 📍 **Apr 18**: Epic-015 complete (Pro Thinking 100%)
 - 📍 **May 9**: Epic-013 complete (Flash 95%+, Gemini 3.x series 100%)
 - 📍 **May 23**: Epic-014 complete (Audio 95%+)
 - 📍 **Jun 13**: Q2 strategic review complete
@@ -198,7 +198,7 @@ epic_016:
 - Epic-013: 17 days (Flash P2+P3)
 
 **Long Epics** (3+ weeks):
-- Epic-008: 21 days (Pro Thinking)
+- Epic-015: 21 days (Pro Thinking)
 - Epic-015: 15-20 days (Research + Implementation, if pursued)
 
 ### By Team Size
@@ -516,7 +516,7 @@ production_readiness:
 
 **After Q1** (2026-03-17):
 ```yaml
-answer: "Epic-012 (Pro Thinking Optimization)"
+answer: "Epic-015 (Pro Thinking Optimization)"
 
 reasons:
   - "COMPARISON ready (90.6%)"
@@ -579,7 +579,7 @@ alternative: "Begin Epic-015 implementation (if research shows high ROI)"
 ```yaml
 epic_005: "docs/epics/Epic-005-Gemini-3-Pro-High.md"
 epic_007: "docs/epics/Epic-007-Gemini-3-Pro-Image.md"
-epic_008: "docs/epics/Epic-008-Gemini-2-5-Pro-Thinking.md"
+epic_008: "docs/epics/Epic-015-Gemini-2-5-Pro-Thinking.md"
 epic_009: "docs/epics/Epic-009-Gemini-3-Pro-Low.md"
 epic_011: "docs/epics/Epic-011-Gemini-3-API-Migration.md"
 ```
