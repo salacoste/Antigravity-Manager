@@ -173,3 +173,19 @@ pub fn log_warn(message: &str) {
 pub fn log_error(message: &str) {
     error!("{}", message);
 }
+
+/// 🆕 Story #024-04 Part 1: Log detection event with structured format
+/// Detection events are logged with category="detection" for easy filtering
+pub fn log_detection_event(event: &crate::proxy::detection::DetectionEvent) {
+    warn!(
+        category = "detection",
+        event_type = ?event.event_type,
+        severity = ?event.severity,
+        account = %event.account_id,
+        model = %event.model_id,
+        request_id = %event.request_id,
+        upstream_status = ?event.upstream_status,
+        context = %event.context,
+        "Detection event logged"
+    );
+}

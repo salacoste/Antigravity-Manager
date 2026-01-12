@@ -21,6 +21,8 @@ pub struct ProxyStatus {
 pub struct ProxyServiceState {
     pub instance: Arc<RwLock<Option<ProxyServiceInstance>>>,
     pub monitor: Arc<RwLock<Option<Arc<ProxyMonitor>>>>,
+    /// Story-024-04: Detection monitor for security events
+    pub detection_monitor: Arc<RwLock<Option<Arc<crate::proxy::detection::DetectionMonitor>>>>,
 }
 
 /// 反代服务实例
@@ -36,6 +38,7 @@ impl ProxyServiceState {
         Self {
             instance: Arc::new(RwLock::new(None)),
             monitor: Arc::new(RwLock::new(None)),
+            detection_monitor: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -67,6 +70,21 @@ pub async fn start_proxy_service(
     }
 
     let monitor = state.monitor.read().await.as_ref().unwrap().clone();
+
+    // Story-024-04: Initialize detection monitor
+    {
+        let mut detection_lock = state.detection_monitor.write().await;
+        if detection_lock.is_none() {
+            let detection_monitor = Arc::new(crate::proxy::detection::DetectionMonitor::new(
+                config.detection_alerts.thresholds.clone(),
+            ));
+            *detection_lock = Some(detection_monitor);
+            tracing::info!(
+                "[Detection] ✓ Detection monitor initialized with {} thresholds",
+                config.detection_alerts.thresholds.len()
+            );
+        }
+    }
 
     // 2. 初始化 Token 管理器
     let app_data_dir = crate::modules::account::get_data_dir()?;

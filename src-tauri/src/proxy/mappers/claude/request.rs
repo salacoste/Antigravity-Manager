@@ -2,6 +2,7 @@
 // 对应 transformClaudeRequestIn
 
 use super::models::*;
+use crate::models::api_provider; // Story-024-02: Centralized API provider constants
 use crate::proxy::common::platform;
 use crate::proxy::mappers::common::gemini_api_validator::validate_gemini_request;
 use crate::proxy::mappers::common::gemini_detection::is_gemini_3_model;
@@ -29,10 +30,9 @@ const CLAUDE_4_5_SONNET_MODEL_ID: u32 = 333;
 const GEMINI_3_PRO_HIGH_MODEL_ID: u32 = 0; // Name-based routing
 const GEMINI_3_PRO_LOW_MODEL_ID: u32 = 0; // Name-based routing (Story-009-02)
 
-// API Provider constants
-// Reference: docs/antigravity/workflows/models/claude/claude-4.5-sonnet-thinking-workflow.md:161-166
-const API_PROVIDER_ANTHROPIC_VERTEX: u32 = 26; // Claude models → Vertex AI
-const API_PROVIDER_GEMINI: u32 = 0; // Gemini models → direct
+// Story-024-02: API Provider constants moved to centralized module
+// Now using api_provider::ANTHROPIC_VERTEX and api_provider::GOOGLE_VERTEX
+// Local constants removed - use api_provider module instead
 
 // Model Provider constants
 const MODEL_PROVIDER_ANTHROPIC: u32 = 3; // Anthropic (Claude)
@@ -205,14 +205,24 @@ pub fn get_model_id(model_name: &str) -> u32 {
 
 /// Get API provider for v1internal routing
 /// Claude models route through ANTHROPIC_VERTEX (26)
-/// Gemini models use direct routing (0)
+/// Gemini models route through GOOGLE_VERTEX (32)
+/// Story-024-02: Now uses centralized api_provider module constants
 /// Reference: docs/antigravity/workflows/models/claude/claude-4.5-sonnet-thinking-workflow.md:161-166
 fn get_api_provider(model_name: &str) -> u32 {
-    if model_name.starts_with("claude-") {
-        API_PROVIDER_ANTHROPIC_VERTEX // 26
+    let provider_id = if model_name.starts_with("claude-") {
+        api_provider::ANTHROPIC_VERTEX // 26
     } else {
-        API_PROVIDER_GEMINI // 0 (Gemini models and default)
-    }
+        api_provider::GOOGLE_VERTEX // 32 (Gemini models)
+    };
+
+    tracing::debug!(
+        "[apiProvider] Model '{}' → Provider {} ({})",
+        model_name,
+        api_provider::provider_name(provider_id),
+        provider_id
+    );
+
+    provider_id
 }
 
 /// Get model provider enum for Antigravity
@@ -2305,7 +2315,8 @@ mod tests {
 
     #[test]
     fn test_get_api_provider_gemini() {
-        assert_eq!(get_api_provider("gemini-2.5-flash"), 0);
+        // Story-024-02: Corrected from 0 to 32 (GOOGLE_VERTEX)
+        assert_eq!(get_api_provider("gemini-2.5-flash"), 32);
     }
 
     #[test]

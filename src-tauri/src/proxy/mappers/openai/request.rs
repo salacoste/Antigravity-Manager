@@ -1,10 +1,38 @@
 // OpenAI → Gemini 请求转换
 use super::models::*;
 use super::streaming::get_thought_signature;
+use crate::models::api_provider; // Story-024-02: Centralized API provider constants
 use crate::proxy::mappers::common::gemini_api_validator::validate_gemini_request;
 use crate::proxy::mappers::common::gemini_detection::is_gemini_3_model;
 use crate::proxy::mappers::common::thinking_level_mapper::determine_thinking_level;
 use serde_json::{json, Value};
+
+// 🆕 Story #24-01: Antigravity IDE identity markers (anti-detection)
+// 🚨 CRITICAL: ideType "ANTIGRAVITY" is PRIMARY anti-detection marker
+const IDE_TYPE: &str = "ANTIGRAVITY";
+const IDE_VERSION: &str = "1.13.3";
+
+/// Get apiProvider based on configuration
+/// Story-024-02: OpenAI requests support both direct and Azure endpoints
+/// Returns OPENAI (1) by default, OPENAI_AZURE (2) if Azure is configured
+fn get_openai_api_provider() -> u32 {
+    // Check if Azure OpenAI endpoint is configured
+    // Note: This is a placeholder - actual Azure detection would be in config
+    // For now, always return direct OpenAI endpoint
+    let provider_id = if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
+        api_provider::OPENAI_AZURE // 2
+    } else {
+        api_provider::OPENAI // 1
+    };
+
+    tracing::debug!(
+        "[apiProvider] OpenAI → Provider {} ({})",
+        api_provider::provider_name(provider_id),
+        provider_id
+    );
+
+    provider_id
+}
 
 pub fn transform_openai_request(
     request: &OpenAIRequest,
@@ -394,6 +422,32 @@ pub fn transform_openai_request(
 
     // 深度清理 [undefined] 字符串 (Cherry Studio 等客户端常见注入)
     crate::proxy::mappers::common_utils::deep_clean_undefined(&mut inner_request);
+
+    // 🆕 Story #24-01: Build Antigravity metadata with IDE identity
+    // 🚨 CRITICAL: ideType "ANTIGRAVITY" is PRIMARY anti-detection marker
+    let metadata = json!({
+        "ideType": IDE_TYPE,           // "ANTIGRAVITY"
+        "ideVersion": IDE_VERSION,     // "1.13.3"
+        "platform": crate::proxy::common::platform::get_platform(),    // "darwin"/"windows"/"linux"
+        "architecture": crate::proxy::common::platform::get_architecture()  // "arm64"/"x86_64"
+    });
+
+    // Add metadata to inner request
+    inner_request["metadata"] = metadata.clone();
+
+    // Story-024-02: Inject apiProvider for upstream routing
+    // OpenAI models route through OPENAI (1) or OPENAI_AZURE (2)
+    inner_request["apiProvider"] = json!(get_openai_api_provider());
+
+    // Story #24-01: Validation logging for metadata injection
+    tracing::debug!(
+        "[Epic-024-Validation] OpenAI metadata injected: ideType={}, ideVersion={}, platform={}, arch={}, apiProvider={}",
+        metadata["ideType"].as_str().unwrap_or(""),
+        metadata["ideVersion"].as_str().unwrap_or(""),
+        metadata["platform"].as_str().unwrap_or(""),
+        metadata["architecture"].as_str().unwrap_or(""),
+        get_openai_api_provider()
+    );
 
     // 4. Handle Tools (Merged Cleaning)
     if let Some(tools) = &request.tools {

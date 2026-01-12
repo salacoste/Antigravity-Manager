@@ -3,9 +3,12 @@
 
 use reqwest::{header, Client, Response, StatusCode};
 use serde_json::Value;
+use std::sync::Arc;
 use tokio::time::Duration;
 
 use crate::proxy::common::platform;
+use crate::proxy::config::{UpstreamProxyConfig, UserAgentConfig};
+use crate::proxy::user_agent::UserAgentPool;
 
 // Cloud Code v1internal endpoints (fallback order: prod → daily)
 // 优先使用稳定的 prod 端点，避免影响缓存命中率
@@ -19,32 +22,51 @@ const V1_INTERNAL_BASE_URL_FALLBACKS: [&str; 2] = [
 
 pub struct UpstreamClient {
     http_client: Client,
+    user_agent_pool: Option<Arc<UserAgentPool>>,
 }
 
 impl UpstreamClient {
-    pub fn new(proxy_config: Option<crate::proxy::config::UpstreamProxyConfig>) -> Self {
-        // [DEBUG] Allow overriding user agent via environment variable for testing
-        // Otherwise, dynamically detect platform/arch for anti-detection compliance
-        let user_agent =
-            std::env::var("CLAUDE_USER_AGENT").unwrap_or_else(|_| platform::build_user_agent());
+    /// Create new UpstreamClient with optional proxy config and user-agent config
+    pub fn new_with_ua_config(
+        proxy_config: Option<UpstreamProxyConfig>,
+        ua_config: Option<UserAgentConfig>,
+    ) -> Self {
+        // Initialize user-agent pool if rotation is enabled
+        let user_agent_pool = if let Some(config) = &ua_config {
+            if config.enabled {
+                let pool = UserAgentPool::with_custom_agents(
+                    config.custom_agents.clone(),
+                    config.strategy.clone(),
+                );
+                tracing::info!(
+                    "User-Agent rotation enabled with {} agents (strategy: {:?})",
+                    pool.size(),
+                    config.strategy
+                );
+                Some(Arc::new(pool))
+            } else {
+                tracing::info!("User-Agent rotation disabled, using static user-agent");
+                None
+            }
+        } else {
+            None
+        };
 
-        // GAP #5: Validation logging for User-Agent formation
-        tracing::info!("🔧 UpstreamClient User-Agent: {}", user_agent);
-        tracing::debug!(
-            "[Epic-004-Validation] User-Agent: '{}' (platform: {}, arch: {})",
-            user_agent,
-            platform::get_platform(),
-            platform::get_architecture()
-        );
-
+        // Build HTTP client WITHOUT static user-agent (will be injected per request)
         let mut builder = Client::builder()
-            // Connection settings (优化连接复用，减少建立开销)
             .connect_timeout(Duration::from_secs(20))
-            .pool_max_idle_per_host(16) // 每主机最多 16 个空闲连接
-            .pool_idle_timeout(Duration::from_secs(90)) // 空闲连接保持 90 秒
-            .tcp_keepalive(Duration::from_secs(60)) // TCP 保活探测 60 秒
-            .timeout(Duration::from_secs(600))
-            .user_agent(user_agent);
+            .pool_max_idle_per_host(16)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_keepalive(Duration::from_secs(60))
+            .timeout(Duration::from_secs(600));
+
+        // If user-agent rotation is disabled, use static user-agent
+        if user_agent_pool.is_none() {
+            let user_agent = std::env::var("CLAUDE_USER_AGENT")
+                .unwrap_or_else(|_| platform::build_user_agent());
+            tracing::info!("Using static User-Agent: {}", user_agent);
+            builder = builder.user_agent(user_agent);
+        }
 
         if let Some(config) = proxy_config {
             if config.enabled && !config.url.is_empty() {
@@ -57,7 +79,15 @@ impl UpstreamClient {
 
         let http_client = builder.build().expect("Failed to create HTTP client");
 
-        Self { http_client }
+        Self {
+            http_client,
+            user_agent_pool,
+        }
+    }
+
+    /// Legacy constructor for backward compatibility
+    pub fn new(proxy_config: Option<UpstreamProxyConfig>) -> Self {
+        Self::new_with_ua_config(proxy_config, None)
     }
 
     /// 构建 v1internal URL
@@ -107,10 +137,22 @@ impl UpstreamClient {
                 .map_err(|e| e.to_string())?,
         );
 
-        // [DEBUG] Allow overriding user agent via environment variable
-        // Updated to 1.13.3 to match current Google Antigravity version
-        let user_agent = std::env::var("CLAUDE_USER_AGENT")
-            .unwrap_or_else(|_| "antigravity/1.13.3 darwin/arm64".to_string());
+        // Inject user-agent per request (rotation or static)
+        let user_agent = if let Some(pool) = &self.user_agent_pool {
+            // User-agent rotation enabled - get from pool
+            let ua = pool.get_user_agent();
+            tracing::debug!(
+                category = "user_agent_rotation",
+                user_agent = %ua,
+                "Rotated User-Agent for request"
+            );
+            ua
+        } else {
+            // User-agent rotation disabled - use environment variable or static
+            std::env::var("CLAUDE_USER_AGENT")
+                .unwrap_or_else(|_| "antigravity/1.13.3 darwin/arm64".to_string())
+        };
+
         headers.insert(
             header::USER_AGENT,
             header::HeaderValue::from_str(&user_agent).map_err(|e| e.to_string())?,
@@ -370,9 +412,14 @@ impl UpstreamClient {
             header::HeaderValue::from_str(&format!("Bearer {}", access_token))
                 .map_err(|e| e.to_string())?,
         );
-        // Updated to 1.13.3 to match current Google Antigravity version
-        let user_agent = std::env::var("CLAUDE_USER_AGENT")
-            .unwrap_or_else(|_| "antigravity/1.13.3 darwin/arm64".to_string());
+
+        // Inject user-agent per request (rotation or static)
+        let user_agent = if let Some(pool) = &self.user_agent_pool {
+            pool.get_user_agent()
+        } else {
+            std::env::var("CLAUDE_USER_AGENT")
+                .unwrap_or_else(|_| "antigravity/1.13.3 darwin/arm64".to_string())
+        };
         headers.insert(
             header::USER_AGENT,
             header::HeaderValue::from_str(&user_agent)

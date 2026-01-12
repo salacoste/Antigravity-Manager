@@ -1,5 +1,11 @@
 // Gemini v1internal 包装/解包
+use crate::models::api_provider; // Story-024-02: Centralized API provider constants
 use serde_json::{json, Value};
+
+// 🆕 Story #24-01: Antigravity IDE identity markers (anti-detection)
+// 🚨 CRITICAL: ideType "ANTIGRAVITY" is PRIMARY anti-detection marker
+const IDE_TYPE: &str = "ANTIGRAVITY";
+const IDE_VERSION: &str = "1.13.3";
 
 /// 包装请求体为 v1internal 格式
 pub fn wrap_request(body: &Value, project_id: &str, mapped_model: &str) -> Value {
@@ -73,6 +79,32 @@ pub fn wrap_request(body: &Value, project_id: &str, mapped_model: &str) -> Value
         final_model_name,
         config.final_model,
         config.request_type
+    );
+
+    // 🆕 Story #24-01: Build Antigravity metadata with IDE identity
+    // 🚨 CRITICAL: ideType "ANTIGRAVITY" is PRIMARY anti-detection marker
+    let metadata = json!({
+        "ideType": IDE_TYPE,           // "ANTIGRAVITY"
+        "ideVersion": IDE_VERSION,     // "1.13.3"
+        "platform": crate::proxy::common::platform::get_platform(),    // "darwin"/"windows"/"linux"
+        "architecture": crate::proxy::common::platform::get_architecture()  // "arm64"/"x86_64"
+    });
+
+    // Add metadata to inner request
+    inner_request["metadata"] = metadata.clone();
+
+    // Story-024-02: Inject apiProvider for upstream routing
+    // All Gemini models route through GOOGLE_VERTEX (32)
+    inner_request["apiProvider"] = json!(api_provider::GOOGLE_VERTEX);
+
+    // Story #24-01: Validation logging for metadata injection
+    tracing::debug!(
+        "[Epic-024-Validation] Gemini metadata injected: ideType={}, ideVersion={}, platform={}, arch={}, apiProvider={}",
+        metadata["ideType"].as_str().unwrap_or(""),
+        metadata["ideVersion"].as_str().unwrap_or(""),
+        metadata["platform"].as_str().unwrap_or(""),
+        metadata["architecture"].as_str().unwrap_or(""),
+        api_provider::GOOGLE_VERTEX
     );
 
     // Inject googleSearch tool if needed

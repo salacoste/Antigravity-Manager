@@ -43,6 +43,13 @@ pub struct ProxyStats {
 
     // AC3: Position violations by role (model/assistant messages)
     pub thinking_position_violations_model: u64,
+
+    // 🆕 Story #024-04 Part 1: Detection event metrics
+    pub detection_events_total: u64,
+    pub detection_events_critical: u64,
+    pub detection_events_high: u64,
+    pub detection_events_medium: u64,
+    pub detection_events_low: u64,
 }
 
 // 🆕 Story #8 Step 2: Violation rates structure
@@ -439,6 +446,11 @@ mod tests {
             thinking_position_violations: 5,
             thinking_position_violations_user: 3,
             thinking_position_violations_model: 2,
+            detection_events_total: 0,
+            detection_events_critical: 0,
+            detection_events_high: 0,
+            detection_events_medium: 0,
+            detection_events_low: 0,
         };
 
         // Verify fields exist and are accessible
@@ -475,6 +487,11 @@ mod tests {
             thinking_position_violations: 2,
             thinking_position_violations_user: 1,
             thinking_position_violations_model: 1,
+            detection_events_total: 0,
+            detection_events_critical: 0,
+            detection_events_high: 0,
+            detection_events_medium: 0,
+            detection_events_low: 0,
         };
 
         let cloned = stats.clone();

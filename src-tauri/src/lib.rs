@@ -1,8 +1,8 @@
 mod commands;
 pub mod error;
-mod models;
+pub mod models; // Public for integration testing (Story-024-02)
 mod modules;
-mod proxy; // 反代服务模块
+pub mod proxy; // 反代服务模块 (public for testing)
 mod utils;
 
 use modules::logger;
@@ -144,6 +144,10 @@ pub fn run() {
             // Autostart 命令
             commands::autostart::toggle_auto_launch,
             commands::autostart::is_auto_launch_enabled,
+            // Detection monitoring 命令 (Story-024-04 Part 2)
+            commands::detection::get_detection_statistics,
+            commands::detection::get_recent_detection_events,
+            commands::detection::clear_detection_events,
             // 测试命令
             commands::test_model_fallback_notification,
             commands::open_devtools,

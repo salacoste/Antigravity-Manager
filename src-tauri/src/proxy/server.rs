@@ -38,6 +38,8 @@ pub struct AppState {
     pub budget_optimizer: Arc<crate::proxy::budget_optimizer::BudgetOptimizer>,
     /// Story-013-05: Response caching for thinking API responses
     pub response_cache: Option<Arc<crate::proxy::response_cache::ResponseCache>>,
+    /// Story-024-04: Detection monitoring and alerting
+    pub detection_monitor: Arc<crate::proxy::detection::DetectionMonitor>,
 }
 
 /// Axum 服务器实例
@@ -241,6 +243,13 @@ impl AxumServer {
         // Story-013-05: Initialize response cache from config before moving experimental_state
         let response_cache_opt = Self::initialize_response_cache(&experimental_state).await;
 
+        // Story-024-04: Initialize detection monitor from config
+        // TODO: Pass ProxyConfig to start() function to access detection_alerts config
+        // For now, use default thresholds (will be integrated when config is passed)
+        let detection_monitor = Arc::new(crate::proxy::detection::DetectionMonitor::new(
+            std::collections::HashMap::new(), // Will be populated from config
+        ));
+
         let state = AppState {
             token_manager: token_manager.clone(),
             custom_mapping: custom_mapping_state.clone(),
@@ -271,6 +280,8 @@ impl AxumServer {
             budget_optimizer: budget_optimizer.clone(),
             // Story-013-05: Response cache initialized above
             response_cache: response_cache_opt,
+            // Story-024-04: Detection monitor initialized above
+            detection_monitor: detection_monitor.clone(),
         };
 
         // 构建路由 - 使用新架构的 handlers！

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ProxyMonitor } from '../components/proxy/ProxyMonitor';
 import { ComplianceMetrics } from '../components/proxy/ComplianceMetrics';
+import { DetectionPanel } from '../components/monitor/DetectionPanel';
 
 const Monitor: React.FC = () => {
     const navigate = useNavigate();
     const { t } = useTranslation();
     const [showCompliance, setShowCompliance] = useState(true);
+    const [showDetection, setShowDetection] = useState(true);
 
     return (
         <div className="h-full w-full flex flex-col bg-gray-50 dark:bg-base-200">
@@ -32,20 +34,35 @@ const Monitor: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Compliance Toggle */}
-                <button
-                    onClick={() => setShowCompliance(!showCompliance)}
-                    className={`btn btn-sm ${showCompliance ? 'btn-primary' : 'btn-ghost'}`}
-                    title={showCompliance ? t('monitor.hide_compliance') : t('monitor.show_compliance')}
-                >
-                    <TrendingUp size={16} />
-                    <span className="hidden sm:inline">{t('monitor.compliance')}</span>
-                </button>
+                {/* View Toggles */}
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setShowDetection(!showDetection)}
+                        className={`btn btn-sm ${showDetection ? 'btn-primary' : 'btn-ghost'}`}
+                        title={showDetection ? 'Hide Detection' : 'Show Detection'}
+                    >
+                        <Shield size={16} />
+                        <span className="hidden sm:inline">Detection</span>
+                    </button>
+                    <button
+                        onClick={() => setShowCompliance(!showCompliance)}
+                        className={`btn btn-sm ${showCompliance ? 'btn-primary' : 'btn-ghost'}`}
+                        title={showCompliance ? t('monitor.hide_compliance') : t('monitor.show_compliance')}
+                    >
+                        <TrendingUp size={16} />
+                        <span className="hidden sm:inline">{t('monitor.compliance')}</span>
+                    </button>
+                </div>
             </div>
 
             {/* Main Content */}
             <div className="flex-1 p-4 overflow-auto">
                 <div className="flex flex-col gap-4">
+                    {/* Detection Dashboard (Story-024-04 Part 2) */}
+                    {showDetection && (
+                        <DetectionPanel className="border border-gray-200 dark:border-base-300" />
+                    )}
+
                     {/* Compliance Dashboard */}
                     {showCompliance && (
                         <ComplianceMetrics />

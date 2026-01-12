@@ -134,7 +134,9 @@ pub fn get_stats() -> Result<crate::proxy::monitor::ProxyStats, String> {
     let stats_result = conn.query_row(
         "SELECT total_requests, success_count, error_count,
                 thinking_budget_violations, thinking_position_violations,
-                thinking_position_violations_user, thinking_position_violations_model
+                thinking_position_violations_user, thinking_position_violations_model,
+                detection_events_total, detection_events_critical,
+                detection_events_high, detection_events_medium, detection_events_low
          FROM proxy_stats WHERE id = 1",
         [],
         |row| {
@@ -146,6 +148,11 @@ pub fn get_stats() -> Result<crate::proxy::monitor::ProxyStats, String> {
                 thinking_position_violations: row.get(4)?,
                 thinking_position_violations_user: row.get(5)?,
                 thinking_position_violations_model: row.get(6)?,
+                detection_events_total: row.get(7).unwrap_or(0),
+                detection_events_critical: row.get(8).unwrap_or(0),
+                detection_events_high: row.get(9).unwrap_or(0),
+                detection_events_medium: row.get(10).unwrap_or(0),
+                detection_events_low: row.get(11).unwrap_or(0),
             })
         },
     );
@@ -184,6 +191,11 @@ pub fn get_stats() -> Result<crate::proxy::monitor::ProxyStats, String> {
                 thinking_position_violations: 0,
                 thinking_position_violations_user: 0,
                 thinking_position_violations_model: 0,
+                detection_events_total: 0,
+                detection_events_critical: 0,
+                detection_events_high: 0,
+                detection_events_medium: 0,
+                detection_events_low: 0,
             })
         }
     }
@@ -206,22 +218,24 @@ pub fn migrate_stats_table() -> Result<(), String> {
     let db_path = get_proxy_db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
-    // Check if table already exists and has violation columns
-    let has_violation_columns: bool = conn
+    // Check if table already exists and has all columns (including detection metrics)
+    let has_all_columns: bool = conn
         .query_row(
             "SELECT COUNT(*) FROM pragma_table_info('proxy_stats')
              WHERE name IN ('thinking_budget_violations', 'thinking_position_violations',
-                           'thinking_position_violations_user', 'thinking_position_violations_model')",
+                           'thinking_position_violations_user', 'thinking_position_violations_model',
+                           'detection_events_total', 'detection_events_critical',
+                           'detection_events_high', 'detection_events_medium', 'detection_events_low')",
             [],
             |row| {
                 let count: i32 = row.get(0)?;
-                Ok(count == 4)
+                Ok(count == 9)
             },
         )
         .unwrap_or(false);
 
-    if has_violation_columns {
-        tracing::info!("[ProxyDB] proxy_stats table already migrated with violation columns");
+    if has_all_columns {
+        tracing::info!("[ProxyDB] proxy_stats table already migrated with all columns");
         return Ok(());
     }
 
@@ -236,11 +250,23 @@ pub fn migrate_stats_table() -> Result<(), String> {
             thinking_position_violations INTEGER DEFAULT 0,
             thinking_position_violations_user INTEGER DEFAULT 0,
             thinking_position_violations_model INTEGER DEFAULT 0,
+            detection_events_total INTEGER DEFAULT 0,
+            detection_events_critical INTEGER DEFAULT 0,
+            detection_events_high INTEGER DEFAULT 0,
+            detection_events_medium INTEGER DEFAULT 0,
+            detection_events_low INTEGER DEFAULT 0,
             updated_at INTEGER
         )",
         [],
     )
     .map_err(|e| format!("Failed to create proxy_stats table: {}", e))?;
+
+    // Add detection columns to existing table (if needed)
+    let _ = conn.execute("ALTER TABLE proxy_stats ADD COLUMN detection_events_total INTEGER DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE proxy_stats ADD COLUMN detection_events_critical INTEGER DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE proxy_stats ADD COLUMN detection_events_high INTEGER DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE proxy_stats ADD COLUMN detection_events_medium INTEGER DEFAULT 0", []);
+    let _ = conn.execute("ALTER TABLE proxy_stats ADD COLUMN detection_events_low INTEGER DEFAULT 0", []);
 
     // Insert initial row (id=1, single-row table pattern)
     conn.execute("INSERT OR IGNORE INTO proxy_stats (id) VALUES (1)", [])
@@ -268,8 +294,13 @@ pub fn save_stats(stats: &crate::proxy::monitor::ProxyStats) -> Result<(), Strin
             thinking_position_violations,
             thinking_position_violations_user,
             thinking_position_violations_model,
+            detection_events_total,
+            detection_events_critical,
+            detection_events_high,
+            detection_events_medium,
+            detection_events_low,
             updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         params![
             1, // Single-row table, always id=1
             stats.total_requests,
@@ -279,6 +310,11 @@ pub fn save_stats(stats: &crate::proxy::monitor::ProxyStats) -> Result<(), Strin
             stats.thinking_position_violations,
             stats.thinking_position_violations_user,
             stats.thinking_position_violations_model,
+            stats.detection_events_total,
+            stats.detection_events_critical,
+            stats.detection_events_high,
+            stats.detection_events_medium,
+            stats.detection_events_low,
             now,
         ],
     )

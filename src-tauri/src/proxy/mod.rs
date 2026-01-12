@@ -15,6 +15,7 @@ pub mod cache; // 图片缓存 (Story-007-04)
 pub mod cache_monitor; // Signature cache monitoring (Story-008-02)
 pub mod response_cache; // Thinking response caching (Story-013-05)
 pub mod common; // 公共工具
+pub mod detection; // Detection event tracking (Story-024-04 Part 1)
 pub mod errors; // 错误处理工具 (Story-007-03)
 pub mod handlers; // API 端点处理器
 pub mod mappers; // 协议转换器
@@ -26,6 +27,7 @@ pub mod session_manager; // 会话指纹管理
 pub mod signature_cache; // Signature Cache (v3.3.16)
 pub mod sticky_config; // 粘性调度配置
 pub mod upstream; // 上游客户端
+pub mod user_agent; // User-Agent rotation (Story-024-03)
 pub mod zai_vision_mcp; // Built-in Vision MCP server state
 pub mod zai_vision_tools; // Built-in Vision MCP tools (z.ai vision API)
 

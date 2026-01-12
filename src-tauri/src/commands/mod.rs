@@ -6,6 +6,8 @@ use tauri::{Emitter, Manager};
 pub mod proxy;
 // 导出 autostart 命令
 pub mod autostart;
+// 导出 detection 命令 (Story-024-04 Part 2)
+pub mod detection;
 
 /// 列出所有账号
 #[tauri::command]

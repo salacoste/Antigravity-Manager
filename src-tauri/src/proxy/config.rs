@@ -166,6 +166,149 @@ fn default_true() -> bool {
     true
 }
 
+/// User-Agent rotation configuration (Story-024-03)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserAgentConfig {
+    /// Enable user-agent rotation
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Rotation strategy
+    #[serde(default)]
+    pub strategy: crate::proxy::user_agent::RotationStrategy,
+
+    /// Custom user-agents (optional)
+    #[serde(default)]
+    pub custom_agents: Vec<String>,
+}
+
+impl Default for UserAgentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            strategy: crate::proxy::user_agent::RotationStrategy::default(),
+            custom_agents: vec![],
+        }
+    }
+}
+
+/// Detection alerts configuration (Story-024-04 Part 2)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectionAlertsConfig {
+    /// Enable detection alerts
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Alert thresholds per event type
+    #[serde(default)]
+    pub thresholds: HashMap<crate::proxy::detection::DetectionEventType, crate::proxy::detection::AlertThreshold>,
+
+    /// Notification channels configuration
+    #[serde(default)]
+    pub notification_channels: NotificationChannels,
+}
+
+impl Default for DetectionAlertsConfig {
+    fn default() -> Self {
+        use crate::proxy::detection::{AlertThreshold, DetectionEventType, Severity};
+        let mut thresholds = HashMap::new();
+
+        // Critical: Alert immediately on first occurrence
+        thresholds.insert(
+            DetectionEventType::IdeTypeMissing,
+            AlertThreshold {
+                count: 1,
+                window_minutes: 1,
+                severity: Severity::Critical,
+            },
+        );
+
+        thresholds.insert(
+            DetectionEventType::ApiProviderMismatch,
+            AlertThreshold {
+                count: 1,
+                window_minutes: 1,
+                severity: Severity::Critical,
+            },
+        );
+
+        thresholds.insert(
+            DetectionEventType::Blocked403,
+            AlertThreshold {
+                count: 1,
+                window_minutes: 1,
+                severity: Severity::Critical,
+            },
+        );
+
+        // High: Alert after 5 occurrences in 1 hour
+        thresholds.insert(
+            DetectionEventType::RateLimit429,
+            AlertThreshold {
+                count: 5,
+                window_minutes: 60,
+                severity: Severity::High,
+            },
+        );
+
+        thresholds.insert(
+            DetectionEventType::AuthError401,
+            AlertThreshold {
+                count: 3,
+                window_minutes: 60,
+                severity: Severity::High,
+            },
+        );
+
+        // Medium: Alert after 10 occurrences in 1 hour
+        thresholds.insert(
+            DetectionEventType::UserAgentStatic,
+            AlertThreshold {
+                count: 10,
+                window_minutes: 60,
+                severity: Severity::Medium,
+            },
+        );
+
+        Self {
+            enabled: true,
+            thresholds,
+            notification_channels: NotificationChannels::default(),
+        }
+    }
+}
+
+/// Notification channels configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NotificationChannels {
+    /// Webhook configuration (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook: Option<WebhookConfig>,
+
+    /// Enable dashboard notifications (via Tauri events)
+    #[serde(default = "default_true")]
+    pub dashboard: bool,
+}
+
+/// Webhook notification configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookConfig {
+    /// Webhook URL
+    pub url: String,
+
+    /// HTTP method (default: POST)
+    #[serde(default = "default_post_method")]
+    pub method: String,
+
+    /// Custom HTTP headers
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+}
+
+fn default_post_method() -> String {
+    "POST".to_string()
+}
+
 /// 反代服务配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyConfig {
@@ -229,6 +372,14 @@ pub struct ProxyConfig {
     /// Environment variable: GEMINI_IMAGE_SAFETY_THRESHOLD
     #[serde(default)]
     pub safety_threshold: Option<String>,
+
+    /// User-Agent rotation configuration (Story-024-03)
+    #[serde(default)]
+    pub user_agent_rotation: UserAgentConfig,
+
+    /// Detection monitoring and alerting (Story-024-04)
+    #[serde(default)]
+    pub detection_alerts: DetectionAlertsConfig,
 }
 
 /// 上游代理配置
@@ -257,6 +408,8 @@ impl Default for ProxyConfig {
             scheduling: crate::proxy::sticky_config::StickySessionConfig::default(),
             experimental: ExperimentalConfig::default(),
             safety_threshold: None, // Default: OFF for backward compatibility
+            user_agent_rotation: UserAgentConfig::default(),
+            detection_alerts: DetectionAlertsConfig::default(),
         }
     }
 }
