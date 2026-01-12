@@ -394,6 +394,12 @@ impl NonStreamingProcessor {
     }
 }
 
+impl Default for NonStreamingProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 转换 Gemini 响应为 Claude 响应 (公共接口)
 pub fn transform_response(gemini_response: &GeminiResponse) -> Result<ClaudeResponse, String> {
     let mut processor = NonStreamingProcessor::new();

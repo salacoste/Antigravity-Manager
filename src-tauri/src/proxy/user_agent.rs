@@ -6,21 +6,16 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
 /// Rotation strategy for user-agent selection
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum RotationStrategy {
     /// Random selection from pool (default)
+    #[default]
     Random,
     /// Sequential round-robin rotation
     RoundRobin,
     /// Weighted selection based on browser market share
     Weighted,
-}
-
-impl Default for RotationStrategy {
-    fn default() -> Self {
-        Self::Random
-    }
 }
 
 /// User-Agent pool manager with configurable rotation strategies

@@ -169,6 +169,12 @@ impl NoOpCache {
     }
 }
 
+impl Default for NoOpCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait::async_trait]
 impl CacheBackend for NoOpCache {
     async fn get(&self, _key: &str) -> Result<Option<CachedImage>> {

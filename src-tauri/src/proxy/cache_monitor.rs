@@ -557,6 +557,12 @@ impl CacheMonitor {
     }
 }
 
+impl Default for CacheMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Calculate percentile from a sorted list of values
 fn calculate_percentile(values: &VecDeque<f64>, percentile: f64) -> f64 {
     if values.is_empty() {

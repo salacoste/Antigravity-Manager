@@ -12,6 +12,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 
+/// Type alias for alert callback to reduce type complexity
+pub type AlertCallback = Arc<dyn Fn(&DetectionEvent) + Send + Sync>;
+
 /// Detection event severity
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "UPPERCASE")]
@@ -118,7 +121,7 @@ pub struct DetectionMonitor {
     /// Alert threshold configurations per event type
     thresholds: HashMap<DetectionEventType, AlertThreshold>,
     /// Optional callback for alert notifications
-    alert_callback: Option<Arc<dyn Fn(&DetectionEvent) + Send + Sync>>,
+    alert_callback: Option<AlertCallback>,
 }
 
 impl DetectionMonitor {
@@ -337,7 +340,7 @@ impl DetectionMonitor {
     /// Create a new detection monitor with webhook configuration
     pub fn with_notifications(
         thresholds: HashMap<DetectionEventType, AlertThreshold>,
-        webhook_config: Option<crate::proxy::config::WebhookConfig>,
+        _webhook_config: Option<crate::proxy::config::WebhookConfig>,
     ) -> Self {
         Self {
             events: Arc::new(Mutex::new(Vec::new())),

@@ -150,6 +150,12 @@ impl SignatureManager {
     }
 }
 
+impl Default for SignatureManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 流式状态机
 pub struct StreamingState {
     block_type: BlockType,
@@ -537,6 +543,12 @@ impl StreamingState {
     #[allow(dead_code)]
     pub fn get_error_count(&self) -> usize {
         self.parse_error_count
+    }
+}
+
+impl Default for StreamingState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

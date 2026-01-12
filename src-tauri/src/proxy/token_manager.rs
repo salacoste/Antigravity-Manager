@@ -665,6 +665,10 @@ impl TokenManager {
         self.tokens.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.tokens.is_empty()
+    }
+
     // ===== 限流管理方法 =====
 
     /// 标记账号限流(从外部调用,通常在 handler 中)

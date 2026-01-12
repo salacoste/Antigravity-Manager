@@ -183,6 +183,12 @@ impl ViolationMetrics {
     }
 }
 
+impl Default for ViolationMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct ProxyMonitor {
     pub logs: RwLock<VecDeque<ProxyRequestLog>>,
     pub stats: RwLock<ProxyStats>,
