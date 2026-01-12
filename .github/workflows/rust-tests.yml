@@ -68,7 +68,7 @@ jobs:
           ANTIGRAVITY_API_KEY: "test-key-for-ci"
         run: |
           # Run only mocked tests (skip live API tests marked with #[ignore])
-          cargo test image_generation --lib --tests -- --skip live
+          cargo test image_generation --lib -- --skip live
         continue-on-error: false
 
       - name: Check test coverage
