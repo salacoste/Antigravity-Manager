@@ -113,7 +113,7 @@ fn sanitize_thinking_block(block: ContentBlock) -> ContentBlock {
 
 /// 过滤消息中的无效 thinking 块
 /// [FIX] Only filter the last 30 messages to avoid performance issues with large histories
-fn filter_invalid_thinking_blocks(messages: &mut Vec<Message>) {
+fn filter_invalid_thinking_blocks(messages: &mut [Message]) {
     let mut total_filtered = 0;
 
     // Get slice of last 30 messages to avoid O(N²) performance on large histories

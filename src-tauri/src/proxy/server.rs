@@ -155,6 +155,7 @@ impl AxumServer {
         tracing::info!("z.ai 配置已热更新");
     }
     /// 启动 Axum 服务器
+    #[allow(clippy::too_many_arguments)]
     pub async fn start(
         host: String,
         port: u16,

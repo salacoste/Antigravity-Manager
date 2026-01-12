@@ -988,7 +988,6 @@ pub async fn handle_images_generations(
         let final_prompt = final_prompt.clone();
         let aspect_ratio = aspect_ratio.to_string();
         let _response_format = response_format.to_string();
-        let safety_threshold = safety_threshold; // Pass to async task
 
         tasks.push(tokio::spawn(async move {
             let gemini_body = json!({
