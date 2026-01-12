@@ -716,8 +716,11 @@ benefit: "~98% documentation coverage"
 
 ---
 
-**Обновлено**: 2026-01-12 (Epic-011 completion update)
-**Источники**: model_mapping.rs + docs files + UI screenshot + Epic planning docs + Epic-011 test results
-**Статус**: ✅ Полная инвентаризация завершена + Epic roadmap updated
-**🎉 КРИТИЧЕСКОЕ ДОСТИЖЕНИЕ**: Epic-011 API Migration COMPLETE ✅ (75/75 tests passing)
-**Воздействие**: Epic-010 UNBLOCKED, Flash auto-injection working, Gemini 3 API debt eliminated
+**Обновлено**: 2026-01-12 (Epic-011 completion + Epic-010 validation + Epic renumbering)
+**Источники**: model_mapping.rs + docs files + UI screenshot + Epic planning docs + Epic-011 test results + Epic-010 validation analysis
+**Статус**: ✅ Полная инвентаризация завершена + Epic roadmap updated + Epic-010 validated
+**🎉 КРИТИЧЕСКИЕ ДОСТИЖЕНИЯ**:
+- Epic-011 API Migration COMPLETE ✅ (75/75 tests passing)
+- Epic-010 COMPLETE via Epic-011 ✅ (P0/P1 stories implemented, independent validation confirmed)
+- Epic renumbering: Epic-008/012 → Epic-015 (Gemini 2.5 Pro Thinking)
+**Воздействие**: Epic-010 P0/P1 COMPLETE, Flash auto-injection working, Gemini 3 API debt eliminated, P2 optimization stories planned in Epic-013
