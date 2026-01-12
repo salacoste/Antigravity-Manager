@@ -26,8 +26,14 @@
 /// - All Gemini 3.x models use `thinkingLevel` API (not `thinkingBudget`)
 /// - Image models don't support thinking mode, so they're excluded
 /// - Gemini 2.5 models continue using `thinkingBudget` API
+/// - Pattern matches "gemini-3." or "gemini-3-" to avoid false positives (e.g., "gemini-30")
 pub fn is_gemini_3_model(model: &str) -> bool {
-    model.starts_with("gemini-3") && !model.contains("image")
+    // More precise pattern: gemini-3. (3.0, 3.1) or gemini-3- (3-flash, 3-pro)
+    // Prevents false positives: gemini-30, gemini-300
+    let is_gemini_3 = model.starts_with("gemini-3.") || model.starts_with("gemini-3-");
+    let is_image = model.contains("image");
+
+    is_gemini_3 && !is_image
 }
 
 #[cfg(test)]
@@ -103,6 +109,32 @@ mod tests {
         assert!(
             !is_gemini_3_model("claude-sonnet-4-5"),
             "Non-Gemini model should NOT be detected"
+        );
+    }
+
+    #[test]
+    fn test_false_positive_prevention() {
+        // Prevent false positives for future models like gemini-30, gemini-300
+        assert!(
+            !is_gemini_3_model("gemini-30-flash"),
+            "gemini-30 should NOT be detected as Gemini 3"
+        );
+        assert!(
+            !is_gemini_3_model("gemini-300-pro"),
+            "gemini-300 should NOT be detected as Gemini 3"
+        );
+    }
+
+    #[test]
+    fn test_future_versions_detected() {
+        // Future Gemini 3.x versions should be detected
+        assert!(
+            is_gemini_3_model("gemini-3.2-flash"),
+            "gemini-3.2 should be detected"
+        );
+        assert!(
+            is_gemini_3_model("gemini-3.5-pro"),
+            "gemini-3.5 should be detected"
         );
     }
 }

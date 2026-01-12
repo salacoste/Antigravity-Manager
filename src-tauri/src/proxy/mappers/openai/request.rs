@@ -245,8 +245,8 @@ pub fn transform_openai_request(
     }
     let contents = merged_contents;
 
-    // 3. 构建请求体
-    // [EPIC-011 Story-011-01] 检测 Gemini 3.x thinking 模型，注入 thinkingLevel 配置
+    // 3. Build request body
+    // [EPIC-011 Story-011-01] Detect Gemini 3.x thinking models, inject thinkingLevel config
     // CHANGED: Use centralized detection function that includes ALL Gemini 3 variants
     let is_gemini_3_thinking = is_gemini_3_model(mapped_model);
 
@@ -261,23 +261,52 @@ pub fn transform_openai_request(
         gen_config["candidateCount"] = json!(n);
     }
 
-    // [EPIC-011 Story-011-01 + Story-011-04] 为 Gemini 3.x 注入 thinkingConfig (使用 thinkingLevel API)
+    // [EPIC-011 Story-011-01 + Story-011-04] Inject thinkingConfig for Gemini 3.x (uses thinkingLevel API)
     // CRITICAL: Gemini 3.x uses thinkingLevel (enum), NOT thinkingBudget (integer)
     // [Story-011-04] OpenAI protocol auto-injects thinking with model-specific defaults
+    // [Code-Review Fix] Support OpenAI reasoning_effort field for client control
     if is_gemini_3_thinking {
-        // Map token budget to thinking level (None = use model default)
-        // Flash default: MEDIUM (balance cost/quality)
-        // Pro default: HIGH (maximize quality)
-        let thinking_level = determine_thinking_level(mapped_model, None);
+        // Determine thinking level from reasoning_effort or use defaults
+        let thinking_level = if let Some(ref effort) = request.reasoning_effort {
+            // Map OpenAI reasoning_effort to Gemini thinkingLevel
+            match effort.to_lowercase().as_str() {
+                "low" => "LOW",
+                "medium" => {
+                    // CRITICAL: Pro models don't support MEDIUM
+                    if mapped_model.contains("-flash") {
+                        "MEDIUM"
+                    } else {
+                        "LOW" // Pro: downgrade MEDIUM to LOW
+                    }
+                }
+                "high" => "HIGH",
+                _ => {
+                    // Invalid effort, use model defaults
+                    determine_thinking_level(mapped_model, None)
+                }
+            }
+        } else {
+            // No reasoning_effort specified, use model defaults
+            // Flash default: MEDIUM (balance cost/quality)
+            // Pro default: HIGH (maximize quality)
+            determine_thinking_level(mapped_model, None)
+        };
 
         gen_config["thinkingConfig"] = json!({
             "includeThoughts": true,
             "thinkingLevel": thinking_level
         });
+
+        let source = if request.reasoning_effort.is_some() {
+            "client-specified"
+        } else {
+            "auto-injected"
+        };
         tracing::info!(
-            "[OpenAI-Request] Gemini 3 thinkingLevel: {} (model: {}, auto-injected)",
+            "[OpenAI-Request] Gemini 3 thinkingLevel: {} (model: {}, {})",
             thinking_level,
-            mapped_model
+            mapped_model,
+            source
         );
     }
 
@@ -492,6 +521,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             parallel_tool_calls: None,
+            reasoning_effort: None,
             instructions: None,
             input: None,
             prompt: None,

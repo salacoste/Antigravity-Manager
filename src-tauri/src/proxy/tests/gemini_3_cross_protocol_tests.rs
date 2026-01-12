@@ -32,6 +32,7 @@ mod cross_protocol_tests {
             tools: None,
             tool_choice: None,
             parallel_tool_calls: None,
+            reasoning_effort: None,
             instructions: None,
             input: None,
         }

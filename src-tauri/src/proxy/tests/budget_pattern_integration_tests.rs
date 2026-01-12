@@ -11,12 +11,25 @@ mod budget_pattern_integration_tests {
     use crate::modules::proxy_db;
     use crate::proxy::budget_optimizer::{BudgetOptimizer, BudgetPattern, ComplexityLevel};
     use std::sync::Arc;
+    use rusqlite::Connection;
+
+    /// Helper: Clear budget_patterns table for test isolation
+    fn clear_budget_patterns_table() {
+        proxy_db::init_db().expect("Database initialization should succeed");
+        let db_path = proxy_db::get_proxy_db_path().expect("DB path should exist");
+        let conn = Connection::open(db_path).expect("DB connection should succeed");
+        conn.execute("DELETE FROM budget_patterns", [])
+            .expect("Clear budget_patterns should succeed");
+    }
 
     /// Test 1: Full persistence lifecycle
     ///
     /// Tests: Create pattern → Save to DB → Load from DB → Restore to store
     #[test]
     fn test_pattern_persistence_lifecycle() {
+        // Clear existing patterns for test isolation
+        clear_budget_patterns_table();
+
         // Step 1: Create optimizer and pattern
         let optimizer = Arc::new(BudgetOptimizer::new());
 
@@ -76,6 +89,9 @@ mod budget_pattern_integration_tests {
     /// Tests: record_feedback() → pattern creation → pattern storage
     #[test]
     fn test_feedback_recording() {
+        // Clear existing patterns for test isolation
+        clear_budget_patterns_table();
+
         let optimizer = Arc::new(BudgetOptimizer::new());
 
         // Initially empty
@@ -124,6 +140,9 @@ mod budget_pattern_integration_tests {
     /// Tests: Database failures don't crash the optimizer
     #[test]
     fn test_graceful_degradation() {
+        // Clear existing patterns for test isolation
+        clear_budget_patterns_table();
+
         let optimizer = Arc::new(BudgetOptimizer::new());
 
         // Recording feedback should work even if DB fails
@@ -157,6 +176,9 @@ mod budget_pattern_integration_tests {
     /// Tests: save_pattern(), get_pattern(), load_from_db(), get_all_patterns()
     #[test]
     fn test_pattern_store_methods() {
+        // Clear existing patterns for test isolation
+        clear_budget_patterns_table();
+
         let optimizer = Arc::new(BudgetOptimizer::new());
 
         // Create test pattern manually

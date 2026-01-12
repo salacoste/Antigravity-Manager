@@ -571,9 +571,22 @@ fn calculate_percentile(values: &VecDeque<f64>, percentile: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::proxy_db;
+    use rusqlite::Connection;
+
+    /// Helper: Clear cache_metrics table for test isolation
+    fn clear_cache_metrics() {
+        proxy_db::init_db().expect("DB init should succeed");
+        let db_path = proxy_db::get_proxy_db_path().expect("DB path should exist");
+        let conn = Connection::open(db_path).expect("DB connection should succeed");
+        conn.execute("DELETE FROM cache_metrics", [])
+            .expect("Clear should succeed");
+    }
 
     #[tokio::test]
     async fn test_cache_monitor_creation() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
         let metrics = monitor.export_metrics().await;
 
@@ -584,6 +597,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_hit_updates_counter() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         monitor.record_hit("sig1", 5.0, None).await;
@@ -596,6 +611,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_miss_updates_counter() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         monitor.record_miss("sig1").await;
@@ -608,6 +625,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_hit_rate_calculation() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         monitor.record_hit("sig1", 5.0, None).await;
@@ -713,6 +732,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_savings_percentage_calculation() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         // Simulate 30% hit rate

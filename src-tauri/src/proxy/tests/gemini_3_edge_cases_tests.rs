@@ -46,30 +46,28 @@ mod edge_case_tests {
 
     #[test]
     fn test_negative_budget_clamping() {
-        // Negative budgets should be handled gracefully
-        // Note: Current implementation uses min(32000) which allows negatives through,
-        // then pattern matching treats them as not matching any positive range
+        // Negative budgets should be clamped to 0 (Issue #5 fix)
+        // Implementation uses .max(0).min(32000) to clamp to valid range
 
-        // Negative values don't match positive ranges (0..=4000, etc.), so they fall
-        // through to the catch-all `_` which returns HIGH
+        // Negative values are clamped to 0, which matches the lowest tier
         let level_flash = determine_thinking_level("gemini-3-flash", Some(-1000));
         assert_eq!(
-            level_flash, "HIGH",
-            "Negative budget doesn't match any positive range, falls to _ => HIGH for Flash"
+            level_flash, "MINIMAL",
+            "Negative budget clamped to 0, maps to MINIMAL for Flash"
         );
 
-        // Same behavior for Pro
+        // Pro models: 0 maps to LOW
         let level_pro = determine_thinking_level("gemini-3-pro-high", Some(-1000));
         assert_eq!(
-            level_pro, "HIGH",
-            "Negative budget doesn't match any positive range, falls to _ => HIGH for Pro"
+            level_pro, "LOW",
+            "Negative budget clamped to 0, maps to LOW for Pro"
         );
 
-        // Verify extremely negative values
+        // Verify extremely negative values also clamp to 0
         let level_extreme = determine_thinking_level("gemini-3-flash", Some(i32::MIN));
         assert_eq!(
-            level_extreme, "HIGH",
-            "i32::MIN falls through to catch-all HIGH for Flash"
+            level_extreme, "MINIMAL",
+            "i32::MIN clamped to 0, maps to MINIMAL for Flash"
         );
     }
 

@@ -1575,7 +1575,10 @@ fn build_generation_config(
 
                 thinking_config["thinkingLevel"] = json!(thinking_level);
                 // Remove thinkingBudget if it was added (shouldn't exist for Gemini 3)
-                thinking_config.as_object_mut().unwrap().remove("thinkingBudget");
+                // Safe pattern: only remove if thinking_config is actually an object
+                if let Some(obj) = thinking_config.as_object_mut() {
+                    obj.remove("thinkingBudget");
+                }
 
                 tracing::info!(
                     "[Claude-Request] Gemini 3 thinkingLevel: {} (budget: {}, model: {})",
@@ -1587,7 +1590,7 @@ fn build_generation_config(
                 // Gemini 2.5 and other models: Use thinkingBudget (backward compatibility)
                 thinking_config["thinkingBudget"] = json!(budget);
 
-                tracing::debug!(
+                tracing::info!(
                     "[Claude-Request] Gemini 2.5 thinkingBudget: {} (model: {})",
                     budget,
                     mapped_model
@@ -1598,7 +1601,7 @@ fn build_generation_config(
         }
     }
 
-    // 其他参数
+    // Other configuration parameters
     if let Some(temp) = claude_req.temperature {
         config["temperature"] = json!(temp);
     }
