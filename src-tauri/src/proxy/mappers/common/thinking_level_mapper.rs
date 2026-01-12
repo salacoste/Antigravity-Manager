@@ -59,7 +59,7 @@ pub fn determine_thinking_level(model: &str, budget: Option<i32>) -> &'static st
 
     // Clamp budget to valid range: 0-32000 tokens
     // Negative budgets are invalid and would cause incorrect mappings
-    let budget = budget.unwrap().max(0).min(32000);
+    let budget = budget.unwrap().clamp(0, 32000);
 
     if model.contains("-flash") {
         // Flash: 4 levels (MINIMAL, LOW, MEDIUM, HIGH)

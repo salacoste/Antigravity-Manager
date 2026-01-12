@@ -1017,9 +1017,9 @@ fn build_contents(
                                 })
                                 .or_else(|| {
                                     let global_sig = get_thought_signature();
-                                    if global_sig.is_some() {
-                                        tracing::info!("[Claude-Request] Using global thought_signature fallback (length: {})", 
-                                            global_sig.as_ref().unwrap().len());
+                                    if let Some(ref sig) = global_sig {
+                                        tracing::info!("[Claude-Request] Using global thought_signature fallback (length: {})",
+                                            sig.len());
                                     }
                                     global_sig
                                 });

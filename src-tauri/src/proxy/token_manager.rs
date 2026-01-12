@@ -261,11 +261,8 @@ impl TokenManager {
             let mut target_token: Option<ProxyToken> = None;
 
             // 模式 A: 粘性会话处理 (CacheFirst 或 Balance 且有 session_id)
-            if !rotate
-                && session_id.is_some()
-                && scheduling.mode != SchedulingMode::PerformanceFirst
-            {
-                let sid = session_id.unwrap();
+            if !rotate && scheduling.mode != SchedulingMode::PerformanceFirst {
+                if let Some(sid) = session_id {
 
                 // 1. 检查会话是否已绑定账号
                 if let Some(bound_id) = self.session_accounts.get(sid).map(|v| v.clone()) {
@@ -294,6 +291,7 @@ impl TokenManager {
                             target_token = Some(found.clone());
                         }
                     }
+                }
                 }
             }
 

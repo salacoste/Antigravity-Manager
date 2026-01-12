@@ -152,7 +152,7 @@ pub async fn fetch_quota_inner(
         {
             Ok(response) => {
                 // 将 HTTP 错误状态转换为 AppError
-                if let Err(_) = response.error_for_status_ref() {
+                if response.error_for_status_ref().is_err() {
                     let status = response.status();
 
                     // ✅ 特殊处理 403 Forbidden - 直接返回,不重试

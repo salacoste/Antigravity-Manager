@@ -137,7 +137,7 @@ pub fn calculate_openai_quality(response_json: &serde_json::Value, budget_used: 
     }
 
     // Clamp to [0.0, 1.0]
-    score.max(0.0).min(1.0)
+    score.clamp(0.0, 1.0)
 }
 
 // ===== Claude-specific Functions =====
@@ -237,7 +237,7 @@ pub fn calculate_claude_quality(response_json: &Value, budget_used: u32) -> f32 
     }
 
     // Clamp to [0.0, 1.0]
-    score.max(0.0).min(1.0)
+    score.clamp(0.0, 1.0)
 }
 
 #[cfg(test)]
