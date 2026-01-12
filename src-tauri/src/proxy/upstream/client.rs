@@ -226,6 +226,17 @@ impl UpstreamClient {
                         tracing::error!("📄 Error Body: {}", body_str);
                         tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
+                        // [Story-013-04 AC-3] Structured API error logging
+                        tracing::error!(
+                            category = "api_error",
+                            error_type = "rate_limit",
+                            google_error_code = "RESOURCE_EXHAUSTED",
+                            status_code = %status,
+                            endpoint = %base_url,
+                            google_error_message = %body_str,
+                            "Google API rate limit error (429)"
+                        );
+
                         // Return error since we consumed body
                         return Err(format!("429 Rate Limit: {}", body_str));
                     }
@@ -238,6 +249,17 @@ impl UpstreamClient {
                         let body_str = String::from_utf8_lossy(&body_bytes);
                         tracing::error!("📄 Error Body: {}", body_str);
                         tracing::error!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+                        // [Story-013-04 AC-3] Structured API error logging
+                        tracing::error!(
+                            category = "api_error",
+                            error_type = "invalid_request",
+                            google_error_code = "INVALID_ARGUMENT",
+                            status_code = %status,
+                            endpoint = %base_url,
+                            google_error_message = %body_str,
+                            "Google API invalid request error (400)"
+                        );
 
                         // Return error since we consumed body
                         return Err(format!("400 Bad Request: {}", body_str));
@@ -407,11 +429,44 @@ impl UpstreamClient {
                     }
 
                     // 不可重试的错误或已是最后一个端点
+                    // [Story-013-04 AC-3] Structured API error logging for other HTTP errors
+                    let error_type = if status.is_server_error() {
+                        "server_error"
+                    } else if status == StatusCode::UNAUTHORIZED {
+                        "authentication_error"
+                    } else if status == StatusCode::FORBIDDEN {
+                        "permission_denied"
+                    } else if status == StatusCode::NOT_FOUND {
+                        "not_found"
+                    } else if status == StatusCode::REQUEST_TIMEOUT {
+                        "timeout"
+                    } else {
+                        "unknown_error"
+                    };
+
+                    tracing::error!(
+                        category = "api_error",
+                        error_type = error_type,
+                        status_code = %status,
+                        endpoint = %base_url,
+                        "Google API error"
+                    );
+
                     return Err(format!("Upstream error: {}", status));
                 }
                 Err(e) => {
                     let msg = format!("Request failed at {}: {}", base_url, e);
                     tracing::debug!("{}", msg);
+
+                    // [Story-013-04 AC-3] Structured API error logging for network errors
+                    tracing::error!(
+                        category = "api_error",
+                        error_type = "network_error",
+                        endpoint = %base_url,
+                        error_message = %e,
+                        "Google API network error"
+                    );
+
                     last_err = Some(msg);
 
                     // 如果是最后一个端点，退出循环
