@@ -368,9 +368,10 @@ mod tests {
     // ==================================================================================
 
     /// Test thinking budget clamping for Claude models
+    /// Epic-019: Use thinking variant to test budget limits (standard mode strips thinking)
     #[test]
     fn test_claude_thinking_budget_limits() {
-        let mut req = create_basic_request("claude-opus-4-5", true);
+        let mut req = create_basic_request("claude-opus-4-5-thinking", true);
         req.thinking = Some(ThinkingConfig {
             type_: "enabled".to_string(),
             budget_tokens: Some(64000), // Превышает максимум 32000
