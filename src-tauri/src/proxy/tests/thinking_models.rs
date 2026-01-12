@@ -19,20 +19,29 @@ mod tests {
     // UNIT TESTS: Model Routing
     // ==================================================================================
 
-    /// Test Claude Opus routing - should route to thinking version
+    /// Test Claude Opus routing - Epic-019: Standard mode supported
     #[test]
     fn test_claude_opus_routing() {
+        // Epic-019: "claude-opus-4-5" now routes to STANDARD mode (no thinking)
         assert_eq!(
             map_claude_model_to_gemini("claude-opus-4-5"),
-            "claude-opus-4-5-thinking",
-            "Opus должен роутиться в thinking версию (Google предоставляет только с thinking)"
+            "claude-opus-4-5",
+            "Epic-019: Opus 4.5 standard mode (no thinking)"
         );
 
+        // Legacy "claude-opus-4" still routes to thinking version for compatibility
         assert_eq!(
             map_claude_model_to_gemini("claude-opus-4"),
             "claude-opus-4-5-thinking"
         );
 
+        // Explicit thinking variant routes to thinking
+        assert_eq!(
+            map_claude_model_to_gemini("claude-opus-4-5-thinking"),
+            "claude-opus-4-5-thinking"
+        );
+
+        // Date-versioned routes to thinking (legacy compatibility)
         assert_eq!(
             map_claude_model_to_gemini("claude-opus-4-5-20251101"),
             "claude-opus-4-5-thinking"
@@ -198,9 +207,11 @@ mod tests {
         }
     }
 
-    /// Test Claude Opus WITH thinking
+    /// Test Claude Opus standard mode - Epic-019: Thinking config stripped for standard model
+    /// IMPORTANT: Standard Claude models (without "-thinking" suffix) do NOT support thinking on Vertex AI
+    /// If user sends thinking config to standard model, it's automatically stripped
     #[test]
-    fn test_claude_opus_with_thinking_request() {
+    fn test_claude_opus_standard_strips_thinking() {
         let req = create_basic_request("claude-opus-4-5", true);
         let result = transform_claude_request_in(&req, "test-project");
 
@@ -208,18 +219,44 @@ mod tests {
 
         let (body, _violations) = result.unwrap();
 
-        // Проверяем model routing
+        // Epic-019: "claude-opus-4-5" is standard mode (no thinking support)
+        assert_eq!(
+            body["model"].as_str(),
+            Some("claude-opus-4-5"),
+            "Epic-019: Model should be claude-opus-4-5 (standard mode)"
+        );
+
+        // CRITICAL: thinkingConfig should be NULL for standard models
+        // Standard Claude models do NOT support thinking on Vertex AI
+        let thinking_config = body["request"]["generationConfig"]["thinkingConfig"].clone();
+        assert!(
+            thinking_config.is_null(),
+            "thinkingConfig should be stripped for standard model (no -thinking suffix)"
+        );
+    }
+
+    /// Test Claude Opus THINKING mode - Epic-019: Thinking config preserved for thinking variant
+    #[test]
+    fn test_claude_opus_thinking_with_thinking_request() {
+        let req = create_basic_request("claude-opus-4-5-thinking", true);
+        let result = transform_claude_request_in(&req, "test-project");
+
+        assert!(result.is_ok(), "Request should succeed");
+
+        let (body, _violations) = result.unwrap();
+
+        // Epic-019: "claude-opus-4-5-thinking" is thinking mode
         assert_eq!(
             body["model"].as_str(),
             Some("claude-opus-4-5-thinking"),
-            "Model должна быть claude-opus-4-5-thinking"
+            "Epic-019: Model should be claude-opus-4-5-thinking"
         );
 
-        // Проверяем thinkingConfig
+        // thinkingConfig should be present for thinking models
         let thinking_config = body["request"]["generationConfig"]["thinkingConfig"].clone();
         assert!(
             !thinking_config.is_null(),
-            "thinkingConfig должен присутствовать для Claude thinking models"
+            "thinkingConfig should be present for -thinking variant"
         );
         assert_eq!(thinking_config["includeThoughts"].as_bool(), Some(true));
         assert!(thinking_config["thinkingBudget"].as_i64().unwrap() > 0);

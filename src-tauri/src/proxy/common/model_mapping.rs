@@ -7,13 +7,16 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
 
     // 直接支持的模型
     m.insert("claude-opus-4-5-thinking", "claude-opus-4-5-thinking");
-    m.insert("claude-opus-4-5", "claude-opus-4-5-thinking"); // Google предоставляет Opus только с thinking
+    m.insert("claude-opus-4-5", "claude-opus-4-5"); // Epic-019: Standard mode (no thinking)
     m.insert("claude-sonnet-4-5", "claude-sonnet-4-5");
     m.insert("claude-sonnet-4-5-thinking", "claude-sonnet-4-5-thinking");
 
     // GAP #3: Add alternative naming convention support (dash position variants)
     m.insert("claude-4.5-sonnet", "claude-sonnet-4-5");
     m.insert("claude-4.5-sonnet-thinking", "claude-sonnet-4-5-thinking");
+    // Epic-019: Opus 4.5 alternative naming conventions
+    m.insert("claude-4.5-opus", "claude-opus-4-5"); // Standard mode
+    m.insert("claude-4.5-opus-thinking", "claude-opus-4-5-thinking");
 
     // 别名映射
     m.insert("claude-sonnet-4-5-20250929", "claude-sonnet-4-5-thinking");
@@ -209,14 +212,18 @@ mod tests {
             "claude-sonnet-4-5"
         );
 
-        // Claude Opus routing (always with thinking since Google only provides thinking version)
+        // Claude Opus routing (Epic-019: Standard mode supported)
         assert_eq!(
             map_claude_model_to_gemini("claude-opus-4"),
-            "claude-opus-4-5-thinking"
+            "claude-opus-4-5-thinking" // Legacy alias maps to thinking
         );
         assert_eq!(
             map_claude_model_to_gemini("claude-opus-4-5"),
-            "claude-opus-4-5-thinking"
+            "claude-opus-4-5" // Standard mode (Epic-019)
+        );
+        assert_eq!(
+            map_claude_model_to_gemini("claude-4.5-opus"),
+            "claude-opus-4-5" // Alternative naming (Epic-019)
         );
         // OpenCode Opus with -high suffix
         assert_eq!(

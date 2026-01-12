@@ -17,6 +17,11 @@ use std::sync::OnceLock;
 const CLAUDE_4_5_SONNET_THINKING_MODEL_ID: u32 = 334;
 const CLAUDE_4_5_SONNET_MODEL_ID: u32 = 333;
 
+// Epic-019: Claude Opus 4.5 Standard Mode (Story-019-01)
+// Reference: docs/stories/Story-019-01-core-implementation.md
+const CLAUDE_OPUS_45_STANDARD_MODEL_ID: u32 = 335; // Standard mode (no thinking)
+const CLAUDE_OPUS_45_THINKING_MODEL_ID: u32 = 336; // Thinking mode (for future Story-019-02)
+
 // Gemini 3.x Model ID constants (Story-005-01)
 // Reference: docs/stories/Story-005-01-gemini-model-id-constants.md
 // NOTE: Gemini 3.x models use name-based routing (Model ID = 0) instead of explicit IDs
@@ -172,12 +177,19 @@ fn clean_cache_control_from_messages(messages: &mut [Message]) {
 /// Made public for test coverage (Story-009-05)
 pub fn get_model_id(model_name: &str) -> u32 {
     let model_id = match model_name {
-        // Thinking variants (ID 334)
+        // Sonnet 4.5 variants (Epic-017)
         "claude-4.5-sonnet-thinking" => CLAUDE_4_5_SONNET_THINKING_MODEL_ID,
         "claude-sonnet-4-5-thinking" => CLAUDE_4_5_SONNET_THINKING_MODEL_ID,
-        // Standard variants (ID 333)
         "claude-4.5-sonnet" => CLAUDE_4_5_SONNET_MODEL_ID,
         "claude-sonnet-4-5" => CLAUDE_4_5_SONNET_MODEL_ID,
+
+        // Opus 4.5 variants (Epic-019 Story-019-01)
+        // Standard mode (no thinking)
+        "claude-opus-4-5" => CLAUDE_OPUS_45_STANDARD_MODEL_ID,
+        "claude-4.5-opus" => CLAUDE_OPUS_45_STANDARD_MODEL_ID,
+        // Thinking mode (for future Story-019-02)
+        "claude-opus-4-5-thinking" => CLAUDE_OPUS_45_THINKING_MODEL_ID,
+        "claude-4.5-opus-thinking" => CLAUDE_OPUS_45_THINKING_MODEL_ID,
 
         // Gemini 3.x models (Story-005-01, Story-009-02)
         // NOTE: Returns 0 (name-based routing) - Gemini 3.x models don't use explicit Model IDs
@@ -670,22 +682,20 @@ fn should_disable_thinking_due_to_history(messages: &[Message]) -> bool {
 /// Claude Code v2.0.67+ enables thinking by default for Opus 4.5 models.
 /// This function determines if the model should have thinking enabled
 /// when no explicit thinking configuration is provided.
+///
+/// Epic-019: Standard Opus 4.5 (claude-opus-4-5) does NOT have thinking by default.
+/// Only explicit "-thinking" variants have thinking enabled by default.
 fn should_enable_thinking_by_default(model: &str) -> bool {
     let model_lower = model.to_lowercase();
 
-    // Enable thinking by default for Opus 4.5 variants
-    if model_lower.contains("opus-4-5") || model_lower.contains("opus-4.5") {
-        tracing::debug!(
-            "[Thinking-Mode] Auto-enabling thinking for Opus 4.5 model: {}",
-            model
-        );
-        return true;
-    }
-
-    // Also enable for explicit thinking model variants
+    // Enable for explicit thinking model variants
     if model_lower.contains("-thinking") {
         return true;
     }
+
+    // Epic-019: Standard Opus models (claude-opus-4-5) do NOT auto-enable thinking
+    // Previously, ALL Opus models auto-enabled thinking, but this was incorrect.
+    // Only explicit "-thinking" variants should have thinking enabled by default.
 
     false
 }
@@ -2340,9 +2350,19 @@ mod tests {
 
     #[test]
     fn test_should_enable_thinking_by_default_opus_4_5() {
-        // Opus 4.5 models should have thinking enabled by default
-        assert!(should_enable_thinking_by_default("claude-opus-4-5"));
-        assert!(should_enable_thinking_by_default("claude-opus-4.5"));
+        // Epic-019: Standard Opus 4.5 models should NOT have thinking enabled by default
+        // Only explicit "-thinking" variants should have thinking enabled
+        assert!(!should_enable_thinking_by_default("claude-opus-4-5"));
+        assert!(!should_enable_thinking_by_default("claude-opus-4.5"));
+        assert!(!should_enable_thinking_by_default("claude-4.5-opus"));
+
+        // Thinking variants SHOULD have thinking enabled
+        assert!(should_enable_thinking_by_default(
+            "claude-opus-4-5-thinking"
+        ));
+        assert!(should_enable_thinking_by_default(
+            "claude-4.5-opus-thinking"
+        ));
     }
 
     #[test]
