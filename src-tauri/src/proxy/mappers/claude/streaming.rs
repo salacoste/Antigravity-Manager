@@ -34,7 +34,7 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                     if let Some(paths) = obj.remove("paths") {
                         let path_str = if let Some(arr) = paths.as_array() {
                             // Take first element if array
-                            arr.get(0)
+                            arr.first()
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".")
                                 .to_string()
@@ -69,7 +69,7 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                 if !obj.contains_key("path") {
                     if let Some(paths) = obj.remove("paths") {
                         let path_str = if let Some(arr) = paths.as_array() {
-                            arr.get(0)
+                            arr.first()
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".")
                                 .to_string()
@@ -161,8 +161,10 @@ pub struct StreamingState {
     trailing_signature: Option<String>,
     pub web_search_query: Option<String>,
     pub grounding_chunks: Option<Vec<serde_json::Value>>,
-    // [IMPROVED] Error recovery 状态追踪
+    // [IMPROVED] Error recovery 状态追踪 (reserved for future error recovery features)
+    #[allow(dead_code)]
     parse_error_count: usize,
+    #[allow(dead_code)]
     last_valid_state: Option<BlockType>,
     // [NEW] Model tracking for signature cache
     pub model_name: Option<String>,
@@ -211,7 +213,7 @@ impl StreamingState {
         let mut message = json!({
             "id": raw_json.get("responseId")
                 .and_then(|v| v.as_str())
-                .unwrap_or_else(|| "msg_unknown"),
+                .unwrap_or("msg_unknown"),
             "type": "message",
             "role": "assistant",
             "content": [],
@@ -408,13 +410,13 @@ impl StreamingState {
             "end_turn"
         };
 
-        let usage = usage_metadata.map(|u| to_claude_usage(u)).unwrap_or(Usage {
+        let usage = usage_metadata.map_or(Usage {
             input_tokens: 0,
             output_tokens: 0,
             cache_read_input_tokens: None,
             cache_creation_input_tokens: None,
             server_tool_use: None,
-        });
+        }, to_claude_usage);
 
         chunks.push(self.emit(
             "message_delta",
@@ -471,6 +473,7 @@ impl StreamingState {
     /// 1. 安全关闭当前 block
     /// 2. 递增错误计数器
     /// 3. 在 debug 模式下输出错误信息
+    #[allow(dead_code)]
     pub fn handle_parse_error(&mut self, raw_data: &str) -> Vec<Bytes> {
         let mut chunks = Vec::new();
 
@@ -521,12 +524,14 @@ impl StreamingState {
     }
 
     /// 重置错误状态 (recovery 后调用)
+    #[allow(dead_code)]
     pub fn reset_error_state(&mut self) {
         self.parse_error_count = 0;
         self.last_valid_state = None;
     }
 
     /// 获取错误计数 (用于监控)
+    #[allow(dead_code)]
     pub fn get_error_count(&self) -> usize {
         self.parse_error_count
     }
@@ -700,7 +705,7 @@ impl<'a> PartProcessor<'a> {
         }
 
         // 非空 text 带签名 - 立即处理
-        if signature.is_some() {
+        if let Some(sig) = signature {
             // 2. 开始新 text 块并发送内容
             chunks.extend(
                 self.state
@@ -724,7 +729,7 @@ impl<'a> PartProcessor<'a> {
             );
             chunks.push(self.state.emit_delta(
                 "signature_delta",
-                json!({ "signature": signature.unwrap() }),
+                json!({ "signature": sig }),
             ));
             chunks.extend(self.state.end_block());
 

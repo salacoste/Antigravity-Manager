@@ -82,7 +82,7 @@ pub async fn handle_chat_completions(
         let tools_val: Option<Vec<Value>> = openai_req
             .tools
             .as_ref()
-            .map(|list| list.iter().cloned().collect());
+            .map(|list| list.to_vec());
         let config = crate::proxy::mappers::common_utils::resolve_request_config(
             &openai_req.model,
             &mapped_model,
@@ -207,7 +207,7 @@ pub async fn handle_chat_completions(
                     let sse_stream = openai_stream.map(|result| -> Result<Bytes, std::io::Error> {
                         match result {
                             Ok(bytes) => Ok(bytes),
-                            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+                            Err(e) => Err(std::io::Error::other(e)),
                         }
                     });
 
@@ -240,6 +240,31 @@ pub async fn handle_chat_completions(
                 .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Parse error: {}", e)))?;
 
             let openai_response = transform_openai_response(&gemini_resp);
+
+            // Epic-008 Story-012-02: Record feedback for budget optimization (async, non-blocking)
+            {
+                let optimizer = state.budget_optimizer.clone();
+                let request_clone = openai_req.clone();
+                let response_clone = serde_json::to_value(&openai_response).unwrap_or_default();
+
+                tokio::spawn(async move {
+                    use crate::proxy::handlers::feedback_utils;
+
+                    let prompt = feedback_utils::extract_openai_prompt(&request_clone);
+                    if !prompt.is_empty() {
+                        let budget_used = feedback_utils::extract_openai_budget(&response_clone);
+                        let quality_score = feedback_utils::calculate_openai_quality(&response_clone, budget_used);
+
+                        optimizer.record_feedback(&prompt, budget_used, quality_score);
+                        tracing::debug!(
+                            "[Epic-008] Budget feedback recorded: budget={}, quality={:.2}",
+                            budget_used,
+                            quality_score
+                        );
+                    }
+                });
+            }
+
             return Ok((
                 StatusCode::OK,
                 [
@@ -644,7 +669,7 @@ pub async fn handle_completions(
         let tools_val: Option<Vec<Value>> = openai_req
             .tools
             .as_ref()
-            .map(|list| list.iter().cloned().collect());
+            .map(|list| list.to_vec());
         let config = crate::proxy::mappers::common_utils::resolve_request_config(
             &openai_req.model,
             &mapped_model,
@@ -963,7 +988,6 @@ pub async fn handle_images_generations(
         let final_prompt = final_prompt.clone();
         let aspect_ratio = aspect_ratio.to_string();
         let _response_format = response_format.to_string();
-        let safety_threshold = safety_threshold; // Pass to async task
 
         tasks.push(tokio::spawn(async move {
             let gemini_body = json!({
@@ -1663,11 +1687,7 @@ pub async fn handle_images_edits(
                 Some(b64.to_string())
             } else if let Some(url) = images[0].get("url").and_then(|v| v.as_str()) {
                 // Extract base64 from data URI format: data:image/png;base64,{data}
-                if let Some(pos) = url.find("base64,") {
-                    Some(url[pos + 7..].to_string())
-                } else {
-                    None
-                }
+                url.find("base64,").map(|pos| url[pos + 7..].to_string())
             } else {
                 None
             };

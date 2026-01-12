@@ -421,4 +421,329 @@ mod tests {
         assert_eq!(level_flash, "MINIMAL", "Flash with budget 0 should be MINIMAL");
         assert_eq!(level_pro, "LOW", "Pro with budget 0 should be LOW");
     }
+
+    // ==================================================================================
+    // STORY-011-05: MISSING TEST COVERAGE
+    // ==================================================================================
+
+    /// Test 13: Flash thinking config injection
+    /// Validates that thinking config is present and has correct API format
+    #[test]
+    fn test_gemini_3_flash_thinking_request() {
+        let mut req = create_test_request("gemini-3-flash", true);
+        req.thinking = Some(ThinkingConfig {
+            type_: "enabled".to_string(),
+            budget_tokens: Some(15000), // MEDIUM level
+        });
+
+        let result = transform_claude_request_in(&req, "test-project");
+        assert!(result.is_ok(), "Flash thinking request should succeed");
+
+        let (body, _) = result.unwrap();
+        let thinking_config = &body["request"]["generationConfig"]["thinkingConfig"];
+
+        // Validate thinking config is present
+        assert!(
+            !thinking_config.is_null(),
+            "Thinking config must be present for Flash"
+        );
+
+        // Validate API format correctness
+        assert!(
+            thinking_config.is_object(),
+            "Thinking config must be an object"
+        );
+        assert_eq!(
+            thinking_config["includeThoughts"].as_bool(),
+            Some(true),
+            "includeThoughts must be true"
+        );
+
+        // Validate thinkingLevel is present
+        assert!(
+            thinking_config["thinkingLevel"].is_string(),
+            "thinkingLevel must be present"
+        );
+        assert_eq!(
+            thinking_config["thinkingLevel"].as_str().unwrap(),
+            "MEDIUM",
+            "Budget 15000 should map to MEDIUM for Flash"
+        );
+
+        // Validate thinkingBudget is absent
+        assert!(
+            thinking_config["thinkingBudget"].is_null(),
+            "thinkingBudget must be absent for Gemini 3 Flash"
+        );
+    }
+
+    /// Test 14: Flash budget clamping to 32000
+    /// Validates that budgets >32000 are clamped and mapped correctly
+    #[test]
+    fn test_gemini_3_flash_budget_limits() {
+        // Test various budgets exceeding 32000
+        let test_cases = vec![
+            (32001, "HIGH"),  // Just over limit
+            (40000, "HIGH"),  // Moderate excess
+            (50000, "HIGH"),  // Large excess
+            (100000, "HIGH"), // Extreme excess
+        ];
+
+        for (budget, expected_level) in test_cases {
+            let mut req = create_test_request("gemini-3-flash", true);
+            req.thinking = Some(ThinkingConfig {
+                type_: "enabled".to_string(),
+                budget_tokens: Some(budget),
+            });
+
+            let result = transform_claude_request_in(&req, "test-project");
+            assert!(result.is_ok(), "Budget {} should be clamped successfully", budget);
+
+            let (body, _) = result.unwrap();
+            let level = body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+                .as_str()
+                .unwrap();
+
+            assert_eq!(
+                level, expected_level,
+                "Budget {} should clamp to 32000 and map to {}",
+                budget, expected_level
+            );
+        }
+
+        // Verify exact boundary (32000)
+        let mut req = create_test_request("gemini-3-flash", true);
+        req.thinking = Some(ThinkingConfig {
+            type_: "enabled".to_string(),
+            budget_tokens: Some(32000),
+        });
+
+        let result = transform_claude_request_in(&req, "test-project");
+        assert!(result.is_ok());
+        let (body, _) = result.unwrap();
+        let level = body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+            .as_str()
+            .unwrap();
+        assert_eq!(level, "HIGH", "Budget 32000 (exact max) should map to HIGH");
+    }
+
+    /// Test 15: Flash level mapping for all budget ranges
+    /// Validates correct level mapping across all budget ranges including edge cases
+    #[test]
+    fn test_gemini_3_flash_level_mapping() {
+        let test_cases = vec![
+            // MINIMAL range (0-4000)
+            (0, "MINIMAL"),
+            (1000, "MINIMAL"),
+            (4000, "MINIMAL"),
+            // LOW range (4001-10000)
+            (4001, "LOW"),
+            (7000, "LOW"),
+            (10000, "LOW"),
+            // MEDIUM range (10001-20000)
+            (10001, "MEDIUM"),
+            (15000, "MEDIUM"),
+            (20000, "MEDIUM"),
+            // HIGH range (20001+)
+            (20001, "HIGH"),
+            (25000, "HIGH"),
+            (32000, "HIGH"),
+            // Edge cases beyond max
+            (40000, "HIGH"),
+            (100000, "HIGH"),
+        ];
+
+        for (budget, expected_level) in test_cases {
+            let mut req = create_test_request("gemini-3-flash", true);
+            req.thinking = Some(ThinkingConfig {
+                type_: "enabled".to_string(),
+                budget_tokens: Some(budget),
+            });
+
+            let result = transform_claude_request_in(&req, "test-project");
+            assert!(result.is_ok(), "Budget {} should be processed successfully", budget);
+
+            let (body, _) = result.unwrap();
+            let level = body["request"]["generationConfig"]["thinkingConfig"]["thinkingLevel"]
+                .as_str()
+                .unwrap();
+
+            assert_eq!(
+                level, expected_level,
+                "Budget {} should map to {} for Flash",
+                budget, expected_level
+            );
+        }
+    }
+
+    /// Test 16: Flash MEDIUM level support, Pro exclusion
+    /// Validates Flash supports MEDIUM, Pro does NOT
+    #[test]
+    fn test_gemini_3_flash_medium_level() {
+        // Test Flash supports MEDIUM
+        let mut req_flash = create_test_request("gemini-3-flash", true);
+        req_flash.thinking = Some(ThinkingConfig {
+            type_: "enabled".to_string(),
+            budget_tokens: Some(15000), // MEDIUM range for Flash
+        });
+
+        let result_flash = transform_claude_request_in(&req_flash, "test-project");
+        assert!(result_flash.is_ok());
+        let (body_flash, _) = result_flash.unwrap();
+        let level_flash = body_flash["request"]["generationConfig"]["thinkingConfig"]
+            ["thinkingLevel"]
+            .as_str()
+            .unwrap();
+
+        assert_eq!(
+            level_flash, "MEDIUM",
+            "Flash MUST support MEDIUM level"
+        );
+
+        // Test Pro High does NOT support MEDIUM (should use LOW)
+        let mut req_pro_high = create_test_request("gemini-3-pro-high", true);
+        req_pro_high.thinking = Some(ThinkingConfig {
+            type_: "enabled".to_string(),
+            budget_tokens: Some(15000), // Would be MEDIUM for Flash
+        });
+
+        let result_pro_high = transform_claude_request_in(&req_pro_high, "test-project");
+        assert!(result_pro_high.is_ok());
+        let (body_pro_high, _) = result_pro_high.unwrap();
+        let level_pro_high = body_pro_high["request"]["generationConfig"]["thinkingConfig"]
+            ["thinkingLevel"]
+            .as_str()
+            .unwrap();
+
+        assert_ne!(
+            level_pro_high, "MEDIUM",
+            "Pro High MUST NOT use MEDIUM level"
+        );
+        assert_eq!(
+            level_pro_high, "LOW",
+            "Pro High should map budget 15000 to LOW (not MEDIUM)"
+        );
+
+        // Test Pro Low does NOT support MEDIUM (should use LOW)
+        let mut req_pro_low = create_test_request("gemini-3-pro-low", true);
+        req_pro_low.thinking = Some(ThinkingConfig {
+            type_: "enabled".to_string(),
+            budget_tokens: Some(15000), // Would be MEDIUM for Flash
+        });
+
+        let result_pro_low = transform_claude_request_in(&req_pro_low, "test-project");
+        assert!(result_pro_low.is_ok());
+        let (body_pro_low, _) = result_pro_low.unwrap();
+        let level_pro_low = body_pro_low["request"]["generationConfig"]["thinkingConfig"]
+            ["thinkingLevel"]
+            .as_str()
+            .unwrap();
+
+        assert_ne!(
+            level_pro_low, "MEDIUM",
+            "Pro Low MUST NOT use MEDIUM level"
+        );
+        assert_eq!(
+            level_pro_low, "LOW",
+            "Pro Low should map budget 15000 to LOW (not MEDIUM)"
+        );
+    }
+
+    /// Test 17: API format validation
+    /// Validates that API format validator catches errors and enforces correct API usage
+    #[test]
+    fn test_gemini_3_api_format_validation() {
+        use crate::proxy::mappers::common::gemini_api_validator::validate_gemini_request;
+        use serde_json::json;
+
+        // Test 1: Gemini 3 with correct thinkingLevel passes
+        let gemini_3_correct = json!({
+            "generationConfig": {
+                "thinkingConfig": {
+                    "includeThoughts": true,
+                    "thinkingLevel": "HIGH"
+                }
+            }
+        });
+        assert!(
+            validate_gemini_request("gemini-3-flash", &gemini_3_correct).is_ok(),
+            "Gemini 3 with thinkingLevel should pass validation"
+        );
+
+        // Test 2: Gemini 3 with thinkingBudget fails
+        let gemini_3_wrong = json!({
+            "generationConfig": {
+                "thinkingConfig": {
+                    "includeThoughts": true,
+                    "thinkingBudget": 16000
+                }
+            }
+        });
+        assert!(
+            validate_gemini_request("gemini-3-flash", &gemini_3_wrong).is_err(),
+            "Gemini 3 with thinkingBudget should fail validation"
+        );
+
+        // Test 3: Gemini 2.5 with correct thinkingBudget passes
+        let gemini_25_correct = json!({
+            "generationConfig": {
+                "thinkingConfig": {
+                    "includeThoughts": true,
+                    "thinkingBudget": 16000
+                }
+            }
+        });
+        assert!(
+            validate_gemini_request("gemini-2.5-flash-thinking", &gemini_25_correct).is_ok(),
+            "Gemini 2.5 with thinkingBudget should pass validation"
+        );
+
+        // Test 4: Gemini 2.5 with thinkingLevel fails
+        let gemini_25_wrong = json!({
+            "generationConfig": {
+                "thinkingConfig": {
+                    "includeThoughts": true,
+                    "thinkingLevel": "HIGH"
+                }
+            }
+        });
+        assert!(
+            validate_gemini_request("gemini-2.5-flash-thinking", &gemini_25_wrong).is_err(),
+            "Gemini 2.5 with thinkingLevel should fail validation"
+        );
+
+        // Test 5: Transform produces correct API format for Gemini 3
+        let mut req_gemini3 = create_test_request("gemini-3-flash", true);
+        req_gemini3.thinking = Some(ThinkingConfig {
+            type_: "enabled".to_string(),
+            budget_tokens: Some(15000),
+        });
+
+        let result = transform_claude_request_in(&req_gemini3, "test-project");
+        assert!(result.is_ok());
+        let (body, _) = result.unwrap();
+
+        // Validate the actual request body passes validation
+        assert!(
+            validate_gemini_request("gemini-3-flash", &body["request"]).is_ok(),
+            "Transformed Gemini 3 request should pass API validation"
+        );
+
+        // Test 6: Transform produces correct API format for Gemini 2.5
+        let mut req_gemini25 = create_test_request("gemini-2.5-flash-thinking", true);
+        req_gemini25.thinking = Some(ThinkingConfig {
+            type_: "enabled".to_string(),
+            budget_tokens: Some(15000),
+        });
+
+        let result = transform_claude_request_in(&req_gemini25, "test-project");
+        assert!(result.is_ok());
+        let (body, _) = result.unwrap();
+
+        // Validate the actual request body passes validation
+        assert!(
+            validate_gemini_request("gemini-2.5-flash-thinking", &body["request"]).is_ok(),
+            "Transformed Gemini 2.5 request should pass API validation"
+        );
+    }
 }

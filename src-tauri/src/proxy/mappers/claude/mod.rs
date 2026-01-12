@@ -115,7 +115,7 @@ fn process_sse_line(
             if let Some(query) = grounding
                 .get("webSearchQueries")
                 .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(0))
+                .and_then(|arr| arr.first())
                 .and_then(|v| v.as_str())
             {
                 state.web_search_query = Some(query.to_string());
@@ -224,6 +224,10 @@ pub fn emit_force_stop(state: &mut StreamingState) -> Vec<Bytes> {
 }
 
 /// Process grounding metadata from Gemini's googleSearch and emit as Claude web_search blocks
+///
+/// Epic-007: Grounding metadata processing - deferred to future sprint
+/// TODO: Integrate when grounding support is fully implemented (Epic-007 continuation)
+#[allow(dead_code)]
 fn process_grounding_metadata(
     metadata: &serde_json::Value,
     state: &mut StreamingState,

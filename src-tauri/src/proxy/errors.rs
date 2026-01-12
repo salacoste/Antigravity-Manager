@@ -12,23 +12,23 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorCategory {
     /// Client-side validation errors (400 Bad Request, invalid parameters)
-    UserError,
+    User,
     /// Upstream API errors (429 Rate Limit, 503 Service Unavailable, quota issues)
-    ApiError,
+    Api,
     /// Internal server errors (500 Internal Server Error, unexpected exceptions)
-    SystemError,
+    System,
     /// Network errors (timeouts, connection failures)
-    NetworkError,
+    Network,
 }
 
 impl ErrorCategory {
     /// Convert to string for logging
     pub fn as_str(&self) -> &'static str {
         match self {
-            ErrorCategory::UserError => "USER_ERROR",
-            ErrorCategory::ApiError => "API_ERROR",
-            ErrorCategory::SystemError => "SYSTEM_ERROR",
-            ErrorCategory::NetworkError => "NETWORK_ERROR",
+            ErrorCategory::User => "USER_ERROR",
+            ErrorCategory::Api => "API_ERROR",
+            ErrorCategory::System => "SYSTEM_ERROR",
+            ErrorCategory::Network => "NETWORK_ERROR",
         }
     }
 }
@@ -45,17 +45,17 @@ impl ErrorCategory {
 /// # Examples
 /// ```
 /// let category = categorize_error(429, "Rate limit exceeded");
-/// assert_eq!(category, ErrorCategory::ApiError);
+/// assert_eq!(category, ErrorCategory::Api);
 ///
 /// let category = categorize_error(400, "Missing prompt field");
-/// assert_eq!(category, ErrorCategory::UserError);
+/// assert_eq!(category, ErrorCategory::User);
 /// ```
 pub fn categorize_error(status_code: u16, error_text: &str) -> ErrorCategory {
     let error_lower = error_text.to_lowercase();
 
     match status_code {
         // Client errors (4xx)
-        400 => ErrorCategory::UserError,
+        400 => ErrorCategory::User,
 
         // Auth errors - quota is API error, others are user errors
         401 | 403 => {
@@ -63,14 +63,14 @@ pub fn categorize_error(status_code: u16, error_text: &str) -> ErrorCategory {
                 || error_lower.contains("rate")
                 || error_lower.contains("limit")
             {
-                ErrorCategory::ApiError
+                ErrorCategory::Api
             } else {
-                ErrorCategory::UserError
+                ErrorCategory::User
             }
         }
 
         // Rate limiting and quota - always API errors
-        429 => ErrorCategory::ApiError,
+        429 => ErrorCategory::Api,
 
         // Server errors (5xx)
         500..=599 => {
@@ -79,9 +79,9 @@ pub fn categorize_error(status_code: u16, error_text: &str) -> ErrorCategory {
                 || error_lower.contains("gemini")
                 || error_lower.contains("google")
             {
-                ErrorCategory::ApiError
+                ErrorCategory::Api
             } else {
-                ErrorCategory::SystemError
+                ErrorCategory::System
             }
         }
 
@@ -92,9 +92,9 @@ pub fn categorize_error(status_code: u16, error_text: &str) -> ErrorCategory {
                 || error_lower.contains("network")
                 || error_lower.contains("unreachable")
             {
-                ErrorCategory::NetworkError
+                ErrorCategory::Network
             } else {
-                ErrorCategory::SystemError
+                ErrorCategory::System
             }
         }
     }
@@ -137,7 +137,7 @@ pub fn format_error_message(category: ErrorCategory, status_code: u16, details: 
     let details_lower = details.to_lowercase();
 
     match category {
-        ErrorCategory::UserError => {
+        ErrorCategory::User => {
             if status_code == 400 {
                 if details_lower.contains("prompt") {
                     format!(
@@ -160,7 +160,7 @@ pub fn format_error_message(category: ErrorCategory, status_code: u16, details: 
             }
         }
 
-        ErrorCategory::ApiError => {
+        ErrorCategory::Api => {
             if status_code == 429
                 || details_lower.contains("quota")
                 || details_lower.contains("rate")
@@ -190,14 +190,14 @@ pub fn format_error_message(category: ErrorCategory, status_code: u16, details: 
             }
         }
 
-        ErrorCategory::SystemError => {
+        ErrorCategory::System => {
             format!(
                 "Internal server error ({}): An unexpected error occurred. Please contact support if this persists. Details: {}",
                 status_code, details
             )
         }
 
-        ErrorCategory::NetworkError => {
+        ErrorCategory::Network => {
             format!(
                 "Network error: Unable to connect to upstream API. This may be a temporary connectivity issue. The system will retry automatically. Details: {}",
                 details
@@ -286,60 +286,60 @@ mod tests {
     #[test]
     fn test_categorize_user_error_400() {
         let category = categorize_error(400, "Missing 'prompt' field");
-        assert_eq!(category, ErrorCategory::UserError);
+        assert_eq!(category, ErrorCategory::User);
     }
 
     #[test]
     fn test_categorize_api_error_429() {
         let category = categorize_error(429, "Rate limit exceeded");
-        assert_eq!(category, ErrorCategory::ApiError);
+        assert_eq!(category, ErrorCategory::Api);
     }
 
     #[test]
     fn test_categorize_api_error_quota() {
         // 403 with quota = API error
         let category = categorize_error(403, "QUOTA_EXHAUSTED for image generation");
-        assert_eq!(category, ErrorCategory::ApiError);
+        assert_eq!(category, ErrorCategory::Api);
 
         // 401 with rate limit = API error
         let category = categorize_error(401, "Rate limit exceeded");
-        assert_eq!(category, ErrorCategory::ApiError);
+        assert_eq!(category, ErrorCategory::Api);
     }
 
     #[test]
     fn test_categorize_user_error_auth() {
         // 403 without quota = User error
         let category = categorize_error(403, "Invalid API key");
-        assert_eq!(category, ErrorCategory::UserError);
+        assert_eq!(category, ErrorCategory::User);
 
         // 401 without quota/rate = User error
         let category = categorize_error(401, "Authentication failed");
-        assert_eq!(category, ErrorCategory::UserError);
+        assert_eq!(category, ErrorCategory::User);
     }
 
     #[test]
     fn test_categorize_system_error_500() {
         let category = categorize_error(500, "Internal server error");
-        assert_eq!(category, ErrorCategory::SystemError);
+        assert_eq!(category, ErrorCategory::System);
     }
 
     #[test]
     fn test_categorize_api_error_upstream_500() {
         // 500 with upstream/gemini/google = API error
         let category = categorize_error(500, "Upstream Gemini API error");
-        assert_eq!(category, ErrorCategory::ApiError);
+        assert_eq!(category, ErrorCategory::Api);
 
         let category = categorize_error(503, "Google service unavailable");
-        assert_eq!(category, ErrorCategory::ApiError);
+        assert_eq!(category, ErrorCategory::Api);
     }
 
     #[test]
     fn test_categorize_network_error() {
         let category = categorize_error(0, "Connection timeout");
-        assert_eq!(category, ErrorCategory::NetworkError);
+        assert_eq!(category, ErrorCategory::Network);
 
         let category = categorize_error(0, "Network unreachable");
-        assert_eq!(category, ErrorCategory::NetworkError);
+        assert_eq!(category, ErrorCategory::Network);
     }
 
     // ==================================================================================
@@ -396,14 +396,14 @@ mod tests {
 
     #[test]
     fn test_format_error_missing_prompt() {
-        let msg = format_error_message(ErrorCategory::UserError, 400, "Missing 'prompt' field");
+        let msg = format_error_message(ErrorCategory::User, 400, "Missing 'prompt' field");
         assert!(msg.contains("Missing or empty prompt"));
         assert!(msg.contains("provide a text description"));
     }
 
     #[test]
     fn test_format_error_quota_exhausted() {
-        let msg = format_error_message(ErrorCategory::ApiError, 429, "QUOTA_EXHAUSTED");
+        let msg = format_error_message(ErrorCategory::Api, 429, "QUOTA_EXHAUSTED");
         assert!(msg.contains("Rate limit exceeded"));
         assert!(msg.contains("automatically rotate"));
         assert!(msg.contains("24 hours"));
@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn test_format_error_safety_filter() {
         let msg = format_error_message(
-            ErrorCategory::ApiError,
+            ErrorCategory::Api,
             400,
             "Content blocked by safety filter",
         );
@@ -424,7 +424,7 @@ mod tests {
     #[test]
     fn test_format_error_service_unavailable() {
         let msg = format_error_message(
-            ErrorCategory::ApiError,
+            ErrorCategory::Api,
             503,
             "Service temporarily unavailable",
         );
@@ -434,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_format_error_network() {
-        let msg = format_error_message(ErrorCategory::NetworkError, 0, "Connection timeout");
+        let msg = format_error_message(ErrorCategory::Network, 0, "Connection timeout");
         assert!(msg.contains("Network error"));
         assert!(msg.contains("connectivity issue"));
         assert!(msg.contains("retry automatically"));
@@ -479,9 +479,9 @@ mod tests {
 
     #[test]
     fn test_error_category_as_str() {
-        assert_eq!(ErrorCategory::UserError.as_str(), "USER_ERROR");
-        assert_eq!(ErrorCategory::ApiError.as_str(), "API_ERROR");
-        assert_eq!(ErrorCategory::SystemError.as_str(), "SYSTEM_ERROR");
-        assert_eq!(ErrorCategory::NetworkError.as_str(), "NETWORK_ERROR");
+        assert_eq!(ErrorCategory::User.as_str(), "USER_ERROR");
+        assert_eq!(ErrorCategory::Api.as_str(), "API_ERROR");
+        assert_eq!(ErrorCategory::System.as_str(), "SYSTEM_ERROR");
+        assert_eq!(ErrorCategory::Network.as_str(), "NETWORK_ERROR");
     }
 }

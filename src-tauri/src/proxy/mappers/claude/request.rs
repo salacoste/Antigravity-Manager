@@ -10,7 +10,6 @@ use crate::proxy::mappers::signature_store::get_thought_signature;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::OnceLock;
-use tauri::Emitter;
 
 // Model ID constants from Google Antigravity v1.13.3
 // Reference: docs/antigravity/workflows/models/claude/claude-4.5-sonnet-thinking-workflow.md:161-166
@@ -23,10 +22,12 @@ const CLAUDE_4_5_SONNET_MODEL_ID: u32 = 333;
 // Discovery method: Documentation analysis (2026-01-11) - No explicit Model IDs found for Gemini 3.x
 // Unlike Claude models (333, 334) and Gemini 2.5 models (246, 312, 313, etc.),
 // Gemini 3.x models (high/low/flash) do not have distinct Model IDs in Antigravity v1.13.3
+//
+// IMPORTANT: Thinking variants (Pro High Thinking, Pro Low Thinking) use the SAME model ID
+// as their base variants. Thinking is activated via `thinkingBudget` parameter, NOT
+// separate model IDs. This is the architectural decision from Epic-009 Story-009-03.
 const GEMINI_3_PRO_HIGH_MODEL_ID: u32 = 0; // Name-based routing
-const GEMINI_3_PRO_HIGH_THINKING_MODEL_ID: u32 = 0; // Same as base (thinking via parameter)
 const GEMINI_3_PRO_LOW_MODEL_ID: u32 = 0; // Name-based routing (Story-009-02)
-const GEMINI_3_PRO_LOW_THINKING_MODEL_ID: u32 = 0; // Same as base (thinking via parameter)
 
 // API Provider constants
 // Reference: docs/antigravity/workflows/models/claude/claude-4.5-sonnet-thinking-workflow.md:161-166
@@ -57,26 +58,6 @@ pub fn get_app_handle() -> Option<&'static tauri::AppHandle> {
     APP_HANDLE.get()
 }
 
-/// Emit model fallback event to UI
-fn emit_model_fallback_event(original_model: &str, fallback_model: &str) -> Result<(), String> {
-    if let Some(app) = APP_HANDLE.get() {
-        let payload = serde_json::json!({
-            "original_model": original_model,
-            "fallback_model": fallback_model,
-            "reason": "High timeout rate (93.7%) with Claude Opus Thinking - see issue #497"
-        });
-
-        app.emit("proxy://model-fallback", payload)
-            .map_err(|e| format!("Failed to emit model fallback event: {}", e))?;
-
-        tracing::debug!(
-            "[Model-Fallback-Event] Emitted UI notification: {} -> {}",
-            original_model,
-            fallback_model
-        );
-    }
-    Ok(())
-}
 
 // ===== Safety Settings Configuration =====
 
@@ -110,7 +91,7 @@ impl SafetyThreshold {
     }
 
     /// Convert to Gemini API threshold string
-    pub fn to_gemini_threshold(&self) -> &'static str {
+    pub fn to_gemini_threshold(self) -> &'static str {
         match self {
             SafetyThreshold::Off => "OFF",
             SafetyThreshold::BlockLowAndAbove => "BLOCK_LOW_AND_ABOVE",
@@ -230,10 +211,8 @@ pub fn get_model_id(model_name: &str) -> u32 {
 fn get_api_provider(model_name: &str) -> u32 {
     if model_name.starts_with("claude-") {
         API_PROVIDER_ANTHROPIC_VERTEX // 26
-    } else if model_name.starts_with("gemini-") {
-        API_PROVIDER_GEMINI // 0
     } else {
-        API_PROVIDER_GEMINI // Default
+        API_PROVIDER_GEMINI // 0 (Gemini models and default)
     }
 }
 
@@ -270,14 +249,13 @@ pub fn transform_claude_request_in(
     let has_web_search_tool = claude_req
         .tools
         .as_ref()
-        .map(|tools| {
+        .is_some_and(|tools| {
             tools.iter().any(|t| {
                 t.is_web_search()
                     || t.name.as_deref() == Some("google_search")
                     || t.type_.as_deref() == Some("web_search_20250305")
             })
-        })
-        .unwrap_or(false);
+        });
 
     // 用于存储 tool_use id -> name 映射
     let mut tool_id_to_name: HashMap<String, String> = HashMap::new();
@@ -494,8 +472,7 @@ pub fn transform_claude_request_in(
 
         // Default to VALIDATED for backward compatibility
         let mode = tool_choice
-            .map(|tc| tc.to_gemini_mode())
-            .unwrap_or("VALIDATED");
+            .map_or("VALIDATED", |tc| tc.to_gemini_mode());
 
         // Build function calling config
         let mut function_calling_config = json!({
@@ -856,7 +833,7 @@ fn build_contents(
     let mut last_thought_signature: Option<String> = None;
 
     let _msg_count = messages.len();
-    for (_i, msg) in messages.iter().enumerate() {
+    for msg in messages.iter() {
         let role = if msg.role == "assistant" {
             "model"
         } else {
@@ -867,11 +844,10 @@ fn build_contents(
 
         match &msg.content {
             MessageContent::String(text) => {
-                if text != "(no content)" {
-                    if !text.trim().is_empty() {
+                if text != "(no content)"
+                    && !text.trim().is_empty() {
                         parts.push(json!({"text": text.trim()}));
                     }
-                }
             }
             MessageContent::Array(blocks) => {
                 for item in blocks {
@@ -960,7 +936,7 @@ fn build_contents(
                                 let cached_family = crate::proxy::SignatureCache::global()
                                     .get_signature_family(sig);
                                 if let Some(family) = cached_family {
-                                    if !is_model_compatible(&family, &mapped_model) {
+                                    if !is_model_compatible(&family, mapped_model) {
                                         tracing::warn!(
                                             "[Thinking-Compatibility] Incompatible signature detected (Family: {}, Target: {}). Dropping signature.",
                                             family, mapped_model
@@ -1035,16 +1011,15 @@ fn build_contents(
                                 .or_else(|| {
                                     // [NEW] Try layer 1 cache (Tool ID -> Signature)
                                     crate::proxy::SignatureCache::global().get_tool_signature(id)
-                                        .map(|s| {
+                                        .inspect(|_s| {
                                             tracing::info!("[Claude-Request] Recovered signature from cache for tool_id: {}", id);
-                                            s
                                         })
                                 })
                                 .or_else(|| {
                                     let global_sig = get_thought_signature();
-                                    if global_sig.is_some() {
-                                        tracing::info!("[Claude-Request] Using global thought_signature fallback (length: {})", 
-                                            global_sig.as_ref().unwrap().len());
+                                    if let Some(ref sig) = global_sig {
+                                        tracing::info!("[Claude-Request] Using global thought_signature fallback (length: {})",
+                                            sig.len());
                                     }
                                     global_sig
                                 });
@@ -1074,13 +1049,7 @@ fn build_contents(
                                 serde_json::Value::Array(arr) => arr
                                     .iter()
                                     .filter_map(|block| {
-                                        if let Some(text) =
-                                            block.get("text").and_then(|v| v.as_str())
-                                        {
-                                            Some(text)
-                                        } else {
-                                            None
-                                        }
+                                        block.get("text").and_then(|v| v.as_str())
                                     })
                                     .collect::<Vec<_>>()
                                     .join("\n"),
@@ -1149,7 +1118,7 @@ fn build_contents(
             } else {
                 // [Crucial Check] 即使有 thought 块，也必须保证它位于 parts 的首位 (Index 0)
                 // 且必须包含 thought: true 标记
-                let first_is_thought = parts.get(0).map_or(false, |p| {
+                let first_is_thought = parts.first().is_some_and(|p| {
                     (p.get("thought").is_some() || p.get("thoughtSignature").is_some())
                         && p.get("text").is_some() // 对于 v1internal，通常 text + thought: true 才是合规的思维块
                 });
@@ -1345,8 +1314,7 @@ fn validate_function_call_order(contents: &[Value]) -> Result<(), String> {
         let has_function_call = msg
             .get("parts")
             .and_then(|p| p.as_array())
-            .map(|parts| parts.iter().any(|p| p.get("functionCall").is_some()))
-            .unwrap_or(false);
+            .is_some_and(|parts| parts.iter().any(|p| p.get("functionCall").is_some()));
 
         if has_function_call {
             // Check previous message
@@ -1359,8 +1327,7 @@ fn validate_function_call_order(contents: &[Value]) -> Result<(), String> {
                 let prev_has_function_response = contents[i - 1]
                     .get("parts")
                     .and_then(|p| p.as_array())
-                    .map(|parts| parts.iter().any(|p| p.get("functionResponse").is_some()))
-                    .unwrap_or(false);
+                    .is_some_and(|parts| parts.iter().any(|p| p.get("functionResponse").is_some()));
 
                 // Function calls must follow user or functionResponse
                 if prev_role != "user" && !prev_has_function_response {
@@ -1371,9 +1338,7 @@ fn validate_function_call_order(contents: &[Value]) -> Result<(), String> {
                 }
             } else {
                 // First message is a functionCall - invalid
-                return Err(format!(
-                    "Invalid function call order at index 0: functionCall cannot be first message, must start with 'user'"
-                ));
+                return Err("Invalid function call order at index 0: functionCall cannot be first message, must start with 'user'".to_string());
             }
         }
     }
@@ -1525,9 +1490,7 @@ fn build_generation_config(
                 // [CRITICAL FIX] Apply model-specific thinking budget limits
                 if has_web_search || mapped_model.contains("gemini-2.5-flash") {
                     user_budget = user_budget.min(24576);
-                } else if mapped_model.contains("claude") {
-                    user_budget = user_budget.min(32000);
-                } else if mapped_model.contains("gemini") {
+                } else if mapped_model.contains("claude") || mapped_model.contains("gemini") {
                     user_budget = user_budget.min(32000);
                 }
 
@@ -1569,9 +1532,7 @@ fn build_generation_config(
                 // Apply model-specific limits to optimal budget
                 let clamped_budget = if has_web_search || mapped_model.contains("gemini-2.5-flash") {
                     optimal_budget.min(24576)
-                } else if mapped_model.contains("claude") {
-                    optimal_budget.min(32000)
-                } else if mapped_model.contains("gemini") {
+                } else if mapped_model.contains("claude") || mapped_model.contains("gemini") {
                     optimal_budget.min(32000)
                 } else {
                     optimal_budget
@@ -1588,13 +1549,16 @@ fn build_generation_config(
             };
 
             // [EPIC-011 Story-011-01] Gemini 3.x uses thinkingLevel, Gemini 2.5 uses thinkingBudget
-            if is_gemini_3_model(&mapped_model) {
+            if is_gemini_3_model(mapped_model) {
                 // Gemini 3.x: Map budget to thinkingLevel
-                let thinking_level = determine_thinking_level(&mapped_model, Some(budget as i32));
+                let thinking_level = determine_thinking_level(mapped_model, Some(budget as i32));
 
                 thinking_config["thinkingLevel"] = json!(thinking_level);
                 // Remove thinkingBudget if it was added (shouldn't exist for Gemini 3)
-                thinking_config.as_object_mut().unwrap().remove("thinkingBudget");
+                // Safe pattern: only remove if thinking_config is actually an object
+                if let Some(obj) = thinking_config.as_object_mut() {
+                    obj.remove("thinkingBudget");
+                }
 
                 tracing::info!(
                     "[Claude-Request] Gemini 3 thinkingLevel: {} (budget: {}, model: {})",
@@ -1606,7 +1570,7 @@ fn build_generation_config(
                 // Gemini 2.5 and other models: Use thinkingBudget (backward compatibility)
                 thinking_config["thinkingBudget"] = json!(budget);
 
-                tracing::debug!(
+                tracing::info!(
                     "[Claude-Request] Gemini 2.5 thinkingBudget: {} (model: {})",
                     budget,
                     mapped_model
@@ -1617,7 +1581,7 @@ fn build_generation_config(
         }
     }
 
-    // 其他参数
+    // Other configuration parameters
     if let Some(temp) = claude_req.temperature {
         config["temperature"] = json!(temp);
     }
@@ -1674,9 +1638,7 @@ fn build_generation_config(
                 let clamped_budget = if has_web_search || mapped_model.contains("gemini-2.5-flash")
                 {
                     budget.min(24576)
-                } else if mapped_model.contains("claude") {
-                    budget.min(32000)
-                } else if mapped_model.contains("gemini") {
+                } else if mapped_model.contains("claude") || mapped_model.contains("gemini") {
                     budget.min(32000)
                 } else {
                     budget

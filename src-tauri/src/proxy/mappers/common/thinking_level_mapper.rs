@@ -57,8 +57,9 @@ pub fn determine_thinking_level(model: &str, budget: Option<i32>) -> &'static st
         };
     }
 
-    // Clamp budget to maximum of 32000 tokens
-    let budget = budget.unwrap().min(32000);
+    // Clamp budget to valid range: 0-32000 tokens
+    // Negative budgets are invalid and would cause incorrect mappings
+    let budget = budget.unwrap().clamp(0, 32000);
 
     if model.contains("-flash") {
         // Flash: 4 levels (MINIMAL, LOW, MEDIUM, HIGH)
@@ -275,6 +276,26 @@ mod tests {
             determine_thinking_level("gemini-3-pro-high", Some(0)),
             "LOW",
             "Budget 0 should map to LOW for Pro"
+        );
+    }
+
+    #[test]
+    fn test_negative_budget_handling() {
+        // Negative budgets should be clamped to 0, then mapped
+        assert_eq!(
+            determine_thinking_level("gemini-3-flash", Some(-5000)),
+            "MINIMAL",
+            "Negative budget should clamp to 0, then map to MINIMAL for Flash"
+        );
+        assert_eq!(
+            determine_thinking_level("gemini-3-pro-high", Some(-10000)),
+            "LOW",
+            "Negative budget should clamp to 0, then map to LOW for Pro"
+        );
+        assert_eq!(
+            determine_thinking_level("gemini-3-pro-low", Some(-1)),
+            "LOW",
+            "Budget -1 should clamp to 0, then map to LOW for Pro"
         );
     }
 }

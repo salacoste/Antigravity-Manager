@@ -14,7 +14,8 @@ pub enum GeminiApiValidationError {
     /// Gemini 2.5 model using thinkingLevel (should use thinkingBudget)
     Gemini25WithLevel { model: String },
 
-    /// thinkingConfig missing for thinking-enabled model
+    /// thinkingConfig missing for thinking-enabled model (reserved for future validation)
+    #[allow(dead_code)]
     MissingThinkingConfig { model: String },
 
     /// Invalid thinkingLevel value

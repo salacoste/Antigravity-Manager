@@ -15,7 +15,7 @@ pub fn transform_openai_request(
     let tools_val = request
         .tools
         .as_ref()
-        .map(|list| list.iter().map(|v| v.clone()).collect::<Vec<_>>());
+        .map(|list| list.to_vec());
 
     // Resolve grounding config
     let config = crate::proxy::mappers::common_utils::resolve_request_config(
@@ -73,10 +73,10 @@ pub fn transform_openai_request(
 
     // 从全局存储获取 thoughtSignature (PR #93 支持)
     let global_thought_sig = get_thought_signature();
-    if global_thought_sig.is_some() {
+    if let Some(ref sig) = global_thought_sig {
         tracing::debug!(
             "从全局存储获取到 thoughtSignature (长度: {})",
-            global_thought_sig.as_ref().unwrap().len()
+            sig.len()
         );
     }
 
@@ -176,7 +176,7 @@ pub fn transform_openai_request(
 
             // Handle tool calls (assistant message)
             if let Some(tool_calls) = &msg.tool_calls {
-                for (_index, tc) in tool_calls.iter().enumerate() {
+                for tc in tool_calls.iter() {
                     /* 暂时移除：防止 Codex CLI 界面碎片化
                     if index == 0 && parts.is_empty() {
                          if mapped_model.contains("gemini-3") {
@@ -206,7 +206,7 @@ pub fn transform_openai_request(
             if msg.role == "tool" || msg.role == "function" {
                 let name = msg.name.as_deref().unwrap_or("unknown");
                 let final_name = if name == "local_shell_call" { "shell" } 
-                                else if let Some(id) = &msg.tool_call_id { tool_id_to_name.get(id).map(|s| s.as_str()).unwrap_or(name) }
+                                else if let Some(id) = &msg.tool_call_id { tool_id_to_name.get(id).map_or(name, |s| s.as_str()) }
                                 else { name };
 
                 let content_val = match &msg.content {
@@ -245,8 +245,8 @@ pub fn transform_openai_request(
     }
     let contents = merged_contents;
 
-    // 3. 构建请求体
-    // [EPIC-011 Story-011-01] 检测 Gemini 3.x thinking 模型，注入 thinkingLevel 配置
+    // 3. Build request body
+    // [EPIC-011 Story-011-01] Detect Gemini 3.x thinking models, inject thinkingLevel config
     // CHANGED: Use centralized detection function that includes ALL Gemini 3 variants
     let is_gemini_3_thinking = is_gemini_3_model(mapped_model);
 
@@ -261,23 +261,52 @@ pub fn transform_openai_request(
         gen_config["candidateCount"] = json!(n);
     }
 
-    // [EPIC-011 Story-011-01 + Story-011-04] 为 Gemini 3.x 注入 thinkingConfig (使用 thinkingLevel API)
+    // [EPIC-011 Story-011-01 + Story-011-04] Inject thinkingConfig for Gemini 3.x (uses thinkingLevel API)
     // CRITICAL: Gemini 3.x uses thinkingLevel (enum), NOT thinkingBudget (integer)
     // [Story-011-04] OpenAI protocol auto-injects thinking with model-specific defaults
+    // [Code-Review Fix] Support OpenAI reasoning_effort field for client control
     if is_gemini_3_thinking {
-        // Map token budget to thinking level (None = use model default)
-        // Flash default: MEDIUM (balance cost/quality)
-        // Pro default: HIGH (maximize quality)
-        let thinking_level = determine_thinking_level(mapped_model, None);
+        // Determine thinking level from reasoning_effort or use defaults
+        let thinking_level = if let Some(ref effort) = request.reasoning_effort {
+            // Map OpenAI reasoning_effort to Gemini thinkingLevel
+            match effort.to_lowercase().as_str() {
+                "low" => "LOW",
+                "medium" => {
+                    // CRITICAL: Pro models don't support MEDIUM
+                    if mapped_model.contains("-flash") {
+                        "MEDIUM"
+                    } else {
+                        "LOW" // Pro: downgrade MEDIUM to LOW
+                    }
+                }
+                "high" => "HIGH",
+                _ => {
+                    // Invalid effort, use model defaults
+                    determine_thinking_level(mapped_model, None)
+                }
+            }
+        } else {
+            // No reasoning_effort specified, use model defaults
+            // Flash default: MEDIUM (balance cost/quality)
+            // Pro default: HIGH (maximize quality)
+            determine_thinking_level(mapped_model, None)
+        };
 
         gen_config["thinkingConfig"] = json!({
             "includeThoughts": true,
             "thinkingLevel": thinking_level
         });
+
+        let source = if request.reasoning_effort.is_some() {
+            "client-specified"
+        } else {
+            "auto-injected"
+        };
         tracing::info!(
-            "[OpenAI-Request] Gemini 3 thinkingLevel: {} (model: {}, auto-injected)",
+            "[OpenAI-Request] Gemini 3 thinkingLevel: {} (model: {}, {})",
             thinking_level,
-            mapped_model
+            mapped_model,
+            source
         );
     }
 
@@ -438,16 +467,12 @@ pub fn transform_openai_request(
 
 fn enforce_uppercase_types(value: &mut Value) {
     if let Value::Object(map) = value {
-        if let Some(type_val) = map.get_mut("type") {
-            if let Value::String(ref mut s) = type_val {
-                *s = s.to_uppercase();
-            }
+        if let Some(Value::String(ref mut s)) = map.get_mut("type") {
+            *s = s.to_uppercase();
         }
-        if let Some(properties) = map.get_mut("properties") {
-            if let Value::Object(ref mut props) = properties {
-                for v in props.values_mut() {
-                    enforce_uppercase_types(v);
-                }
+        if let Some(Value::Object(ref mut props)) = map.get_mut("properties") {
+            for v in props.values_mut() {
+                enforce_uppercase_types(v);
             }
         }
         if let Some(items) = map.get_mut("items") {
@@ -492,6 +517,7 @@ mod tests {
             tools: None,
             tool_choice: None,
             parallel_tool_calls: None,
+            reasoning_effort: None,
             instructions: None,
             input: None,
             prompt: None,

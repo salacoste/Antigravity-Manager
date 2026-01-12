@@ -15,8 +15,7 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let icon_bytes = include_bytes!("../../icons/tray-icon.png");
     let img = image::load_from_memory(icon_bytes)
         .map_err(|e| {
-            tauri::Error::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            tauri::Error::Io(std::io::Error::other(
                 e.to_string(),
             ))
         })?
@@ -130,7 +129,7 @@ pub fn create_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
                             };
 
                             // 2. 切换
-                            if let Ok(_) = modules::switch_account(&next_account.id).await {
+                            if modules::switch_account(&next_account.id).await.is_ok() {
                                 // 3. 通知前端
                                 let _ = app_handle
                                     .emit("tray://account-switched", next_account.id.clone());

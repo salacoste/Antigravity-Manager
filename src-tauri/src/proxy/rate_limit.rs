@@ -28,10 +28,12 @@ pub struct RateLimitInfo {
     /// 检测时间
     #[allow(dead_code)]
     pub detected_at: SystemTime,
-    /// 限流原因
+    /// 限流原因 (reserved for detailed rate limit analytics)
+    #[allow(dead_code)]
     pub reason: RateLimitReason,
     /// 关联的模型 (用于模型级别限流)
     /// None 表示账号级别限流,Some(model) 表示特定模型限流
+    #[allow(dead_code)]
     pub model: Option<String>,
 }
 
@@ -336,7 +338,7 @@ impl RateLimitTracker {
                     .get("error")
                     .and_then(|e| e.get("details"))
                     .and_then(|d| d.as_array())
-                    .and_then(|a| a.get(0))
+                    .and_then(|a| a.first())
                     .and_then(|o| o.get("reason"))
                     .and_then(|v| v.as_str())
                 {
@@ -418,7 +420,7 @@ impl RateLimitTracker {
 
         // 计算总秒数
         let total_seconds =
-            hours * 3600 + minutes * 60 + seconds.ceil() as u64 + (milliseconds + 999) / 1000;
+            hours * 3600 + minutes * 60 + seconds.ceil() as u64 + milliseconds.div_ceil(1000);
 
         // 如果总秒数为 0，说明解析失败
         if total_seconds == 0 {
@@ -449,7 +451,7 @@ impl RateLimitTracker {
                     .get("error")
                     .and_then(|e| e.get("details"))
                     .and_then(|d| d.as_array())
-                    .and_then(|a| a.get(0))
+                    .and_then(|a| a.first())
                     .and_then(|o| o.get("metadata")) // 添加 metadata 层级
                     .and_then(|m| m.get("quotaResetDelay"))
                     .and_then(|v| v.as_str())

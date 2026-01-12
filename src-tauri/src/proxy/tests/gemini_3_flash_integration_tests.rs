@@ -42,6 +42,7 @@ mod flash_integration_tests {
             tools: None,
             tool_choice: None,
             parallel_tool_calls: None,
+            reasoning_effort: None,
             instructions: None,
             input: None,
         }

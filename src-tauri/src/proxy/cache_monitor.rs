@@ -257,8 +257,9 @@ pub struct CacheMonitor {
 
 impl CacheMonitor {
     /// Create a new cache monitor
+    /// Story-012-03: Restore metrics from database on startup
     pub fn new() -> Self {
-        Self {
+        let monitor = Self {
             metrics: Arc::new(RwLock::new(CacheMetrics::default())),
             signatures: Arc::new(RwLock::new(HashMap::new())),
             lookup_times: Arc::new(RwLock::new(VecDeque::new())),
@@ -267,7 +268,39 @@ impl CacheMonitor {
             hourly_savings: Arc::new(RwLock::new(VecDeque::new())),
             daily_savings: Arc::new(RwLock::new(VecDeque::new())),
             baseline_p95: Arc::new(RwLock::new(0.0)),
+        };
+
+        // Story-012-03: Restore metrics from database
+        match crate::modules::proxy_db::load_cache_metrics() {
+            Ok(saved) => {
+                // Use try_write() to avoid blocking within async runtime
+                // Constructor is called from both sync and async contexts
+                match monitor.metrics.try_write() {
+                    Ok(mut metrics) => {
+                        let hit_count = saved.hit_count;
+                        let miss_count = saved.miss_count;
+                        *metrics = saved;
+                        tracing::info!(
+                            "[CacheMonitor] Restored cache metrics: hits={}, misses={}, hit_rate={:.2}%",
+                            hit_count,
+                            miss_count,
+                            metrics.hit_rate * 100.0
+                        );
+                    }
+                    Err(_) => {
+                        tracing::warn!("[CacheMonitor] Failed to acquire metrics lock during restoration (lock busy)");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::info!(
+                    "[CacheMonitor] No saved metrics found (first run or empty database): {}. Using defaults.",
+                    e
+                );
+            }
         }
+
+        monitor
     }
 
     /// Record a cache hit
@@ -481,7 +514,7 @@ impl CacheMonitor {
 
             // Keep only last 24 hours
             let cutoff = now.timestamp() - 86400;
-            while hourly.front().map_or(false, |(h, _)| *h < cutoff) {
+            while hourly.front().is_some_and(|(h, _)| *h < cutoff) {
                 hourly.pop_front();
             }
         }
@@ -501,7 +534,7 @@ impl CacheMonitor {
 
             // Keep only last 7 days
             let cutoff = now.timestamp() - 7 * 86400;
-            while daily.front().map_or(false, |(d, _)| *d < cutoff) {
+            while daily.front().is_some_and(|(d, _)| *d < cutoff) {
                 daily.pop_front();
             }
         }
@@ -538,9 +571,22 @@ fn calculate_percentile(values: &VecDeque<f64>, percentile: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::proxy_db;
+    use rusqlite::Connection;
+
+    /// Helper: Clear cache_metrics table for test isolation
+    fn clear_cache_metrics() {
+        proxy_db::init_db().expect("DB init should succeed");
+        let db_path = proxy_db::get_proxy_db_path().expect("DB path should exist");
+        let conn = Connection::open(db_path).expect("DB connection should succeed");
+        conn.execute("DELETE FROM cache_metrics", [])
+            .expect("Clear should succeed");
+    }
 
     #[tokio::test]
     async fn test_cache_monitor_creation() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
         let metrics = monitor.export_metrics().await;
 
@@ -551,6 +597,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_hit_updates_counter() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         monitor.record_hit("sig1", 5.0, None).await;
@@ -563,6 +611,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_miss_updates_counter() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         monitor.record_miss("sig1").await;
@@ -575,6 +625,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_hit_rate_calculation() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         monitor.record_hit("sig1", 5.0, None).await;
@@ -680,6 +732,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_savings_percentage_calculation() {
+        clear_cache_metrics();
+
         let monitor = CacheMonitor::new();
 
         // Simulate 30% hit rate

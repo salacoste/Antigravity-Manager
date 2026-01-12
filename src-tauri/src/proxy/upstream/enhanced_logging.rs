@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 /// Check if enhanced debugging is enabled
+#[allow(dead_code)]
 pub fn is_debug_enabled() -> bool {
     std::env::var("DEBUG_CLAUDE_REQUESTS")
         .map(|v| v == "1" || v.to_lowercase() == "true")
@@ -13,6 +14,7 @@ pub fn is_debug_enabled() -> bool {
 }
 
 /// Log request details before sending
+#[allow(dead_code)]
 pub fn log_request_details(
     url: &str,
     method: &str,
@@ -79,6 +81,7 @@ pub fn log_request_details(
 }
 
 /// Log response details after receiving
+#[allow(dead_code)]
 pub async fn log_response_details(response: &Response, context: &str) {
     if !is_debug_enabled() {
         return;
@@ -100,6 +103,7 @@ pub async fn log_response_details(response: &Response, context: &str) {
 }
 
 /// Log 429 error details with quota information
+#[allow(dead_code)]
 pub fn log_429_error_details(status: u16, body: &str, headers: &reqwest::header::HeaderMap) {
     if status != 429 {
         return;
@@ -163,6 +167,7 @@ pub fn log_429_error_details(status: u16, body: &str, headers: &reqwest::header:
 }
 
 /// Compare request with reference (for debugging)
+#[allow(dead_code)]
 pub fn compare_with_reference(current_ua: &str, current_request_type: &str) -> Vec<String> {
     let mut suggestions = Vec::new();
 
@@ -204,6 +209,7 @@ pub fn compare_with_reference(current_ua: &str, current_request_type: &str) -> V
 }
 
 /// Generate diagnostic report
+#[allow(dead_code)]
 pub fn generate_diagnostic_report(
     user_agent: &str,
     request_type: &str,

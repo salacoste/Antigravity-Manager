@@ -27,6 +27,9 @@ pub struct OpenAIRequest {
     pub tool_choice: Option<Value>,
     #[serde(rename = "parallel_tool_calls")]
     pub parallel_tool_calls: Option<bool>,
+    // OpenAI o1/o3 reasoning models support
+    #[serde(rename = "reasoning_effort", default)]
+    pub reasoning_effort: Option<String>, // "low", "medium", "high"
     // Codex proprietary fields
     pub instructions: Option<String>,
     pub input: Option<Value>,
