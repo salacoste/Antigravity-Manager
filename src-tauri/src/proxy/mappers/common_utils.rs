@@ -336,7 +336,6 @@ mod tests {
         let config = resolve_request_config("gemini-3-flash-online", "gemini-3-flash", &None);
         assert_eq!(config.request_type, "web_search");
         assert!(config.inject_google_search);
-        // Web search downgrades all models to gemini-2.5-flash (only model supporting googleSearch)
         assert_eq!(config.final_model, "gemini-2.5-flash");
     }
 

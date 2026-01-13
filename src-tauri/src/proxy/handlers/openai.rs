@@ -114,6 +114,7 @@ pub async fn handle_chat_completions(
     let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
 
     let mut last_error = String::new();
+    let mut last_email: Option<String> = None;
 
     for attempt in 0..max_attempts {
         // 2. 模型路由解析
@@ -153,6 +154,7 @@ pub async fn handle_chat_completions(
             }
         };
 
+        last_email = Some(email.clone());
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
         // 4. 转换请求
@@ -400,7 +402,7 @@ pub async fn handle_chat_completions(
                     max_attempts
                 );
                 // 标记该账号受限 (已经在上面的 mark_rate_limited 完成)
-                // 继续循环以尝试下一个账号
+                // 继续循环以尝试下一个账号 (our strategy: try all accounts before giving up)
                 continue;
             }
 
@@ -432,14 +434,22 @@ pub async fn handle_chat_completions(
             "OpenAI Upstream non-retryable error {} on account {}: {}",
             status_code, email, error_text
         );
-        return Err((status, error_text));
+        return Ok((status, [("X-Account-Email", email.as_str())], error_text).into_response());
     }
 
     // 所有尝试均失败
-    Err((
-        StatusCode::TOO_MANY_REQUESTS,
-        format!("All accounts exhausted. Last error: {}", last_error),
-    ))
+    if let Some(email) = last_email {
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            [("X-Account-Email", email)],
+            format!("All accounts exhausted. Last error: {}", last_error),
+        ).into_response())
+    } else {
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            format!("All accounts exhausted. Last error: {}", last_error),
+        ).into_response())
+    }
 }
 
 /// 处理 Legacy Completions API (/v1/completions)
@@ -1308,7 +1318,11 @@ pub async fn handle_images_generations(
         "data": images
     });
 
-    Ok(Json(openai_response))
+    Ok((
+        StatusCode::OK,
+        [("X-Account-Email", email.as_str())],
+        Json(openai_response)
+    ).into_response())
 }
 
 pub async fn handle_images_edits(
@@ -1802,7 +1816,11 @@ pub async fn handle_images_edits(
         "data": images
     });
 
-    Ok(Json(openai_response))
+    Ok((
+        StatusCode::OK,
+        [("X-Account-Email", email.as_str())],
+        Json(openai_response)
+    ).into_response())
 }
 
 #[cfg(test)]

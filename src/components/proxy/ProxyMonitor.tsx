@@ -43,22 +43,70 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
     const [isLoggingEnabled, setIsLoggingEnabled] = useState(false);
     const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
 
-    const loadData = async () => {
+    // Pagination state
+    const [pageSize] = useState(20);
+    const [hasMore, setHasMore] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [loadingDetail, setLoadingDetail] = useState(false);
+
+    const loadData = async (append = false) => {
+        if (loading) return;
+        setLoading(true);
+
         try {
-            const config = await invoke<AppConfig>('load_config');
+            // Add timeout control (10 seconds)
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Request timeout')), 10000)
+            );
+
+            const config = await Promise.race([
+                invoke<AppConfig>('load_config'),
+                timeoutPromise
+            ]) as AppConfig;
+
             if (config && config.proxy) {
                 setIsLoggingEnabled(config.proxy.enable_logging);
                 await invoke('set_proxy_monitor_enabled', { enabled: config.proxy.enable_logging });
             }
 
-            const history = await invoke<ProxyRequestLog[]>('get_proxy_logs', { limit: 100 });
-            if (Array.isArray(history)) setLogs(history);
+            // Use paginated query
+            const offset = append ? logs.length : 0;
+            const history = await Promise.race([
+                invoke<ProxyRequestLog[]>('get_proxy_logs_paginated', {
+                    limit: pageSize,
+                    offset: offset
+                }),
+                timeoutPromise
+            ]) as ProxyRequestLog[];
 
-            const currentStats = await invoke<ProxyStats>('get_proxy_stats');
+            if (Array.isArray(history)) {
+                if (append) {
+                    setLogs(prev => [...prev, ...history]);
+                } else {
+                    setLogs(history);
+                }
+                setHasMore(history.length === pageSize);
+            }
+
+            const currentStats = await Promise.race([
+                invoke<ProxyStats>('get_proxy_stats'),
+                timeoutPromise
+            ]) as ProxyStats;
+
             if (currentStats) setStats(currentStats);
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to load proxy data", e);
+            if (e.message === 'Request timeout') {
+                // Show timeout error to user
+                console.error('Loading monitor data timeout, please try again later');
+            }
+        } finally {
+            setLoading(false);
         }
+    };
+
+    const loadMore = () => {
+        loadData(true);
     };
 
     const toggleLogging = async () => {
@@ -204,7 +252,18 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
                     </thead>
                     <tbody className="font-mono text-gray-700 dark:text-gray-300">
                         {filteredLogs.map(log => (
-                            <tr key={log.id} className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer" onClick={() => setSelectedLog(log)}>
+                            <tr key={log.id} className="hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer" onClick={async () => {
+                                setLoadingDetail(true);
+                                try {
+                                    const detail = await invoke<ProxyRequestLog>('get_proxy_log_detail', { logId: log.id });
+                                    setSelectedLog(detail);
+                                } catch (e) {
+                                    console.error('Failed to load log detail', e);
+                                    setSelectedLog(log); // Fallback to summary data
+                                } finally {
+                                    setLoadingDetail(false);
+                                }
+                            }}>
                                 <td><span className={`badge badge-xs text-white border-none ${log.status >= 200 && log.status < 400 ? 'badge-success' : 'badge-error'}`}>{log.status}</span></td>
                                 <td className="font-bold">{log.method}</td>
                                 <td className="text-blue-600 truncate max-w-[180px]">
@@ -226,6 +285,26 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
                         ))}
                     </tbody>
                 </table>
+
+                {/* Loading indicator */}
+                {loading && (
+                    <div className="flex items-center justify-center p-8">
+                        <div className="loading loading-spinner loading-md"></div>
+                        <span className="ml-3 text-sm text-gray-500">{t('common.loading') || 'Loading...'}</span>
+                    </div>
+                )}
+
+                {/* Load more button */}
+                {!loading && hasMore && filteredLogs.length > 0 && (
+                    <div className="flex justify-center p-4 border-t border-gray-200 dark:border-base-300">
+                        <button
+                            onClick={loadMore}
+                            className="btn btn-sm btn-outline"
+                        >
+                            {t('common.load_more') || 'Load More'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {selectedLog && (
@@ -234,6 +313,7 @@ export const ProxyMonitor: React.FC<ProxyMonitorProps> = ({ className }) => {
                         {/* Modal Header */}
                         <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-gray-50 dark:bg-slate-900">
                             <div className="flex items-center gap-3">
+                                {loadingDetail && <div className="loading loading-spinner loading-sm"></div>}
                                 <span className={`badge badge-sm text-white border-none ${selectedLog.status >= 200 && selectedLog.status < 400 ? 'badge-success' : 'badge-error'}`}>{selectedLog.status}</span>
                                 <span className="font-mono font-bold text-gray-900 dark:text-white text-sm">{selectedLog.method}</span>
                                 <span className="text-xs text-gray-500 dark:text-slate-400 font-mono truncate max-w-md hidden sm:inline">{selectedLog.url}</span>

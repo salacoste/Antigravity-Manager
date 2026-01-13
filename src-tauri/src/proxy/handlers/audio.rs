@@ -222,6 +222,10 @@ pub async fn handle_audio_transcription(
         warn!("Failed to record audio metric: {}", e);
     }
 
-    // 12. 返回响应
-    Ok(Json(response_json))
+    // 12. 返回响应 (with X-Account-Email header from upstream)
+    Ok((
+        StatusCode::OK,
+        [("X-Account-Email", email.as_str())],
+        Json(response_json)
+    ).into_response())
 }

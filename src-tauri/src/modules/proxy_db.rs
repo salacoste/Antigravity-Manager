@@ -61,6 +61,12 @@ pub fn init_db() -> Result<(), String> {
     // 🆕 Epic-025 Story-025-04: Run migration for quality_analyses table
     migrate_quality_analyses_table()?;
 
+    // Add status index for faster stats queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_status ON request_logs (status)",
+        [],
+    ).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
@@ -92,37 +98,38 @@ pub fn save_log(log: &ProxyRequestLog) -> Result<(), String> {
     Ok(())
 }
 
-pub fn get_logs(limit: usize) -> Result<Vec<ProxyRequestLog>, String> {
+/// Get logs summary (without large request_body and response_body fields) with pagination
+pub fn get_logs_summary(limit: usize, offset: usize) -> Result<Vec<ProxyRequestLog>, String> {
     let db_path = get_proxy_db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, timestamp, method, url, status, duration, model, error, request_body, response_body, input_tokens, output_tokens, account_email, mapped_model
+        "SELECT id, timestamp, method, url, status, duration, model, error, 
+                NULL as request_body, NULL as response_body,
+                input_tokens, output_tokens, account_email, mapped_model
          FROM request_logs 
          ORDER BY timestamp DESC 
-         LIMIT ?1"
+         LIMIT ?1 OFFSET ?2"
     ).map_err(|e| e.to_string())?;
 
-    let logs_iter = stmt
-        .query_map([limit], |row| {
-            Ok(ProxyRequestLog {
-                id: row.get(0)?,
-                timestamp: row.get(1)?,
-                method: row.get(2)?,
-                url: row.get(3)?,
-                status: row.get(4)?,
-                duration: row.get(5)?,
-                model: row.get(6)?,
-                mapped_model: row.get(13).unwrap_or(None),
-                account_email: row.get(12).unwrap_or(None),
-                error: row.get(7)?,
-                request_body: row.get(8).unwrap_or(None),
-                response_body: row.get(9).unwrap_or(None),
-                input_tokens: row.get(10).unwrap_or(None),
-                output_tokens: row.get(11).unwrap_or(None),
-            })
+    let logs_iter = stmt.query_map([limit, offset], |row| {
+        Ok(ProxyRequestLog {
+            id: row.get(0)?,
+            timestamp: row.get(1)?,
+            method: row.get(2)?,
+            url: row.get(3)?,
+            status: row.get(4)?,
+            duration: row.get(5)?,
+            model: row.get(6)?,
+            mapped_model: row.get(13).unwrap_or(None),
+            account_email: row.get(12).unwrap_or(None),
+            error: row.get(7)?,
+            request_body: None,  // Don't query large fields for list view
+            response_body: None, // Don't query large fields for list view
+            input_tokens: row.get(10).unwrap_or(None),
+            output_tokens: row.get(11).unwrap_or(None),
         })
-        .map_err(|e| e.to_string())?;
+    }).map_err(|e| e.to_string())?;
 
     let mut logs = Vec::new();
     for log in logs_iter {
@@ -131,80 +138,99 @@ pub fn get_logs(limit: usize) -> Result<Vec<ProxyRequestLog>, String> {
     Ok(logs)
 }
 
-// 🆕 Story #8: Updated to load from proxy_stats table
+/// Get logs (backward compatible, calls get_logs_summary)
+pub fn get_logs(limit: usize) -> Result<Vec<ProxyRequestLog>, String> {
+    get_logs_summary(limit, 0)
+}
+
 pub fn get_stats() -> Result<crate::proxy::monitor::ProxyStats, String> {
     let db_path = get_proxy_db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
-    // Try to load from proxy_stats table first
-    let stats_result = conn.query_row(
-        "SELECT total_requests, success_count, error_count,
-                thinking_budget_violations, thinking_position_violations,
-                thinking_position_violations_user, thinking_position_violations_model,
-                detection_events_total, detection_events_critical,
-                detection_events_high, detection_events_medium, detection_events_low
-         FROM proxy_stats WHERE id = 1",
+    // Optimized: Use single query instead of three separate queries
+    let (total_requests, success_count, error_count): (u64, u64, u64) = conn.query_row(
+        "SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status >= 200 AND status < 400 THEN 1 ELSE 0 END) as success,
+            SUM(CASE WHEN status < 200 OR status >= 400 THEN 1 ELSE 0 END) as error
+         FROM request_logs",
         [],
-        |row| {
-            Ok(crate::proxy::monitor::ProxyStats {
-                total_requests: row.get(0)?,
-                success_count: row.get(1)?,
-                error_count: row.get(2)?,
-                thinking_budget_violations: row.get(3)?,
-                thinking_position_violations: row.get(4)?,
-                thinking_position_violations_user: row.get(5)?,
-                thinking_position_violations_model: row.get(6)?,
-                detection_events_total: row.get(7).unwrap_or(0),
-                detection_events_critical: row.get(8).unwrap_or(0),
-                detection_events_high: row.get(9).unwrap_or(0),
-                detection_events_medium: row.get(10).unwrap_or(0),
-                detection_events_low: row.get(11).unwrap_or(0),
-            })
-        },
-    );
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).map_err(|e| e.to_string())?;
 
-    match stats_result {
-        Ok(stats) => Ok(stats),
-        Err(_) => {
-            // Fallback to calculating from request_logs if proxy_stats doesn't exist yet
-            tracing::warn!("[ProxyDB] proxy_stats table not found, calculating from logs");
+    Ok(crate::proxy::monitor::ProxyStats {
+        total_requests,
+        success_count,
+        error_count,
+    })
+}
 
-            let total_requests: u64 = conn
-                .query_row("SELECT COUNT(*) FROM request_logs", [], |row| row.get(0))
-                .map_err(|e| e.to_string())?;
+/// Get single log detail (with request_body and response_body)
+pub fn get_log_detail(log_id: &str) -> Result<ProxyRequestLog, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
 
-            let success_count: u64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM request_logs WHERE status >= 200 AND status < 400",
-                    [],
-                    |row| row.get(0),
-                )
-                .map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(
+        "SELECT id, timestamp, method, url, status, duration, model, error, 
+                request_body, response_body, input_tokens, output_tokens, 
+                account_email, mapped_model
+         FROM request_logs 
+         WHERE id = ?1"
+    ).map_err(|e| e.to_string())?;
 
-            let error_count: u64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM request_logs WHERE status < 200 OR status >= 400",
-                    [],
-                    |row| row.get(0),
-                )
-                .map_err(|e| e.to_string())?;
+    stmt.query_row([log_id], |row| {
+        Ok(ProxyRequestLog {
+            id: row.get(0)?,
+            timestamp: row.get(1)?,
+            method: row.get(2)?,
+            url: row.get(3)?,
+            status: row.get(4)?,
+            duration: row.get(5)?,
+            model: row.get(6)?,
+            mapped_model: row.get(13).unwrap_or(None),
+            account_email: row.get(12).unwrap_or(None),
+            error: row.get(7)?,
+            request_body: row.get(8).unwrap_or(None),
+            response_body: row.get(9).unwrap_or(None),
+            input_tokens: row.get(10).unwrap_or(None),
+            output_tokens: row.get(11).unwrap_or(None),
+        })
+    }).map_err(|e| e.to_string())
+}
 
-            Ok(crate::proxy::monitor::ProxyStats {
-                total_requests,
-                success_count,
-                error_count,
-                thinking_budget_violations: 0,
-                thinking_position_violations: 0,
-                thinking_position_violations_user: 0,
-                thinking_position_violations_model: 0,
-                detection_events_total: 0,
-                detection_events_critical: 0,
-                detection_events_high: 0,
-                detection_events_medium: 0,
-                detection_events_low: 0,
-            })
-        }
-    }
+/// Cleanup old logs (keep last N days)
+pub fn cleanup_old_logs(days: i64) -> Result<usize, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    
+    let cutoff_timestamp = chrono::Utc::now().timestamp() - (days * 24 * 3600);
+    
+    let deleted = conn.execute(
+        "DELETE FROM request_logs WHERE timestamp < ?1",
+        [cutoff_timestamp],
+    ).map_err(|e| e.to_string())?;
+    
+    // Execute VACUUM to reclaim disk space
+    conn.execute("VACUUM", []).map_err(|e| e.to_string())?;
+    
+    Ok(deleted)
+}
+
+/// Limit maximum log count (keep newest N records)
+pub fn limit_max_logs(max_count: usize) -> Result<usize, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+    
+    let deleted = conn.execute(
+        "DELETE FROM request_logs WHERE id NOT IN (
+            SELECT id FROM request_logs ORDER BY timestamp DESC LIMIT ?1
+        )",
+        [max_count],
+    ).map_err(|e| e.to_string())?;
+    
+    conn.execute("VACUUM", []).map_err(|e| e.to_string())?;
+    
+    Ok(deleted)
 }
 
 pub fn clear_logs() -> Result<(), String> {

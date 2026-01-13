@@ -2,8 +2,9 @@ use serde_json;
 use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
+use serde::Serialize;
 
-use crate::models::{Account, AccountIndex, AccountSummary, QuotaData, TokenData};
+use crate::models::{Account, AccountIndex, AccountSummary, QuotaData, TokenData, DeviceProfile, DeviceProfileVersion};
 use crate::modules;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -388,8 +389,7 @@ pub fn reorder_accounts(account_ids: &[String]) -> Result<(), String> {
 
 /// 切换当前账号
 pub async fn switch_account(account_id: &str) -> Result<(), String> {
-    use crate::modules::{db, oauth, process};
-
+    use crate::modules::{db, oauth, process, device};
     let index = {
         let _lock = ACCOUNT_INDEX_LOCK
             .lock()
@@ -424,7 +424,32 @@ pub async fn switch_account(account_id: &str) -> Result<(), String> {
         process::close_antigravity(20)?;
     }
 
-    // 4. 获取数据库路径并备份
+    // 4. 写入设备指纹（缺失则生成并绑定），仅在切换时改 storage (Story-027-10)
+    let storage_path = device::get_storage_path()?;
+    let profile_to_apply = {
+        // 优先账户绑定，其次全局原始，否则现采集/生成
+        if let Some(p) = account.device_profile.clone() {
+            p
+        } else if let Some(global) = device::load_global_original() {
+            global
+        } else {
+            // 捕获当前 storage 为原始指纹
+            let current =
+                device::read_profile(&storage_path).unwrap_or_else(|_| device::generate_profile());
+            let _ = device::save_global_original(&current);
+            current
+        }
+    };
+    crate::modules::logger::log_info(&format!(
+        "写入设备指纹到 storage.json: machineId={}, macMachineId={}, devDeviceId={}, sqmId={}",
+        profile_to_apply.machine_id,
+        profile_to_apply.mac_machine_id,
+        profile_to_apply.dev_device_id,
+        profile_to_apply.sqm_id
+    ));
+    device::write_profile(&storage_path, &profile_to_apply)?;
+
+    // 5. 获取数据库路径并备份
     let db_path = db::get_db_path()?;
     if db_path.exists() {
         let backup_path = db_path.with_extension("vscdb.backup");
@@ -433,7 +458,7 @@ pub async fn switch_account(account_id: &str) -> Result<(), String> {
         crate::modules::logger::log_info("数据库不存在，跳过备份");
     }
 
-    // 5. 注入 Token
+    // 6. 注入 Token
     crate::modules::logger::log_info("正在注入 Token 到数据库...");
     db::inject_token(
         &db_path,
@@ -442,7 +467,7 @@ pub async fn switch_account(account_id: &str) -> Result<(), String> {
         account.token.expiry_timestamp,
     )?;
 
-    // 6. 更新工具内部状态
+    // 7. 更新工具内部状态
     {
         let _lock = ACCOUNT_INDEX_LOCK
             .lock()
@@ -455,12 +480,155 @@ pub async fn switch_account(account_id: &str) -> Result<(), String> {
     account.update_last_used();
     save_account(&account)?;
 
-    // 7. 重启 Antigravity
+    // 8. 重启 Antigravity
     process::start_antigravity()?;
     crate::modules::logger::log_info(&format!("账号切换完成: {}", account.email));
 
     Ok(())
 }
+
+/// 获取设备指纹信息：当前 storage.json + 账号绑定的 profile
+#[derive(Debug, Serialize)]
+pub struct DeviceProfiles {
+    pub current_storage: Option<DeviceProfile>,
+    pub bound_profile: Option<DeviceProfile>,
+    pub history: Vec<DeviceProfileVersion>,
+    pub baseline: Option<DeviceProfile>,
+}
+
+pub fn get_device_profiles(account_id: &str) -> Result<DeviceProfiles, String> {
+    let storage_path = crate::modules::device::get_storage_path()?;
+    let current = crate::modules::device::read_profile(&storage_path).ok();
+    let account = load_account(account_id)?;
+    Ok(DeviceProfiles {
+        current_storage: current,
+        bound_profile: account.device_profile.clone(),
+        history: account.device_history.clone(),
+        baseline: crate::modules::device::load_global_original(),
+    })
+}
+
+/// 绑定设备指纹并立即写入 storage.json
+pub fn bind_device_profile(account_id: &str, mode: &str) -> Result<DeviceProfile, String> {
+    use crate::modules::device;
+
+    let profile = match mode {
+        "capture" => device::read_profile(&device::get_storage_path()?)?,
+        "generate" => device::generate_profile(),
+        _ => return Err("mode 只能是 capture 或 generate".to_string()),
+    };
+
+    let mut account = load_account(account_id)?;
+    let _ = device::save_global_original(&profile);
+    apply_profile_to_account(&mut account, profile.clone(), Some(mode.to_string()), true)?;
+
+    Ok(profile)
+}
+
+/// 直接使用提供的 profile 进行绑定
+pub fn bind_device_profile_with_profile(account_id: &str, profile: DeviceProfile, label: Option<String>) -> Result<DeviceProfile, String> {
+    let mut account = load_account(account_id)?;
+    let _ = crate::modules::device::save_global_original(&profile);
+    apply_profile_to_account(&mut account, profile.clone(), label, true)?;
+
+    Ok(profile)
+}
+
+fn apply_profile_to_account(account: &mut Account, profile: DeviceProfile, label: Option<String>, add_history: bool) -> Result<(), String> {
+    account.device_profile = Some(profile.clone());
+    if add_history {
+        // 清除 current 标记
+        for h in account.device_history.iter_mut() {
+            h.is_current = false;
+        }
+        account.device_history.push(DeviceProfileVersion {
+            id: Uuid::new_v4().to_string(),
+            created_at: chrono::Utc::now().timestamp(),
+            label: label.unwrap_or_else(|| "generated".to_string()),
+            profile: profile.clone(),
+            is_current: true,
+        });
+    }
+    save_account(account)?;
+    Ok(())
+}
+
+/// 列出指定账号的可用指纹版本（含基线）
+pub fn list_device_versions(account_id: &str) -> Result<DeviceProfiles, String> {
+    get_device_profiles(account_id)
+}
+
+/// 根据版本ID恢复指纹（baseline 使用 special id "baseline"，当前绑定为 "current"）
+pub fn restore_device_version(account_id: &str, version_id: &str) -> Result<DeviceProfile, String> {
+    let mut account = load_account(account_id)?;
+
+    let target_profile = if version_id == "baseline" {
+        crate::modules::device::load_global_original().ok_or("未找到全局原始指纹")?
+    } else if let Some(v) = account.device_history.iter().find(|v| v.id == version_id) {
+        v.profile.clone()
+    } else if version_id == "current" {
+        account.device_profile.clone().ok_or("没有当前绑定的指纹")?
+    } else {
+        return Err("未找到对应的指纹版本".to_string());
+    };
+
+    account.device_profile = Some(target_profile.clone());
+    for h in account.device_history.iter_mut() {
+        h.is_current = h.id == version_id;
+    }
+    save_account(&account)?;
+    Ok(target_profile)
+}
+
+/// 删除指定历史指纹（baseline 不可删除）
+pub fn delete_device_version(account_id: &str, version_id: &str) -> Result<(), String> {
+    if version_id == "baseline" {
+        return Err("原始指纹不可删除".to_string());
+    }
+    let mut account = load_account(account_id)?;
+    if account.device_history.iter().any(|v| v.id == version_id && v.is_current) {
+        return Err("当前指纹不可删除".to_string());
+    }
+    let before = account.device_history.len();
+    account.device_history.retain(|v| v.id != version_id);
+    if account.device_history.len() == before {
+        return Err("未找到对应的历史指纹".to_string());
+    }
+    save_account(&account)?;
+    Ok(())
+}
+/// 应用账号绑定的设备指纹到 storage.json
+pub fn apply_device_profile(account_id: &str) -> Result<DeviceProfile, String> {
+    use crate::modules::device;
+    let mut account = load_account(account_id)?;
+    let profile = account
+        .device_profile
+        .clone()
+        .ok_or("该账号尚未绑定设备指纹")?;
+    let storage_path = device::get_storage_path()?;
+    device::write_profile(&storage_path, &profile)?;
+    account.update_last_used();
+    save_account(&account)?;
+    Ok(profile)
+}
+
+/// 恢复最早的 storage.json 备份（近似“原始”状态）
+pub fn restore_original_device() -> Result<String, String> {
+    if let Some(current_id) = get_current_account_id()? {
+        if let Ok(mut account) = load_account(&current_id) {
+            if let Some(original) = crate::modules::device::load_global_original() {
+                account.device_profile = Some(original);
+                for h in account.device_history.iter_mut() {
+                    h.is_current = false;
+                }
+                save_account(&account)?;
+                return Ok("已将当前账号绑定指纹重置为原始指纹（未应用到存储）".to_string());
+            }
+        }
+    }
+    Err("未找到原始指纹，无法恢复".to_string())
+}
+
 
 /// 获取当前账号 ID
 pub fn get_current_account_id() -> Result<Option<String>, String> {
@@ -491,6 +659,71 @@ pub fn set_current_account_id(account_id: &str) -> Result<(), String> {
 pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), String> {
     let mut account = load_account(account_id)?;
     account.update_quota(quota);
+
+    // --- 配额保护逻辑开始 ---
+    if let Ok(config) = crate::modules::config::load_app_config() {
+        if config.quota_protection.enabled {
+            let mut min_percentage = 101; 
+            let mut min_model_name = String::new();
+            let mut has_models = false;
+            
+            if let Some(ref q) = account.quota {
+                for model in &q.models {
+                    // 仅对用户勾选的模型进行监控
+                    if !config.quota_protection.monitored_models.contains(&model.name) {
+                        continue;
+                    }
+                    
+                    has_models = true;
+                    if model.percentage < min_percentage {
+                        min_percentage = model.percentage;
+                        min_model_name = model.name.clone();
+                    }
+                }
+            }
+
+            if has_models {
+                let threshold = config.quota_protection.threshold_percentage as i32;
+                
+                if min_percentage <= threshold {
+                    // 触发保护
+                    let is_already_protected = account.proxy_disabled && 
+                        account.proxy_disabled_reason.as_ref().map_or(false, |r| r.contains("quota_protection"));
+                    
+                    if !account.proxy_disabled || is_already_protected {
+                        if !account.proxy_disabled {
+                            crate::modules::logger::log_info(&format!(
+                                "[Quota] 触发保护: {} ({} 剩余 {}% <= 阈值 {}%)",
+                                account.email, min_model_name, min_percentage, threshold
+                            ));
+                        }
+                        account.proxy_disabled = true;
+                        account.proxy_disabled_at = Some(chrono::Utc::now().timestamp());
+                        account.proxy_disabled_reason = Some(format!(
+                            "quota_protection: {} ({}% <= {}%)",
+                            min_model_name, min_percentage, threshold
+                        ));
+                    }
+                } else {
+                    // 检查是否需要自动恢复
+                    let is_protected = account.proxy_disabled && 
+                        account.proxy_disabled_reason.as_ref().map_or(false, |r| r.contains("quota_protection"));
+                        
+                    if is_protected {
+                        crate::modules::logger::log_info(&format!(
+                            "[Quota] 自动恢复: {} (监控模型最低额度已恢复至 {}%)",
+                            account.email, min_percentage
+                        ));
+                        account.proxy_disabled = false;
+                        account.proxy_disabled_reason = None;
+                        account.proxy_disabled_at = None;
+                    }
+                }
+            }
+        }
+    }
+    // --- 配额保护逻辑结束 ---
+
     save_account(&account)
 }
 
@@ -686,4 +919,105 @@ pub async fn fetch_quota_with_retry(account: &mut Account) -> crate::error::AppR
 
     // fetch_quota 已经处理了 403 错误,这里直接返回结果
     result.map(|(q, _)| q)
+}
+
+#[derive(Serialize)]
+pub struct RefreshStats {
+    pub total: usize,
+    pub success: usize,
+    pub failed: usize,
+    pub details: Vec<String>,
+}
+
+/// 批量刷新所有账号配额的核心逻辑 (不依赖 Tauri 状态)
+pub async fn refresh_all_quotas_logic() -> Result<RefreshStats, String> {
+    use futures::future::join_all;
+    use std::sync::Arc;
+    use tokio::sync::Semaphore;
+
+    const MAX_CONCURRENT: usize = 5;
+    let start = std::time::Instant::now();
+
+    crate::modules::logger::log_info(&format!(
+        "开始批量刷新所有账号配额 (并发模式, 最大并发: {})",
+        MAX_CONCURRENT
+    ));
+    let accounts = list_accounts()?;
+
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT));
+
+    let tasks: Vec<_> = accounts
+        .into_iter()
+        .filter(|account| {
+            if account.disabled {
+                crate::modules::logger::log_info(&format!("  - Skipping {} (Disabled)", account.email));
+                return false;
+            }
+            if let Some(ref q) = account.quota {
+                if q.is_forbidden {
+                    crate::modules::logger::log_info(&format!("  - Skipping {} (Forbidden)", account.email));
+                    return false;
+                }
+            }
+            true
+        })
+        .map(|mut account| {
+            let email = account.email.clone();
+            let account_id = account.id.clone();
+            let permit = semaphore.clone();
+            async move {
+                let _guard = permit.acquire().await.unwrap();
+                crate::modules::logger::log_info(&format!("  - Processing {}", email));
+                match fetch_quota_with_retry(&mut account).await {
+                    Ok(quota) => {
+                        if let Err(e) = update_account_quota(&account_id, quota) {
+                            let msg = format!("Account {}: Save quota failed - {}", email, e);
+                            crate::modules::logger::log_error(&msg);
+                            Err(msg)
+                        } else {
+                            crate::modules::logger::log_info(&format!("    ✅ {} Success", email));
+                            Ok(())
+                        }
+                    }
+                    Err(e) => {
+                        let msg = format!("Account {}: Fetch quota failed - {}", email, e);
+                        crate::modules::logger::log_error(&msg);
+                        Err(msg)
+                    }
+                }
+            }
+        })
+        .collect();
+
+    let total = tasks.len();
+    let results = join_all(tasks).await;
+
+    let mut success = 0;
+    let mut failed = 0;
+    let mut details = Vec::new();
+
+    for result in results {
+        match result {
+            Ok(()) => success += 1,
+            Err(msg) => {
+                failed += 1;
+                details.push(msg);
+            }
+        }
+    }
+
+    let elapsed = start.elapsed();
+    crate::modules::logger::log_info(&format!(
+        "批量刷新完成: {} 成功, {} 失败, 耗时: {}ms",
+        success,
+        failed,
+        elapsed.as_millis()
+    ));
+
+    Ok(RefreshStats {
+        total,
+        success,
+        failed,
+        details,
+    })
 }

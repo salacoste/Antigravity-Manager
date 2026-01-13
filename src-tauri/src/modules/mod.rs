@@ -19,6 +19,10 @@ pub mod signature_cache; // Epic-025 Story-025-02
 pub mod thinking_quality; // Epic-025 Story-025-04
 pub mod tray;
 pub mod weekly_tuner; // Epic-025 Week 7
+// Upstream modules (Story-027)
+pub mod device; // Story-027-10: Device Binding
+pub mod update_checker; // Story-027-09: Update Notifications
+pub mod scheduler; // Story-027-11: Smart Warmup System
 
 use crate::models;
 
@@ -29,6 +33,7 @@ pub use config::*;
 pub use logger::*;
 #[allow(unused_imports)]
 pub use quota::*;
+// Note: device::* not re-exported by default to avoid namespace pollution
 
 pub async fn fetch_quota(
     access_token: &str,

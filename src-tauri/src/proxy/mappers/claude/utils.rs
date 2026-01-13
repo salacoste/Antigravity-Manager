@@ -7,22 +7,12 @@
 // 例如: "string" -> "STRING", "integer" -> "INTEGER"
 // 已移除未使用的 uppercase_schema_types 函数
 
-/// 从 Gemini UsageMetadata 转换为 Claude Usage
-pub fn to_claude_usage(usage_metadata: &super::models::UsageMetadata) -> super::models::Usage {
+pub fn to_claude_usage(usage_metadata: &super::models::UsageMetadata, scaling_enabled: bool) -> super::models::Usage {
     let prompt_tokens = usage_metadata.prompt_token_count.unwrap_or(0);
     let cached_tokens = usage_metadata.cached_content_token_count.unwrap_or(0);
-
     super::models::Usage {
-        // input_tokens 应该排除缓存的部分
-        input_tokens: prompt_tokens.saturating_sub(cached_tokens),
+        input_tokens: reported_input,
         output_tokens: usage_metadata.candidates_token_count.unwrap_or(0),
-        // 缓存统计
-        cache_read_input_tokens: if cached_tokens > 0 {
-            Some(cached_tokens)
-        } else {
-            None
-        },
-        cache_creation_input_tokens: Some(0), // Gemini 不提供此字段,设为 0
         server_tool_use: None,
     }
 }
@@ -48,7 +38,7 @@ mod tests {
             cached_content_token_count: None,
         };
 
-        let claude_usage = to_claude_usage(&usage);
+        let claude_usage = to_claude_usage(&usage, true);
         assert_eq!(claude_usage.input_tokens, 100);
         assert_eq!(claude_usage.output_tokens, 50);
     }

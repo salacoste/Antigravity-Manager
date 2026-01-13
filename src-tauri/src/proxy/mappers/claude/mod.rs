@@ -27,6 +27,8 @@ pub fn create_claude_sse_stream(
     mut gemini_stream: Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>>,
     trace_id: String,
     email: String,
+    session_id: Option<String>, // [NEW v3.3.17] Session ID for signature caching
+    scaling_enabled: bool, // [NEW] Flag for context usage scaling
 ) -> Pin<Box<dyn Stream<Item = Result<Bytes, String>> + Send>> {
     use async_stream::stream;
     use bytes::BytesMut;
@@ -34,6 +36,8 @@ pub fn create_claude_sse_stream(
 
     Box::pin(stream! {
         let mut state = StreamingState::new();
+        state.session_id = session_id; // Set session ID for signature caching
+        state.scaling_enabled = scaling_enabled; // Set scaling enabled flag
         let mut buffer = BytesMut::new();
 
         while let Some(chunk_result) = gemini_stream.next().await {
@@ -228,7 +232,7 @@ pub fn emit_force_stop(state: &mut StreamingState) -> Vec<Bytes> {
 /// Process grounding metadata from Gemini's googleSearch and emit as Claude web_search blocks
 ///
 /// Epic-007: Grounding metadata processing - deferred to future sprint
-/// TODO: Integrate when grounding support is fully implemented (Epic-007 continuation)
+/// Temporarily disabled for Cherry Studio compatibility, kept for future use
 #[allow(dead_code)]
 fn process_grounding_metadata(
     metadata: &serde_json::Value,

@@ -2,9 +2,15 @@ use crate::models::QuotaData;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use crate::modules::config;
 
 const QUOTA_API_URL: &str = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
 const USER_AGENT: &str = "antigravity/1.11.3 Darwin/arm64";
+
+/// 临界值重试阈值：当配额达到 95% 时认为接近恢复
+const NEAR_READY_THRESHOLD: i32 = 95;
+const MAX_RETRIES: u32 = 3;
+const RETRY_DELAY_SECS: u64 = 30;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct QuotaResponse {
@@ -50,6 +56,10 @@ struct Tier {
 /// 创建配置好的 HTTP Client
 fn create_client() -> reqwest::Client {
     crate::utils::http::create_client(15)
+}
+
+fn create_warmup_client() -> reqwest::Client {
+    crate::utils::http::create_client(60) // 60 秒超时
 }
 
 const CLOUD_CODE_BASE_URL: &str = "https://cloudcode-pa.googleapis.com";
@@ -112,23 +122,24 @@ async fn fetch_project_id(access_token: &str, email: &str) -> (Option<String>, O
 }
 
 /// 查询账号配额的统一入口
-pub async fn fetch_quota(
-    access_token: &str,
-    email: &str,
-) -> crate::error::AppResult<(QuotaData, Option<String>)> {
-    fetch_quota_inner(access_token, email).await
+pub async fn fetch_quota(access_token: &str, email: &str) -> crate::error::AppResult<(QuotaData, Option<String>)> {
+    fetch_quota_with_cache(access_token, email, None).await
 }
 
-/// 查询账号配额逻辑
-pub async fn fetch_quota_inner(
+/// 带缓存的配额查询 (Story-027-01: Aggressive Context Scaling)
+pub async fn fetch_quota_with_cache(
     access_token: &str,
     email: &str,
+    cached_project_id: Option<&str>,
 ) -> crate::error::AppResult<(QuotaData, Option<String>)> {
     use crate::error::AppError;
-    // crate::modules::logger::log_info(&format!("[{}] 开始外部查询配额...", email));
 
-    // 1. 获取 Project ID 和订阅类型
-    let (project_id, subscription_tier) = fetch_project_id(access_token, email).await;
+    // 优化：如果有缓存的 project_id，跳过 loadCodeAssist 调用以节省 API 配额
+    let (project_id, subscription_tier) = if let Some(pid) = cached_project_id {
+        (Some(pid.to_string()), None)
+    } else {
+        fetch_project_id(access_token, email).await
+    };
 
     let final_project_id = project_id.as_deref().unwrap_or("bamboo-precept-lgxtn");
 
@@ -229,6 +240,11 @@ pub async fn fetch_quota_inner(
     Err(last_error.unwrap_or_else(|| AppError::Unknown("配额查询失败".to_string())))
 }
 
+/// 查询账号配额逻辑
+pub async fn fetch_quota_inner(access_token: &str, email: &str) -> crate::error::AppResult<(QuotaData, Option<String>)> {
+    fetch_quota_with_cache(access_token, email, None).await
+}
+
 /// 批量查询所有账号配额 (备用功能)
 #[allow(dead_code)]
 pub async fn fetch_all_quotas(
@@ -245,4 +261,204 @@ pub async fn fetch_all_quotas(
     }
 
     results
+}
+
+/// 获取有效 token（自动刷新过期的）
+pub async fn get_valid_token_for_warmup(account: &crate::models::account::Account) -> Result<(String, String), String> {
+    let mut account = account.clone();
+    
+    // 检查并自动刷新 token
+    let new_token = crate::modules::oauth::ensure_fresh_token(&account.token).await?;
+    
+    // 如果 token 改变了（意味着刷新了），保存它
+    if new_token.access_token != account.token.access_token {
+        account.token = new_token;
+        if let Err(e) = crate::modules::account::save_account(&account) {
+            crate::modules::logger::log_warn(&format!("[Warmup] 保存刷新后的 Token 失败: {}", e));
+        } else {
+            crate::modules::logger::log_info(&format!("[Warmup] 成功为 {} 刷新并保存了新 Token", account.email));
+        }
+    }
+    
+    // 获取 project_id
+    let (project_id, _) = fetch_project_id(&account.token.access_token, &account.email).await;
+    let final_pid = project_id.unwrap_or_else(|| "bamboo-precept-lgxtn".to_string());
+    
+    Ok((account.token.access_token, final_pid))
+}
+
+/// 通过代理内部 API 发送预热请求
+pub async fn warmup_model_directly(
+    access_token: &str,
+    model_name: &str,
+    project_id: &str,
+    email: &str,
+    percentage: i32,
+) -> bool {
+    // 获取当前配置的代理端口
+    let port = config::load_app_config()
+        .map(|c| c.proxy.port)
+        .unwrap_or(8045);
+
+    let warmup_url = format!("http://127.0.0.1:{}/internal/warmup", port);
+    let body = json!({
+        "email": email,
+        "model": model_name,
+        "access_token": access_token,
+        "project_id": project_id
+    });
+
+    let client = create_warmup_client();
+    let resp = client
+        .post(&warmup_url)
+        .header("Content-Type", "application/json")
+        .json(&body)
+        .send()
+        .await;
+
+    match resp {
+        Ok(response) => {
+            let status = response.status();
+            if status.is_success() {
+                crate::modules::logger::log_info(&format!("[Warmup] ✓ Triggered {} for {} (was {}%)", model_name, email, percentage));
+                true
+            } else {
+                let text = response.text().await.unwrap_or_default();
+                crate::modules::logger::log_warn(&format!("[Warmup] ✗ {} for {} (was {}%): HTTP {} - {}", model_name, email, percentage, status, text));
+                false
+            }
+        }
+        Err(e) => {
+            crate::modules::logger::log_warn(&format!("[Warmup] ✗ {} for {} (was {}%): {}", model_name, email, percentage, e));
+            false
+        }
+    }
+}
+
+/// 智能预热所有账号
+pub async fn warm_up_all_accounts() -> Result<String, String> {
+    let mut retry_count = 0;
+    
+    loop {
+        let target_accounts = crate::modules::account::list_accounts().unwrap_or_default();
+
+        if target_accounts.is_empty() {
+            return Ok("没有可用账号".to_string());
+        }
+
+        crate::modules::logger::log_info(&format!("[Warmup] 开始筛选 {} 个账号的模型...", target_accounts.len()));
+
+        let mut warmup_items = Vec::new();
+        let mut has_near_ready_models = false;
+
+        for account in &target_accounts {
+            let (token, pid) = match get_valid_token_for_warmup(account).await {
+                Ok(t) => t,
+                Err(e) => {
+                    crate::modules::logger::log_warn(&format!("[Warmup] 账号 {} 准备失败: {}", account.email, e));
+                    continue;
+                }
+            };
+
+            // 获取最新实时配额
+            if let Ok((fresh_quota, _)) = fetch_quota_with_cache(&token, &account.email, Some(&pid)).await {
+                let mut account_warmed_series = std::collections::HashSet::new();
+                for m in fresh_quota.models {
+                    if m.percentage >= 100 {
+                        // 1. 映射逻辑
+                        let model_to_ping = if m.name == "gemini-2.5-flash" { "gemini-3-flash".to_string() } else { m.name.clone() };
+                        
+                        // 2. 严格白名单过滤
+                        match model_to_ping.as_str() {
+                            "gemini-3-flash" | "claude-sonnet-4-5" | "gemini-3-pro-high" | "gemini-3-pro-image" => {
+                                if !account_warmed_series.contains(&model_to_ping) {
+                                    warmup_items.push((account.email.clone(), model_to_ping.clone(), token.clone(), pid.clone(), m.percentage));
+                                    account_warmed_series.insert(model_to_ping);
+                                }
+                            }
+                            _ => continue,
+                        }
+                    } else if m.percentage >= NEAR_READY_THRESHOLD {
+                        has_near_ready_models = true;
+                    }
+                }
+            }
+        }
+
+        if !warmup_items.is_empty() {
+            let total = warmup_items.len();
+            tokio::spawn(async move {
+                let mut success = 0;
+                let round_total = warmup_items.len();
+                for (idx, (email, model, token, pid, pct)) in warmup_items.into_iter().enumerate() {
+                    if warmup_model_directly(&token, &model, &pid, &email, pct).await {
+                        success += 1;
+                    }
+                    if idx < round_total - 1 {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    }
+                }
+                crate::modules::logger::log_info(&format!("[Warmup] 预热任务完成: 成功 {}/{}", success, total));
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        let _ = crate::modules::account::refresh_all_quotas_logic().await;
+            });
+            return Ok(format!("已启动 {} 个模型的预热任务", total));
+        }
+
+        if has_near_ready_models && retry_count < MAX_RETRIES {
+            retry_count += 1;
+            crate::modules::logger::log_info(&format!("[Warmup] 检测到临界恢复模型，等待 {}s 后重试 ({}/{})", RETRY_DELAY_SECS, retry_count, MAX_RETRIES));
+            tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_DELAY_SECS)).await;
+            continue;
+        }
+
+        return Ok("没有模型需要预热".to_string());
+    }
+}
+
+/// 单账号预热
+pub async fn warm_up_account(account_id: &str) -> Result<String, String> {
+    let accounts = crate::modules::account::list_accounts().unwrap_or_default();
+    let account_owned = accounts.iter().find(|a| a.id == account_id).cloned().ok_or_else(|| "账号未找到".to_string())?;
+    
+    let email = account_owned.email.clone();
+    let (token, pid) = get_valid_token_for_warmup(&account_owned).await?;
+    let (fresh_quota, _) = fetch_quota_with_cache(&token, &email, Some(&pid)).await.map_err(|e| format!("查询配额失败: {}", e))?;
+    
+    let mut models_to_warm = Vec::new();
+    let mut warmed_series = std::collections::HashSet::new();
+
+    for m in fresh_quota.models {
+        if m.percentage >= 100 {
+            // 1. 映射逻辑
+            let model_name = if m.name == "gemini-2.5-flash" { "gemini-3-flash".to_string() } else { m.name.clone() };
+            
+            // 2. 严格白名单过滤
+            match model_name.as_str() {
+                "gemini-3-flash" | "claude-sonnet-4-5" | "gemini-3-pro-high" | "gemini-3-pro-image" => {
+                    if !warmed_series.contains(&model_name) {
+                        models_to_warm.push((model_name.clone(), m.percentage));
+                        warmed_series.insert(model_name);
+                    }
+                }
+                _ => continue,
+            }
+        }
+    }
+
+    if models_to_warm.is_empty() {
+        return Ok("无需预热".to_string());
+    }
+
+    let warmed_count = models_to_warm.len();
+    
+    tokio::spawn(async move {
+        for (name, pct) in models_to_warm {
+            warmup_model_directly(&token, &name, &pid, &email, pct).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        }
+        let _ = crate::modules::account::refresh_all_quotas_logic().await;
+    });
+
+    Ok(format!("成功触发 {} 个系列的模型预热", warmed_count))
 }
