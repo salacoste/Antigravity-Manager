@@ -1034,6 +1034,63 @@ impl TokenManager {
     pub fn clear_all_sessions(&self) {
         self.session_accounts.clear();
     }
+
+    // ============================================================================
+    // Epic-024: Adaptive Model Selection Integration
+    // ============================================================================
+
+    /// Get model recommendation based on request complexity
+    pub async fn get_recommended_model(
+        &self,
+        messages: &[crate::modules::model_selector::RequestMessage],
+    ) -> Result<String, String> {
+        if let Some(ref recommender) = self.model_recommender {
+            let recommendation = recommender.as_ref().recommend_model(messages).await;
+            tracing::debug!(
+                "Model recommendation: {} (complexity: {:?}, confidence: {:.2}, reason: {})",
+                recommendation.model_name,
+                recommendation.complexity,
+                recommendation.confidence,
+                recommendation.reasoning
+            );
+            Ok(recommendation.model_id)
+        } else {
+            tracing::debug!("Model recommender disabled, defaulting to thinking model (313)");
+            Ok("313".to_string())
+        }
+    }
+
+    /// Get cost tracking statistics from model recommender
+    pub async fn get_model_cost_stats(
+        &self,
+    ) -> Result<crate::modules::model_selector::CostStats, String> {
+        if let Some(ref recommender) = self.model_recommender {
+            Ok(recommender.as_ref().get_cost_stats().await)
+        } else {
+            Err("Model recommender not initialized".to_string())
+        }
+    }
+
+    /// Reset model selection cost statistics
+    pub async fn reset_model_cost_stats(&self) -> Result<(), String> {
+        if let Some(ref recommender) = self.model_recommender {
+            recommender.as_ref().reset_cost_stats().await;
+            Ok(())
+        } else {
+            Err("Model recommender not initialized".to_string())
+        }
+    }
+
+    /// Enable or disable adaptive model selection
+    pub fn set_adaptive_model_selection(&mut self, enabled: bool) {
+        if enabled && self.model_recommender.is_none() {
+            self.model_recommender = Some(Arc::new(ModelRecommender::new()));
+            tracing::info!("Adaptive model selection enabled (Epic-024)");
+        } else if !enabled {
+            self.model_recommender = None;
+            tracing::info!("Adaptive model selection disabled");
+        }
+    }
 }
 
 fn truncate_reason(reason: &str, max_len: usize) -> String {

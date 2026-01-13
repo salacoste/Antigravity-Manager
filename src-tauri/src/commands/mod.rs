@@ -8,6 +8,8 @@ pub mod proxy;
 pub mod autostart;
 // 导出 detection 命令 (Story-024-04 Part 2)
 pub mod detection;
+// 导出 budget 命令 (Epic-025 Story-025-01)
+pub mod budget;
 
 /// 列出所有账号
 #[tauri::command]

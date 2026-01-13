@@ -57,9 +57,7 @@ pub async fn get_budget_metrics(
 
 /// Reset optimization metrics (useful for testing)
 #[tauri::command]
-pub async fn reset_budget_metrics(
-    state: State<'_, BudgetOptimizerState>,
-) -> Result<(), String> {
+pub async fn reset_budget_metrics(state: State<'_, BudgetOptimizerState>) -> Result<(), String> {
     state.optimizer.reset_metrics().await;
     Ok(())
 }
@@ -70,10 +68,7 @@ pub async fn test_budget_allocation(
     state: State<'_, BudgetOptimizerState>,
 ) -> Result<Vec<BudgetAllocation>, String> {
     let test_cases = vec![
-        (
-            "What is the weather today?",
-            vec![],
-        ),
+        ("What is the weather today?", vec![]),
         (
             "First, analyze the data. Then, process it. Finally, generate a report.",
             vec![],

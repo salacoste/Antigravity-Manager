@@ -108,15 +108,43 @@ impl KeywordDetector {
     fn new() -> Self {
         Self {
             multi_step_keywords: vec![
-                "first", "then", "next", "after", "finally", "lastly",
-                "step", "stage", "phase", "initially", "subsequently",
+                "first",
+                "then",
+                "next",
+                "after",
+                "finally",
+                "lastly",
+                "step",
+                "stage",
+                "phase",
+                "initially",
+                "subsequently",
             ],
             technical_terms: vec![
-                "function", "class", "method", "variable", "parameter",
-                "return", "import", "export", "async", "await",
-                "interface", "type", "struct", "enum", "trait",
-                "algorithm", "optimization", "performance", "refactor",
-                "database", "query", "schema", "migration", "index",
+                "function",
+                "class",
+                "method",
+                "variable",
+                "parameter",
+                "return",
+                "import",
+                "export",
+                "async",
+                "await",
+                "interface",
+                "type",
+                "struct",
+                "enum",
+                "trait",
+                "algorithm",
+                "optimization",
+                "performance",
+                "refactor",
+                "database",
+                "query",
+                "schema",
+                "migration",
+                "index",
             ],
         }
     }
@@ -210,7 +238,9 @@ impl ComplexityClassifier {
         }
 
         // Factor 2: Multi-step reasoning keywords (+1 per keyword)
-        let multi_step_count = self.keyword_detector.count_multi_step_keywords(request_text);
+        let multi_step_count = self
+            .keyword_detector
+            .count_multi_step_keywords(request_text);
         if multi_step_count > 0 {
             let score = multi_step_count as i32;
             factors.insert("multi_step_keywords".to_string(), score);
@@ -374,7 +404,8 @@ mod tests {
     #[test]
     fn test_multi_step_reasoning() {
         let classifier = ComplexityClassifier::new();
-        let request = "First, analyze the data. Then, process the results. Finally, generate a report.";
+        let request =
+            "First, analyze the data. Then, process the results. Finally, generate a report.";
         let messages = vec![];
 
         let allocation = classifier.classify(request, &messages);
@@ -472,11 +503,7 @@ Finally, add proper error handling and documentation.
 
         // Simulate 10 simple requests (4096 tokens each)
         for _ in 0..10 {
-            let allocation = BudgetAllocation::new(
-                ComplexityTier::Simple,
-                0.9,
-                HashMap::new(),
-            );
+            let allocation = BudgetAllocation::new(ComplexityTier::Simple, 0.9, HashMap::new());
             metrics.record_allocation(&allocation);
         }
 

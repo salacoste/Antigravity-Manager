@@ -39,6 +39,7 @@ pub fn run() {
             });
         }))
         .manage(commands::proxy::ProxyServiceState::new())
+        .manage(commands::budget::BudgetOptimizerState::new())
         .setup(|app| {
             info!("Setup starting...");
             modules::tray::create_tray(app.handle())?;
@@ -150,6 +151,11 @@ pub fn run() {
             commands::detection::get_detection_statistics,
             commands::detection::get_recent_detection_events,
             commands::detection::clear_detection_events,
+            // Budget optimization 命令 (Epic-025 Story-025-01)
+            commands::budget::allocate_budget,
+            commands::budget::get_budget_metrics,
+            commands::budget::reset_budget_metrics,
+            commands::budget::test_budget_allocation,
             // 测试命令
             commands::test_model_fallback_notification,
             commands::open_devtools,

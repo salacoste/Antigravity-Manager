@@ -112,11 +112,7 @@ pub struct CachedSignature {
 
 impl CachedSignature {
     /// Creates a new cached signature entry
-    pub fn new(
-        signature: String,
-        conversation_id: String,
-        model_id: String,
-    ) -> Self {
+    pub fn new(signature: String, conversation_id: String, model_id: String) -> Self {
         Self {
             signature,
             created_at: Utc::now(),
@@ -419,12 +415,7 @@ impl SignatureCacheLRU {
     /// # Returns
     ///
     /// `true` if signature is valid, `false` otherwise
-    fn validate(
-        &self,
-        signature: &CachedSignature,
-        conversation_id: &str,
-        model_id: &str,
-    ) -> bool {
+    fn validate(&self, signature: &CachedSignature, conversation_id: &str, model_id: &str) -> bool {
         // Check format
         if !signature.is_valid_format() {
             tracing::warn!(
@@ -488,10 +479,7 @@ impl SignatureCacheLRU {
         let mut metrics = self.metrics.write().unwrap();
         metrics.reset();
 
-        tracing::info!(
-            entries_cleared = size_before,
-            "Signature cache cleared"
-        );
+        tracing::info!(entries_cleared = size_before, "Signature cache cleared");
     }
 
     /// Returns current cache metrics
@@ -646,19 +634,13 @@ mod tests {
         assert!(!short_sig.is_valid_format());
 
         // Invalid: empty
-        let empty_sig = CachedSignature::new(
-            "".to_string(),
-            "conv_1".to_string(),
-            "model_1".to_string(),
-        );
+        let empty_sig =
+            CachedSignature::new("".to_string(), "conv_1".to_string(), "model_1".to_string());
         assert!(!empty_sig.is_valid_format());
 
         // Invalid: too long
-        let long_sig = CachedSignature::new(
-            "a".repeat(201),
-            "conv_1".to_string(),
-            "model_1".to_string(),
-        );
+        let long_sig =
+            CachedSignature::new("a".repeat(201), "conv_1".to_string(), "model_1".to_string());
         assert!(!long_sig.is_valid_format());
 
         // Invalid: contains invalid characters
