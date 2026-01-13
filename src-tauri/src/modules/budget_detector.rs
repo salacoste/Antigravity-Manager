@@ -217,10 +217,7 @@ impl EscalationManager {
     /// Get escalation history for a request
     pub fn get_history(&self, request_id: &str) -> Vec<EscalationEvent> {
         let history = self.escalation_history.read().unwrap();
-        history
-            .get(request_id)
-            .cloned()
-            .unwrap_or_default()
+        history.get(request_id).cloned().unwrap_or_default()
     }
 
     /// Calculate escalation metrics

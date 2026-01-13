@@ -428,10 +428,16 @@ mod tests {
 
     #[test]
     fn test_subscription_tier_parse_tier() {
-        assert_eq!(SubscriptionTier::parse_tier("ULTRA"), SubscriptionTier::ULTRA);
+        assert_eq!(
+            SubscriptionTier::parse_tier("ULTRA"),
+            SubscriptionTier::ULTRA
+        );
         assert_eq!(SubscriptionTier::parse_tier("PRO"), SubscriptionTier::PRO);
         assert_eq!(SubscriptionTier::parse_tier("FREE"), SubscriptionTier::FREE);
-        assert_eq!(SubscriptionTier::parse_tier("ultra"), SubscriptionTier::ULTRA);
+        assert_eq!(
+            SubscriptionTier::parse_tier("ultra"),
+            SubscriptionTier::ULTRA
+        );
         assert_eq!(SubscriptionTier::parse_tier("pro"), SubscriptionTier::PRO);
         assert_eq!(
             SubscriptionTier::parse_tier("unknown"),

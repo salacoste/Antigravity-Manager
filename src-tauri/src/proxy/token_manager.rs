@@ -401,43 +401,63 @@ impl TokenManager {
     ) -> Result<(String, String, String), String> {
         // ===== Epic-001 QUOTA-001-02: Proactive Quota Validation =====
         // Try quota-aware selection first if quota manager enabled and model provided
-        if !force_rotate
-            && self.quota_manager.is_some()
-            && quota_group != "image_gen"
-        {
+        if !force_rotate && self.quota_manager.is_some() && quota_group != "image_gen" {
             if let Some(model_id) = model {
-
-            // 1. Try session-bound account first with quota validation
-            if let Some(sid) = session_id {
-                if let Some(bound_token) = self.get_bound_token(sid) {
-                    match self.validate_quota(&bound_token, model_id).await {
-                        Ok(QuotaDecision::Proceed) => {
-                            tracing::debug!(
-                                "Using session-bound account {} with healthy quota",
-                                bound_token.account_id
-                            );
-                            // Proceed to use bound account (continue to existing logic)
-                        }
-                        Ok(QuotaDecision::LowQuota {
-                            remaining,
-                            reset_time: _,
-                        }) => {
-                            tracing::warn!(
+                // 1. Try session-bound account first with quota validation
+                if let Some(sid) = session_id {
+                    if let Some(bound_token) = self.get_bound_token(sid) {
+                        match self.validate_quota(&bound_token, model_id).await {
+                            Ok(QuotaDecision::Proceed) => {
+                                tracing::debug!(
+                                    "Using session-bound account {} with healthy quota",
+                                    bound_token.account_id
+                                );
+                                // Proceed to use bound account (continue to existing logic)
+                            }
+                            Ok(QuotaDecision::LowQuota {
+                                remaining,
+                                reset_time: _,
+                            }) => {
+                                tracing::warn!(
                                 "Session-bound account {} has low quota ({:.1}%), continuing anyway",
                                 bound_token.account_id,
                                 remaining * 100.0
                             );
-                            // Proceed with low quota warning (continue to existing logic)
-                        }
-                        Ok(QuotaDecision::Exhausted { reset_time }) => {
-                            tracing::info!(
+                                // Proceed with low quota warning (continue to existing logic)
+                            }
+                            Ok(QuotaDecision::Exhausted { reset_time }) => {
+                                tracing::info!(
                                 "Session-bound account {} quota exhausted until {}, finding alternative",
                                 bound_token.account_id,
                                 reset_time
                             );
-                            // Switch to quota-aware selection
-                            let selected =
-                                self.select_account_with_quota(model_id, session_id).await?;
+                                // Switch to quota-aware selection
+                                let selected =
+                                    self.select_account_with_quota(model_id, session_id).await?;
+                                let project_id = selected
+                                    .project_id
+                                    .clone()
+                                    .ok_or_else(|| "Missing project_id".to_string())?;
+                                return Ok((selected.access_token, project_id, selected.email));
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                "Quota validation failed for {}: {}, using bound account anyway",
+                                bound_token.account_id,
+                                e
+                            );
+                                // Validation error, continue with bound account (existing logic)
+                            }
+                        }
+                    }
+                }
+
+                // 2. No session binding or quota check passed - use quota-aware selection for new account
+                if session_id.is_some() && !self.session_accounts.contains_key(session_id.unwrap())
+                {
+                    // Session not bound yet, use quota-aware selection
+                    match self.select_account_with_quota(model_id, session_id).await {
+                        Ok(selected) => {
                             let project_id = selected
                                 .project_id
                                 .clone()
@@ -445,37 +465,14 @@ impl TokenManager {
                             return Ok((selected.access_token, project_id, selected.email));
                         }
                         Err(e) => {
-                            tracing::error!(
-                                "Quota validation failed for {}: {}, using bound account anyway",
-                                bound_token.account_id,
-                                e
-                            );
-                            // Validation error, continue with bound account (existing logic)
-                        }
-                    }
-                }
-            }
-
-            // 2. No session binding or quota check passed - use quota-aware selection for new account
-            if session_id.is_some() && !self.session_accounts.contains_key(session_id.unwrap()) {
-                // Session not bound yet, use quota-aware selection
-                match self.select_account_with_quota(model_id, session_id).await {
-                    Ok(selected) => {
-                        let project_id = selected
-                            .project_id
-                            .clone()
-                            .ok_or_else(|| "Missing project_id".to_string())?;
-                        return Ok((selected.access_token, project_id, selected.email));
-                    }
-                    Err(e) => {
-                        tracing::warn!(
+                            tracing::warn!(
                             "Quota-aware selection failed: {}, falling back to standard selection",
                             e
                         );
-                        // Fall through to existing logic
+                            // Fall through to existing logic
+                        }
                     }
                 }
-            }
             }
         }
         // ===== End Epic-001 Integration =====
