@@ -1,11 +1,11 @@
 pub mod account;
-pub mod budget_optimizer;
+pub mod budget_optimizer; // Epic-025 Story-025-01
 pub mod config;
 pub mod db;
 pub mod i18n;
 pub mod logger;
 pub mod migration;
-pub mod model_selector;
+pub mod model_selector; // Epic-024 Story-024-02
 pub mod oauth;
 pub mod oauth_server;
 pub mod process;

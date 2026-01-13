@@ -8,11 +8,60 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use crate::modules::budget_optimizer::BudgetOptimizer;
 use crate::proxy::mappers::gemini::{unwrap_response, wrap_request};
 use crate::proxy::server::AppState;
 use crate::proxy::session_manager::SessionManager;
+use once_cell::sync::Lazy;
 
 const MAX_RETRY_ATTEMPTS: usize = 3;
+
+// Epic-025 Story-025-01: Global budget optimizer instance
+static BUDGET_OPTIMIZER: Lazy<BudgetOptimizer> = Lazy::new(BudgetOptimizer::new);
+
+/// Epic-025: Check if model is Gemini 2.5 Flash Thinking (Model ID 313)
+fn is_flash_thinking_model(model_id: &str) -> bool {
+    model_id == "313"
+        || model_id == "gemini-2.5-flash-thinking"
+        || model_id.contains("flash-thinking")
+}
+
+/// Epic-025: Extract request text and messages from Gemini request body
+fn extract_request_context(body: &Value) -> (String, Vec<Value>) {
+    let mut request_text = String::new();
+    let mut messages = Vec::new();
+
+    // Extract from systemInstruction
+    if let Some(sys_inst) = body.get("systemInstruction") {
+        if let Some(parts) = sys_inst.get("parts").and_then(|p| p.as_array()) {
+            for part in parts {
+                if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                    request_text.push_str(text);
+                    request_text.push(' ');
+                }
+            }
+        }
+    }
+
+    // Extract from contents (conversation history)
+    if let Some(contents) = body.get("contents").and_then(|c| c.as_array()) {
+        for content in contents {
+            messages.push(content.clone());
+
+            // Extract text from latest user message for complexity analysis
+            if let Some(parts) = content.get("parts").and_then(|p| p.as_array()) {
+                for part in parts {
+                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                        request_text.push_str(text);
+                        request_text.push(' ');
+                    }
+                }
+            }
+        }
+    }
+
+    (request_text.trim().to_string(), messages)
+}
 
 /// 处理 generateContent 和 streamGenerateContent
 /// 路径参数: model_name, method (e.g. "gemini-pro", "generateContent")
@@ -105,8 +154,51 @@ pub async fn handle_generate(
 
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
+        // Epic-025 Story-025-01: Apply budget optimization for Flash Thinking (Model ID 313)
+        let mut optimized_body = body.clone();
+        if is_flash_thinking_model(&mapped_model) {
+            let (request_text, messages) = extract_request_context(&body);
+
+            // Only optimize if we have meaningful content
+            if !request_text.is_empty() {
+                let allocation = BUDGET_OPTIMIZER
+                    .allocate_budget(&request_text, &messages)
+                    .await;
+
+                // Apply optimized budget to thinkingConfig
+                if let Some(gen_config) = optimized_body.get_mut("generationConfig") {
+                    if let Some(gen_obj) = gen_config.as_object_mut() {
+                        let thinking_config =
+                            gen_obj.entry("thinkingConfig").or_insert_with(|| json!({}));
+                        if let Some(think_obj) = thinking_config.as_object_mut() {
+                            think_obj
+                                .insert("thinkingBudget".to_string(), json!(allocation.budget));
+                        }
+                    }
+                } else {
+                    // Create generationConfig if it doesn't exist
+                    optimized_body["generationConfig"] = json!({
+                        "thinkingConfig": {
+                            "thinkingBudget": allocation.budget
+                        }
+                    });
+                }
+
+                info!(
+                    "[Epic-025] Budget optimization applied: model={}, tier={}, budget={}, confidence={:.2}, factors={:?}",
+                    mapped_model,
+                    allocation.tier.as_str(),
+                    allocation.budget,
+                    allocation.confidence,
+                    allocation.factors
+                );
+            } else {
+                debug!("[Epic-025] Skipping budget optimization (no content extracted)");
+            }
+        }
+
         // 5. 包装请求 (project injection)
-        let wrapped_body = wrap_request(&body, &project_id, &mapped_model);
+        let wrapped_body = wrap_request(&optimized_body, &project_id, &mapped_model);
 
         // 5. 上游调用
         let query_string = if is_stream { Some("alt=sse") } else { None };
