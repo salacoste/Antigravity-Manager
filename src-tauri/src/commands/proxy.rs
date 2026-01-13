@@ -1,3 +1,4 @@
+use crate::db::audio_metrics::AudioAnalytics; // Epic-014 Story-014-04
 use crate::proxy::monitor::{
     DetailedViolationMetrics, ProxyMonitor, ProxyRequestLog, ProxyStats, ViolationRates,
 };
@@ -598,4 +599,14 @@ pub async fn get_cost_breakdown(
 pub async fn reset_analytics() -> Result<(), String> {
     crate::proxy::analytics::ANALYTICS.reset().await;
     Ok(())
+}
+
+// ===== Epic-014 Story-014-04: Audio Analytics Commands =====
+
+/// Get audio transcription analytics for last N days
+/// Epic-014 Story-014-04 AC5: Dashboard integration
+#[tauri::command]
+pub async fn get_audio_analytics(days: Option<u32>) -> Result<AudioAnalytics, String> {
+    let days = days.unwrap_or(30); // Default to 30 days
+    crate::modules::proxy_db::get_audio_analytics(days)
 }

@@ -855,3 +855,13 @@ pub fn cleanup_old_audio_metrics(days: u32) -> Result<usize, String> {
 
     Ok(deleted)
 }
+
+/// Get audio analytics for last N days
+/// Epic-014 Story-014-04 AC5: Dashboard integration
+pub fn get_audio_analytics(days: u32) -> Result<crate::db::audio_metrics::AudioAnalytics, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    crate::db::audio_metrics::get_audio_analytics(&conn, days)
+        .map_err(|e| format!("Failed to get audio analytics: {}", e))
+}
