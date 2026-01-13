@@ -21,6 +21,8 @@ export interface TokenData {
     expiry_timestamp: number;
     token_type: string;
     email?: string;
+    project_id?: string; // Google Cloud project ID
+    session_id?: string; // Antigravity session ID
 }
 
 export interface QuotaData {

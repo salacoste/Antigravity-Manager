@@ -8,6 +8,7 @@ pub mod server;
 pub mod token_manager;
 
 // 新架构模块
+pub mod account_prioritizer; // Account prioritization (Epic-001 QUOTA-001-04)
 pub mod analytics; // Cost analytics and level distribution (Story-013-06)
 pub mod audio; // 音频处理模块 (PR #311)
 pub mod budget_optimizer; // Adaptive budget optimization (Story-008-01)

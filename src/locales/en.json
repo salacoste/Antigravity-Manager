@@ -638,6 +638,24 @@
             "position_yellow_fix": "Monitor message ordering in client implementations"
         }
     },
+    "quota": {
+        "title": "Quota Status",
+        "healthy": "Healthy",
+        "low": "Low Quota",
+        "exhausted": "Exhausted",
+        "remaining": "remaining",
+        "resetTime": "Reset",
+        "warningMessage": "Low quota - consider switching accounts",
+        "errorMessage": "Quota exhausted - will auto-switch",
+        "monitorStats": "Quota Monitor Statistics",
+        "totalAccounts": "Total Accounts",
+        "cachedQuotas": "Cached Quotas",
+        "exhaustedQuotas": "Exhausted Quotas",
+        "healthScore": "Health Score",
+        "expired": "expired",
+        "lastUpdated": "Last updated",
+        "refresh": "Refresh"
+    },
     "profiles": {
         "title": "Configuration Profiles",
         "subtitle": "Quick presets for Gemini 3 Pro High with optimized settings",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Users, Sparkles, Bot, AlertTriangle, ArrowRight, Download, RefreshCw } from 'lucide-react';
@@ -6,10 +6,19 @@ import { useAccountStore } from '../stores/useAccountStore';
 import CurrentAccount from '../components/dashboard/CurrentAccount';
 import BestAccounts from '../components/dashboard/BestAccounts';
 import AddAccountDialog from '../components/accounts/AddAccountDialog';
+import { QuotaStatusCard } from '../components/quota-manager/QuotaStatusCard';
+import { AccountTierBadge } from '../components/quota-manager/AccountTierBadge';
+import { MonitorStatsPanel } from '../components/quota-manager/MonitorStatsPanel';
 import { save } from '@tauri-apps/plugin-dialog';
 import { request as invoke } from '../utils/request';
 import { showToast } from '../components/common/ToastContainer';
 import { Account } from '../types/account';
+import {
+    getAccountQuotas,
+    getAccountTier,
+    QuotaStatus,
+    TierInfo
+} from '../services/quotaManagerService';
 
 function Dashboard() {
     const { t } = useTranslation();
@@ -92,6 +101,47 @@ function Dashboard() {
     };
 
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null);
+    const [tierInfo, setTierInfo] = useState<TierInfo | null>(null);
+    const [quotaLoading, setQuotaLoading] = useState(false);
+
+    // Fetch quota data using new QuotaManager service
+    const fetchQuotaData = useCallback(async () => {
+        if (!currentAccount) {
+            setQuotaStatus(null);
+            setTierInfo(null);
+            return;
+        }
+
+        setQuotaLoading(true);
+        try {
+            // Use email as account_id and get project_id from token
+            const accountId = currentAccount.email;
+            const projectId = currentAccount.token.project_id || '';
+
+            const [quotas, tier] = await Promise.all([
+                getAccountQuotas(
+                    accountId,
+                    currentAccount.token.access_token,
+                    projectId
+                ),
+                getAccountTier(accountId, currentAccount.token.access_token),
+            ]);
+
+            setQuotaStatus(quotas);
+            setTierInfo(tier);
+        } catch (error) {
+            console.error('[Dashboard] Failed to fetch quota data:', error);
+            // Silently fail - this is optional enhancement
+        } finally {
+            setQuotaLoading(false);
+        }
+    }, [currentAccount]);
+
+    // Fetch quota data when current account changes
+    useEffect(() => {
+        fetchQuotaData();
+    }, [fetchQuotaData]);
 
     const handleRefreshCurrent = async () => {
         if (!currentAccount) return;
@@ -101,6 +151,8 @@ function Dashboard() {
             await refreshQuota(currentAccount.id);
             // 刷新成功后重新获取最新数据
             await fetchCurrentAccount();
+            // Also refresh quota manager data
+            await fetchQuotaData();
             showToast(t('dashboard.toast.refresh_success'), 'success');
         } catch (error) {
             console.error('[Dashboard] Refresh failed:', error);
@@ -158,13 +210,17 @@ function Dashboard() {
                 <div
                     className="flex justify-between items-center"
                 >
-                    <div>
+                    <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold text-gray-900 dark:text-base-content">
                             {currentAccount
                                 ? t('dashboard.hello').replace('用户', currentAccount.name || currentAccount.email.split('@')[0])
                                 : t('dashboard.hello')
                             }
                         </h1>
+                        {/* Tier Badge */}
+                        {tierInfo && (
+                            <AccountTierBadge tier={tierInfo.tier} size="md" />
+                        )}
                     </div>
                     <div className="flex gap-2">
                         <AddAccountDialog onAdd={handleAddAccount} />
@@ -247,6 +303,32 @@ function Dashboard() {
                         <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{t('dashboard.quota_desc')}</div>
                     </div>
                 </div>
+
+                {/* Monitor Stats Panel */}
+                <MonitorStatsPanel autoRefresh refreshInterval={30000} />
+
+                {/* Quota Manager: Model Quotas */}
+                {quotaLoading ? (
+                    <div className="flex justify-center py-12">
+                        <span className="loading loading-spinner loading-lg"></span>
+                    </div>
+                ) : quotaStatus ? (
+                    <div>
+                        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-base-content">
+                            Model Quotas
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {Object.entries(quotaStatus.model_quotas).map(([modelId, quota]) => (
+                                <QuotaStatusCard
+                                    key={modelId}
+                                    accountId={quotaStatus.account_id}
+                                    modelId={modelId}
+                                    quota={quota}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
 
                 {/* 双栏布局 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

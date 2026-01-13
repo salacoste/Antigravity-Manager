@@ -12,6 +12,8 @@ pub mod detection;
 pub mod budget;
 // Epic-025 Story-025-04: Quality monitoring commands
 pub mod quality;
+// Epic-001 Phase 3: QuotaManager Dashboard Commands (QUOTA-001-06)
+pub mod quota_manager_commands;
 
 /// 列出所有账号
 #[tauri::command]

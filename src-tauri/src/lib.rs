@@ -44,6 +44,11 @@ pub fn run() {
         .manage(commands::proxy::ProxyServiceState::new())
         .manage(commands::budget::BudgetOptimizerState::new())
         .manage(commands::quality::QualityMonitorState::new())
+        .manage({
+            use crate::modules::quota_manager::QuotaManager;
+            use std::sync::Arc;
+            commands::quota_manager_commands::QuotaManagerState::new(Arc::new(QuotaManager::new(300)))
+        })
         .setup(|app| {
             info!("Setup starting...");
             modules::tray::create_tray(app.handle())?;
@@ -101,6 +106,11 @@ pub fn run() {
             // 配额命令
             commands::fetch_account_quota,
             commands::refresh_all_quotas,
+            // Epic-001 Phase 3: QuotaManager Dashboard Commands (QUOTA-001-06)
+            commands::quota_manager_commands::get_account_quotas,
+            commands::quota_manager_commands::get_account_tier,
+            commands::quota_manager_commands::get_quota_manager_stats,
+            commands::quota_manager_commands::clear_tier_cache,
             // 配置命令
             commands::load_config,
             commands::save_config,

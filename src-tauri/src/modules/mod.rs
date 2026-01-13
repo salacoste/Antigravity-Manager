@@ -12,8 +12,9 @@ pub mod oauth_server;
 pub mod process;
 pub mod proxy_db;
 pub mod quota;
-pub mod quota_cache; // Epic-024 quota caching
-pub mod quota_fetcher; // Epic-024 quota fetching
+pub mod quota_cache; // Epic-001 Phase 1: Quota caching (Dev 3)
+pub mod quota_fetcher; // Epic-001 Phase 1: Quota API client (Dev 1)
+pub mod quota_manager; // Epic-001 Phase 2: Background monitoring (Dev 2)
 pub mod signature_cache; // Epic-025 Story-025-02
 pub mod thinking_quality; // Epic-025 Story-025-04
 pub mod tray;

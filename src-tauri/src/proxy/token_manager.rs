@@ -1,10 +1,11 @@
 // 移除冗余的顶层导入，因为这些在代码中已由 full path 或局部导入处理
 use dashmap::DashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
+use crate::modules::quota_manager::{QuotaDecision, QuotaManager};
 use crate::proxy::rate_limit::RateLimitTracker;
 use crate::proxy::sticky_config::StickySessionConfig;
 
@@ -30,6 +31,7 @@ pub struct TokenManager {
     sticky_config: Arc<tokio::sync::RwLock<StickySessionConfig>>, // 新增：调度配置
     session_accounts: Arc<DashMap<String, String>>, // 新增：会话与账号映射 (SessionID -> AccountID)
     model_recommender: Option<Arc<crate::modules::model_selector::ModelRecommender>>, // Epic-024: Adaptive model selection
+    quota_manager: Option<Arc<QuotaManager>>, // Epic-001 QUOTA-001-02: Proactive quota validation
 }
 
 impl TokenManager {
@@ -44,7 +46,17 @@ impl TokenManager {
             sticky_config: Arc::new(tokio::sync::RwLock::new(StickySessionConfig::default())),
             session_accounts: Arc::new(DashMap::new()),
             model_recommender: None, // Epic-024: Initially disabled
+            quota_manager: None, // Epic-001: Initially disabled, enabled via set_quota_manager()
         }
+    }
+
+    /// Enable proactive quota validation (Epic-001 QUOTA-001-02)
+    ///
+    /// Must be called after TokenManager creation to enable quota-aware account selection.
+    /// This allows lazy initialization after QuotaManager is ready.
+    pub fn set_quota_manager(&mut self, quota_manager: Arc<QuotaManager>) {
+        self.quota_manager = Some(quota_manager);
+        tracing::info!("Proactive quota validation enabled (Epic-001)");
     }
 
     /// 从主应用账号目录加载所有账号
@@ -212,6 +224,173 @@ impl TokenManager {
         }
     }
 
+    /// Validate quota for a specific account and model (Epic-001 QUOTA-001-02)
+    ///
+    /// Uses QuotaManager's check_quota() for cache-first validation.
+    ///
+    /// # Returns
+    /// - `Ok(QuotaDecision)` - Quota validation result
+    /// - `Err(String)` - Validation error (treated as healthy quota)
+    async fn validate_quota(
+        &self,
+        token: &ProxyToken,
+        model: &str,
+    ) -> Result<QuotaDecision, String> {
+        if let Some(ref qm) = self.quota_manager {
+            let project_id = token
+                .project_id
+                .as_ref()
+                .ok_or_else(|| format!("Account {} missing project_id", token.account_id))?;
+
+            qm.check_quota(&token.account_id, model, &token.access_token, project_id)
+                .await
+        } else {
+            // Quota manager not enabled, assume healthy quota
+            Ok(QuotaDecision::Proceed)
+        }
+    }
+
+    /// Get session-bound token if exists (Epic-001 QUOTA-001-02)
+    fn get_bound_token(&self, session_id: &str) -> Option<ProxyToken> {
+        if let Some(account_id) = self.session_accounts.get(session_id) {
+            self.tokens
+                .get(account_id.as_str())
+                .map(|entry| entry.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Select account with proactive quota validation (Epic-001 QUOTA-001-02)
+    ///
+    /// Implements quota-aware account selection with multi-factor prioritization.
+    ///
+    /// # Priority Order
+    /// 1. Subscription tier (ULTRA > PRO > FREE)
+    /// 2. Rate limit status (not limited > limited)
+    /// 3. Quota remaining (higher is better)
+    ///
+    /// # Arguments
+    /// * `model` - Model ID for quota validation
+    /// * `session_id` - Optional session ID for binding
+    ///
+    /// # Returns
+    /// Selected account with healthy quota
+    async fn select_account_with_quota(
+        &self,
+        model: &str,
+        session_id: Option<&str>,
+    ) -> Result<ProxyToken, String> {
+        // 1. Collect all available accounts
+        let candidates: Vec<ProxyToken> = self
+            .tokens
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        if candidates.is_empty() {
+            return Err("No accounts available".to_string());
+        }
+
+        tracing::debug!(
+            "Selecting from {} candidate accounts for model {}",
+            candidates.len(),
+            model
+        );
+
+        // 2. Validate quotas and collect metrics
+        let mut quota_map = HashMap::new();
+        let mut valid_accounts = Vec::new();
+
+        for token in &candidates {
+            match self.validate_quota(token, model).await {
+                Ok(QuotaDecision::Proceed) | Ok(QuotaDecision::LowQuota { .. }) => {
+                    // Account is usable
+                    if let Some(ref qm) = self.quota_manager {
+                        if let Ok(all_quotas) = qm
+                            .get_all_quotas(
+                                &token.account_id,
+                                &token.access_token,
+                                token
+                                    .project_id
+                                    .as_ref()
+                                    .ok_or_else(|| "Missing project_id".to_string())?,
+                            )
+                            .await
+                        {
+                            if let Some(model_quota) = all_quotas.get(model) {
+                                quota_map.insert(
+                                    token.account_id.clone(),
+                                    model_quota.remaining_fraction,
+                                );
+                            } else {
+                                // Model quota not found, assume healthy (0.5 = 50%)
+                                quota_map.insert(token.account_id.clone(), 0.5);
+                            }
+                        } else {
+                            // API error, assume healthy
+                            quota_map.insert(token.account_id.clone(), 0.5);
+                        }
+                    } else {
+                        // No quota manager, assume healthy
+                        quota_map.insert(token.account_id.clone(), 0.5);
+                    }
+                    valid_accounts.push(token.clone());
+                }
+                Ok(QuotaDecision::Exhausted { reset_time }) => {
+                    tracing::debug!(
+                        "Skipping account {} - quota exhausted until {}",
+                        token.account_id,
+                        reset_time
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Quota check failed for {}: {}, including anyway",
+                        token.account_id,
+                        e
+                    );
+                    quota_map.insert(token.account_id.clone(), 0.5);
+                    valid_accounts.push(token.clone());
+                }
+            }
+        }
+
+        if valid_accounts.is_empty() {
+            return Err("No accounts with available quota".to_string());
+        }
+
+        // 3. Use AccountPrioritizer for intelligent selection
+        use crate::proxy::account_prioritizer::AccountPrioritizer;
+        AccountPrioritizer::prioritize_accounts(
+            &mut valid_accounts,
+            &quota_map,
+            &self.rate_limit_tracker,
+        );
+
+        // 4. Select top candidate
+        let selected = valid_accounts
+            .first()
+            .ok_or_else(|| "No valid accounts after prioritization".to_string())?
+            .clone();
+
+        tracing::info!(
+            "Selected account {} (tier: {:?}, quota: {:.1}%)",
+            selected.account_id,
+            selected.subscription_tier,
+            quota_map.get(&selected.account_id).unwrap_or(&0.5) * 100.0
+        );
+
+        // 5. Bind to session if provided
+        if let Some(sid) = session_id {
+            self.session_accounts
+                .insert(sid.to_string(), selected.account_id.clone());
+            tracing::debug!("Bound session {} to account {}", sid, selected.account_id);
+        }
+
+        Ok(selected)
+    }
+
     /// 内部实现：获取 Token 的核心逻辑
     async fn get_token_internal(
         &self,
@@ -220,6 +399,87 @@ impl TokenManager {
         session_id: Option<&str>,
         model: Option<&str>, // 🆕 模型参数
     ) -> Result<(String, String, String), String> {
+        // ===== Epic-001 QUOTA-001-02: Proactive Quota Validation =====
+        // Try quota-aware selection first if quota manager enabled and model provided
+        if !force_rotate
+            && self.quota_manager.is_some()
+            && model.is_some()
+            && quota_group != "image_gen"
+        {
+            let model_id = model.unwrap();
+
+            // 1. Try session-bound account first with quota validation
+            if let Some(sid) = session_id {
+                if let Some(bound_token) = self.get_bound_token(sid) {
+                    match self.validate_quota(&bound_token, model_id).await {
+                        Ok(QuotaDecision::Proceed) => {
+                            tracing::debug!(
+                                "Using session-bound account {} with healthy quota",
+                                bound_token.account_id
+                            );
+                            // Proceed to use bound account (continue to existing logic)
+                        }
+                        Ok(QuotaDecision::LowQuota {
+                            remaining,
+                            reset_time: _,
+                        }) => {
+                            tracing::warn!(
+                                "Session-bound account {} has low quota ({:.1}%), continuing anyway",
+                                bound_token.account_id,
+                                remaining * 100.0
+                            );
+                            // Proceed with low quota warning (continue to existing logic)
+                        }
+                        Ok(QuotaDecision::Exhausted { reset_time }) => {
+                            tracing::info!(
+                                "Session-bound account {} quota exhausted until {}, finding alternative",
+                                bound_token.account_id,
+                                reset_time
+                            );
+                            // Switch to quota-aware selection
+                            let selected =
+                                self.select_account_with_quota(model_id, session_id).await?;
+                            let project_id = selected
+                                .project_id
+                                .clone()
+                                .ok_or_else(|| "Missing project_id".to_string())?;
+                            return Ok((selected.access_token, project_id, selected.email));
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "Quota validation failed for {}: {}, using bound account anyway",
+                                bound_token.account_id,
+                                e
+                            );
+                            // Validation error, continue with bound account (existing logic)
+                        }
+                    }
+                }
+            }
+
+            // 2. No session binding or quota check passed - use quota-aware selection for new account
+            if session_id.is_some() && !self.session_accounts.contains_key(session_id.unwrap()) {
+                // Session not bound yet, use quota-aware selection
+                match self.select_account_with_quota(model_id, session_id).await {
+                    Ok(selected) => {
+                        let project_id = selected
+                            .project_id
+                            .clone()
+                            .ok_or_else(|| "Missing project_id".to_string())?;
+                        return Ok((selected.access_token, project_id, selected.email));
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Quota-aware selection failed: {}, falling back to standard selection",
+                            e
+                        );
+                        // Fall through to existing logic
+                    }
+                }
+            }
+        }
+        // ===== End Epic-001 Integration =====
+
         let mut tokens_snapshot: Vec<ProxyToken> =
             self.tokens.iter().map(|e| e.value().clone()).collect();
         let total = tokens_snapshot.len();
@@ -1104,4 +1364,228 @@ fn truncate_reason(reason: &str, max_len: usize) -> String {
     let mut s: String = reason.chars().take(max_len).collect();
     s.push('…');
     s
+}
+
+// ============================================================================
+// Epic-001 QUOTA-001-02: Integration Tests
+// ============================================================================
+
+#[cfg(test)]
+mod quota_integration_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn create_test_token(
+        account_id: &str,
+        tier: Option<&str>,
+        project_id: Option<&str>,
+    ) -> ProxyToken {
+        ProxyToken {
+            account_id: account_id.to_string(),
+            access_token: "test_token".to_string(),
+            refresh_token: "test_refresh".to_string(),
+            expires_in: 3600,
+            timestamp: 9999999999,
+            email: format!("{}@test.com", account_id),
+            account_path: PathBuf::from("/tmp/test.json"),
+            project_id: project_id.map(|s| s.to_string()),
+            subscription_tier: tier.map(|s| s.to_string()),
+        }
+    }
+
+    fn create_test_manager() -> TokenManager {
+        TokenManager::new(PathBuf::from("/tmp"))
+    }
+
+    fn create_quota_manager() -> Arc<QuotaManager> {
+        Arc::new(QuotaManager::new(300)) // 5-minute TTL
+    }
+
+    #[tokio::test]
+    async fn test_validate_quota_without_quota_manager() {
+        let manager = create_test_manager();
+        let token = create_test_token("acc1", Some("PRO"), Some("test-project"));
+
+        // Without quota manager, should return Proceed
+        let result = manager.validate_quota(&token, "gemini-2.5-flash").await;
+        assert!(result.is_ok());
+        assert!(matches!(result.unwrap(), QuotaDecision::Proceed));
+    }
+
+    #[tokio::test]
+    async fn test_validate_quota_missing_project_id() {
+        let mut manager = create_test_manager();
+        manager.set_quota_manager(create_quota_manager());
+
+        let token = create_test_token("acc1", Some("PRO"), None);
+
+        // Missing project_id should return error
+        let result = manager.validate_quota(&token, "gemini-2.5-flash").await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("missing project_id"));
+    }
+
+    #[tokio::test]
+    async fn test_get_bound_token_exists() {
+        let manager = create_test_manager();
+        let token = create_test_token("acc1", Some("PRO"), Some("project1"));
+
+        manager.tokens.insert("acc1".to_string(), token.clone());
+        manager
+            .session_accounts
+            .insert("session1".to_string(), "acc1".to_string());
+
+        let bound = manager.get_bound_token("session1");
+        assert!(bound.is_some());
+        assert_eq!(bound.unwrap().account_id, "acc1");
+    }
+
+    #[tokio::test]
+    async fn test_get_bound_token_not_exists() {
+        let manager = create_test_manager();
+        let bound = manager.get_bound_token("nonexistent");
+        assert!(bound.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_select_account_with_quota_no_accounts() {
+        let manager = create_test_manager();
+
+        let result = manager
+            .select_account_with_quota("gemini-2.5-flash", None)
+            .await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("No accounts available"));
+    }
+
+    #[tokio::test]
+    async fn test_select_account_with_quota_no_quota_manager() {
+        let manager = create_test_manager();
+
+        // Add test accounts
+        manager.tokens.insert(
+            "acc1".to_string(),
+            create_test_token("acc1", Some("PRO"), Some("project1")),
+        );
+        manager.tokens.insert(
+            "acc2".to_string(),
+            create_test_token("acc2", Some("ULTRA"), Some("project2")),
+        );
+
+        // Without quota manager, should still select based on tier
+        let result = manager
+            .select_account_with_quota("gemini-2.5-flash", None)
+            .await;
+        assert!(result.is_ok());
+
+        let selected = result.unwrap();
+        // ULTRA should be selected over PRO
+        assert_eq!(selected.subscription_tier, Some("ULTRA".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_select_account_with_quota_binds_session() {
+        let manager = create_test_manager();
+
+        manager.tokens.insert(
+            "acc1".to_string(),
+            create_test_token("acc1", Some("PRO"), Some("project1")),
+        );
+
+        let result = manager
+            .select_account_with_quota("gemini-2.5-flash", Some("session1"))
+            .await;
+        assert!(result.is_ok());
+
+        // Session should be bound
+        assert!(manager.session_accounts.contains_key("session1"));
+        assert_eq!(
+            manager.session_accounts.get("session1").unwrap().as_str(),
+            "acc1"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_token_internal_with_quota_validation() {
+        let manager = create_test_manager();
+
+        // Add accounts
+        manager.tokens.insert(
+            "acc1".to_string(),
+            create_test_token("acc1", Some("PRO"), Some("project1")),
+        );
+        manager.tokens.insert(
+            "acc2".to_string(),
+            create_test_token("acc2", Some("ULTRA"), Some("project2")),
+        );
+
+        // Without model parameter, should use standard selection
+        let result = manager
+            .get_token_internal("claude", false, None, None)
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_token_internal_with_model_parameter() {
+        let manager = create_test_manager();
+
+        manager.tokens.insert(
+            "acc1".to_string(),
+            create_test_token("acc1", Some("PRO"), Some("project1")),
+        );
+
+        // With model parameter but no quota manager, should still work
+        let result = manager
+            .get_token_internal("claude", false, None, Some("gemini-2.5-flash"))
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_token_internal_session_binding_preserved() {
+        let manager = create_test_manager();
+
+        manager.tokens.insert(
+            "acc1".to_string(),
+            create_test_token("acc1", Some("PRO"), Some("project1")),
+        );
+        manager.tokens.insert(
+            "acc2".to_string(),
+            create_test_token("acc2", Some("ULTRA"), Some("project2")),
+        );
+
+        // First request with session - should bind
+        let result1 = manager
+            .get_token_internal("claude", false, Some("session1"), Some("gemini-2.5-flash"))
+            .await;
+        assert!(result1.is_ok());
+
+        let first_account_email = result1.unwrap().2;
+
+        // Second request with same session - should use same account
+        let result2 = manager
+            .get_token_internal("claude", false, Some("session1"), Some("gemini-2.5-flash"))
+            .await;
+        assert!(result2.is_ok());
+
+        let second_account_email = result2.unwrap().2;
+
+        // Should be the same account
+        assert_eq!(first_account_email, second_account_email);
+    }
+
+    #[tokio::test]
+    async fn test_set_quota_manager() {
+        let mut manager = create_test_manager();
+
+        // Initially disabled
+        assert!(manager.quota_manager.is_none());
+
+        // Enable quota manager
+        manager.set_quota_manager(create_quota_manager());
+
+        // Should be enabled
+        assert!(manager.quota_manager.is_some());
+    }
 }
