@@ -6,6 +6,9 @@ mod modules;
 pub mod proxy; // 反代服务模块 (public for testing)
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
 use modules::logger;
 use tauri::Manager;
 use tracing::{error, info};
@@ -40,6 +43,7 @@ pub fn run() {
         }))
         .manage(commands::proxy::ProxyServiceState::new())
         .manage(commands::budget::BudgetOptimizerState::new())
+        .manage(commands::quality::QualityMonitorState::new())
         .setup(|app| {
             info!("Setup starting...");
             modules::tray::create_tray(app.handle())?;
@@ -156,6 +160,14 @@ pub fn run() {
             commands::budget::get_budget_metrics,
             commands::budget::reset_budget_metrics,
             commands::budget::test_budget_allocation,
+            // Epic-025 Story-025-04: Quality monitoring commands
+            commands::quality::get_quality_metrics,
+            commands::quality::get_weekly_feedback,
+            commands::quality::get_quality_history,
+            commands::quality::submit_user_rating,
+            commands::quality::reset_quality_metrics,
+            commands::quality::get_quality_history_with_trends,
+            commands::quality::get_budget_distribution,
             // 测试命令
             commands::test_model_fallback_notification,
             commands::open_devtools,

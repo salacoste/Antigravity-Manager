@@ -6,6 +6,8 @@ import Accounts from './pages/Accounts';
 import Settings from './pages/Settings';
 import ApiProxy from './pages/ApiProxy';
 import Monitor from './pages/Monitor';
+import BudgetOptimizerPage from './pages/BudgetOptimizerPage';
+import QuotaMonitoringPage from './pages/QuotaMonitoringPage';
 import ThemeManager from './components/common/ThemeManager';
 import ToastContainer, { showToast } from './components/common/ToastContainer';
 import { useEffect } from 'react';
@@ -34,6 +36,14 @@ const router = createBrowserRouter([
       {
         path: 'monitor',
         element: <Monitor />,
+      },
+      {
+        path: 'budget-optimizer',
+        element: <BudgetOptimizerPage />,
+      },
+      {
+        path: 'quota-monitoring',
+        element: <QuotaMonitoringPage />,
       },
       {
         path: 'settings',

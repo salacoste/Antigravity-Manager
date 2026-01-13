@@ -1,20 +1,23 @@
 pub mod account;
-pub mod budget_optimizer;
+pub mod budget_detector; // Epic-025 Story-025-03
+pub mod budget_optimizer; // Epic-025 Story-025-01
 pub mod config;
 pub mod db;
 pub mod i18n;
 pub mod logger;
 pub mod migration;
-pub mod model_selector;
+pub mod model_selector; // Epic-024 Story-024-02 Adaptive Model Selection
 pub mod oauth;
 pub mod oauth_server;
 pub mod process;
 pub mod proxy_db;
 pub mod quota;
-pub mod quota_cache;
-pub mod quota_fetcher;
-pub mod signature_cache;
+pub mod quota_cache; // Epic-024 quota caching
+pub mod quota_fetcher; // Epic-024 quota fetching
+pub mod signature_cache; // Epic-025 Story-025-02
+pub mod thinking_quality; // Epic-025 Story-025-04
 pub mod tray;
+pub mod weekly_tuner; // Epic-025 Week 7
 
 use crate::models;
 

@@ -8,11 +8,101 @@ use axum::{
 use serde_json::{json, Value};
 use tracing::{debug, error, info};
 
+use crate::modules::budget_optimizer::BudgetOptimizer;
 use crate::proxy::mappers::gemini::{unwrap_response, wrap_request};
 use crate::proxy::server::AppState;
 use crate::proxy::session_manager::SessionManager;
+use once_cell::sync::Lazy;
 
 const MAX_RETRY_ATTEMPTS: usize = 3;
+
+// Epic-025 Story-025-01: Global budget optimizer instance
+static BUDGET_OPTIMIZER: Lazy<BudgetOptimizer> = Lazy::new(BudgetOptimizer::new);
+
+/// Epic-025: Check if model is Gemini 2.5 Flash Thinking (Model ID 313)
+fn is_flash_thinking_model(model_id: &str) -> bool {
+    model_id == "313"
+        || model_id == "gemini-2.5-flash-thinking"
+        || model_id.contains("flash-thinking")
+}
+
+/// Epic-025 Story-025-04: Extract response metadata for quality monitoring
+fn extract_response_metadata(
+    response_json: &Value,
+    request_id: &str,
+    model_id: &str,
+    thinking_budget: u32,
+) -> Option<(u32, u32, crate::modules::budget_detector::FinishReason)> {
+    use crate::modules::budget_detector::FinishReason;
+
+    // Extract from usageMetadata
+    let usage = response_json.get("usageMetadata")?;
+
+    let thinking_tokens = usage
+        .get("cachedContentTokenCount")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    let output_tokens = usage
+        .get("candidatesTokenCount")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    // Extract finish_reason from first candidate
+    let finish_reason_str = response_json
+        .get("candidates")
+        .and_then(|c| c.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|c| c.get("finishReason"))
+        .and_then(|fr| fr.as_str())
+        .unwrap_or("UNSPECIFIED");
+
+    let finish_reason = FinishReason::from_string(finish_reason_str);
+
+    debug!(
+        "[Epic-025] Response metadata extracted: request_id={}, model={}, thinking_tokens={}, output_tokens={}, finish_reason={:?}, thinking_budget={}",
+        request_id, model_id, thinking_tokens, output_tokens, finish_reason, thinking_budget
+    );
+
+    Some((thinking_tokens, output_tokens, finish_reason))
+}
+
+/// Epic-025: Extract request text and messages from Gemini request body
+fn extract_request_context(body: &Value) -> (String, Vec<Value>) {
+    let mut request_text = String::new();
+    let mut messages = Vec::new();
+
+    // Extract from systemInstruction
+    if let Some(sys_inst) = body.get("systemInstruction") {
+        if let Some(parts) = sys_inst.get("parts").and_then(|p| p.as_array()) {
+            for part in parts {
+                if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                    request_text.push_str(text);
+                    request_text.push(' ');
+                }
+            }
+        }
+    }
+
+    // Extract from contents (conversation history)
+    if let Some(contents) = body.get("contents").and_then(|c| c.as_array()) {
+        for content in contents {
+            messages.push(content.clone());
+
+            // Extract text from latest user message for complexity analysis
+            if let Some(parts) = content.get("parts").and_then(|p| p.as_array()) {
+                for part in parts {
+                    if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
+                        request_text.push_str(text);
+                        request_text.push(' ');
+                    }
+                }
+            }
+        }
+    }
+
+    (request_text.trim().to_string(), messages)
+}
 
 /// 处理 generateContent 和 streamGenerateContent
 /// 路径参数: model_name, method (e.g. "gemini-pro", "generateContent")
@@ -28,9 +118,12 @@ pub async fn handle_generate(
         (model_action, "generateContent".to_string())
     };
 
+    // Epic-025 Story-025-04: Generate request ID for quality tracking
+    let request_id = uuid::Uuid::new_v4().to_string();
+
     crate::modules::logger::log_info(&format!(
-        "Received Gemini request: {}/{}",
-        model_name, method
+        "Received Gemini request: {}/{} (request_id={})",
+        model_name, method, request_id
     ));
 
     // 1. 验证方法
@@ -105,8 +198,56 @@ pub async fn handle_generate(
 
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
+        // Epic-025 Story-025-01: Apply budget optimization for Flash Thinking (Model ID 313)
+        // Epic-025 Story-025-04: Track applied budget for quality monitoring
+        let mut optimized_body = body.clone();
+        let mut applied_thinking_budget: u32 = 0;
+
+        if is_flash_thinking_model(&mapped_model) {
+            let (request_text, messages) = extract_request_context(&body);
+
+            // Only optimize if we have meaningful content
+            if !request_text.is_empty() {
+                let allocation = BUDGET_OPTIMIZER
+                    .allocate_budget(&request_text, &messages)
+                    .await;
+
+                applied_thinking_budget = allocation.budget;
+
+                // Apply optimized budget to thinkingConfig
+                if let Some(gen_config) = optimized_body.get_mut("generationConfig") {
+                    if let Some(gen_obj) = gen_config.as_object_mut() {
+                        let thinking_config =
+                            gen_obj.entry("thinkingConfig").or_insert_with(|| json!({}));
+                        if let Some(think_obj) = thinking_config.as_object_mut() {
+                            think_obj
+                                .insert("thinkingBudget".to_string(), json!(allocation.budget));
+                        }
+                    }
+                } else {
+                    // Create generationConfig if it doesn't exist
+                    optimized_body["generationConfig"] = json!({
+                        "thinkingConfig": {
+                            "thinkingBudget": allocation.budget
+                        }
+                    });
+                }
+
+                info!(
+                    "[Epic-025] Budget optimization applied: model={}, tier={}, budget={}, confidence={:.2}, factors={:?}",
+                    mapped_model,
+                    allocation.tier.as_str(),
+                    allocation.budget,
+                    allocation.confidence,
+                    allocation.factors
+                );
+            } else {
+                debug!("[Epic-025] Skipping budget optimization (no content extracted)");
+            }
+        }
+
         // 5. 包装请求 (project injection)
-        let wrapped_body = wrap_request(&body, &project_id, &mapped_model);
+        let wrapped_body = wrap_request(&optimized_body, &project_id, &mapped_model);
 
         // 5. 上游调用
         let query_string = if is_stream { Some("alt=sse") } else { None };
@@ -216,15 +357,100 @@ pub async fn handle_generate(
                 .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Parse error: {}", e)))?;
 
             let unwrapped = unwrap_response(&gemini_resp);
-            return Ok((
-                StatusCode::OK,
-                [
-                    ("X-Account-Email", email.as_str()),
-                    ("X-Mapped-Model", mapped_model.as_str()),
-                ],
-                Json(unwrapped),
-            )
-                .into_response());
+
+            // Epic-025 Story-025-04: Quality monitoring for Model ID 313
+            let mut quality_score_header = None;
+            let mut ftr_header = None;
+
+            if is_flash_thinking_model(&mapped_model) && applied_thinking_budget > 0 {
+                // Extract response metadata
+                if let Some((thinking_tokens, output_tokens, finish_reason)) =
+                    extract_response_metadata(
+                        &unwrapped,
+                        &request_id,
+                        &mapped_model,
+                        applied_thinking_budget,
+                    )
+                {
+                    // Clone for use in both async task and header
+                    let finish_reason_clone = finish_reason.clone();
+
+                    // Analyze quality (async non-blocking)
+                    let quality_monitor = state.quality_monitor.clone();
+                    let req_id = request_id.clone();
+
+                    tokio::spawn(async move {
+                        use std::time::Instant;
+                        let start = Instant::now();
+
+                        let analysis = quality_monitor
+                            .analyze_quality(
+                                req_id.clone(),
+                                thinking_tokens,
+                                output_tokens,
+                                applied_thinking_budget,
+                                finish_reason_clone,
+                                0, // escalation_count = 0 for initial request
+                            )
+                            .await;
+
+                        let elapsed = start.elapsed();
+
+                        // Log if overhead exceeds target
+                        if elapsed.as_millis() > 50 {
+                            tracing::warn!(
+                                "[Epic-025] Quality analysis overhead: {}ms (target: <50ms)",
+                                elapsed.as_millis()
+                            );
+                        }
+
+                        // Save to database (async, non-blocking)
+                        if let Err(e) = crate::modules::proxy_db::save_quality_analysis(&analysis) {
+                            tracing::error!("[Epic-025] Failed to save quality analysis: {}", e);
+                        } else {
+                            tracing::debug!(
+                                "[Epic-025] Quality analysis saved: request_id={}, overall_score={:.2}, FTR={}",
+                                req_id, analysis.overall_score, analysis.first_time_right
+                            );
+                        }
+                    });
+
+                    // Set response headers for immediate monitoring (synchronous - minimal overhead)
+                    quality_score_header = Some(format!(
+                        "{:.2}",
+                        (thinking_tokens as f64 / applied_thinking_budget as f64) * 100.0
+                    ));
+                    ftr_header = Some(
+                        (finish_reason == crate::modules::budget_detector::FinishReason::Stop)
+                            .to_string(),
+                    );
+                }
+            }
+
+            // Build response with headers
+            let mut response = (StatusCode::OK, Json(unwrapped)).into_response();
+
+            // Add standard headers
+            response
+                .headers_mut()
+                .insert("X-Account-Email", email.parse().unwrap());
+            response
+                .headers_mut()
+                .insert("X-Mapped-Model", mapped_model.parse().unwrap());
+
+            // Add quality headers if available
+            if let Some(score) = quality_score_header {
+                response
+                    .headers_mut()
+                    .insert("X-Quality-Budget-Utilization", score.parse().unwrap());
+            }
+            if let Some(ftr) = ftr_header {
+                response
+                    .headers_mut()
+                    .insert("X-First-Time-Right", ftr.parse().unwrap());
+            }
+
+            return Ok(response);
         }
 
         // 处理错误并重试
