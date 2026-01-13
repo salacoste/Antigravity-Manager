@@ -5,10 +5,13 @@ use axum::{
     Json,
 };
 use serde_json::{json, Value};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::proxy::{audio::AudioProcessor, server::AppState};
+use crate::utils::audio_validation::{
+    AudioHeaderValidator, AudioDurationValidator, CodecValidator, DurationWarning,
+};
 
 /// 处理音频转录请求 (OpenAI Whisper API 兼容)
 pub async fn handle_audio_transcription(
@@ -76,7 +79,33 @@ pub async fn handle_audio_transcription(
         ));
     }
 
-    // 4. 使用 Inline Data 方式
+    // 4. Epic-014 Story-014-01: Validate audio file header (magic bytes)
+    AudioHeaderValidator::validate_header(&audio_bytes, &mime_type)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    // 5. Epic-014 Story-014-01: Validate codec compatibility
+    CodecValidator::validate_codec(&audio_bytes, &mime_type)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    // 6. Epic-014 Story-014-01: Validate duration (with warnings for long files)
+    match AudioDurationValidator::validate_duration(&audio_bytes, &mime_type) {
+        Ok(DurationWarning::ExceedsRecommended { message, duration_minutes, .. }) => {
+            warn!(
+                "Audio duration warning ({}min): {}",
+                duration_minutes, message
+            );
+            // Continue processing with warning log
+        }
+        Ok(DurationWarning::None) => {
+            // No warning, continue
+        }
+        Err(e) => {
+            // Hard error (exceeds 3-hour limit)
+            return Err((StatusCode::BAD_REQUEST, e.to_string()));
+        }
+    }
+
+    // 7. 使用 Inline Data 方式
     debug!("使用 Inline Data 方式处理");
     let base64_audio = AudioProcessor::encode_to_base64(&audio_bytes);
 
