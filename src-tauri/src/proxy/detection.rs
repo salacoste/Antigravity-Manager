@@ -174,6 +174,7 @@ impl DetectionMonitor {
     }
 
     /// Check if alert threshold is exceeded
+    /// Includes the current event in the count (checks if threshold WILL BE exceeded)
     fn should_alert(&self, event: &DetectionEvent) -> bool {
         let threshold = match self.thresholds.get(&event.event_type) {
             Some(t) => t,
@@ -183,10 +184,12 @@ impl DetectionMonitor {
         let events = self.events.lock().unwrap();
         let window_start = Utc::now() - Duration::minutes(threshold.window_minutes);
 
+        // Count existing events + 1 for the current event being checked
         let recent_count = events
             .iter()
             .filter(|e| e.event_type == event.event_type && e.timestamp >= window_start)
-            .count();
+            .count()
+            + 1; // Include the event we're checking
 
         recent_count >= threshold.count
     }
