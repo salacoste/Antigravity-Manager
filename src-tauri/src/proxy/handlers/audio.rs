@@ -5,7 +5,7 @@ use axum::{
     Json,
 };
 use serde_json::{json, Value};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::proxy::{audio::AudioProcessor, server::AppState};
@@ -152,8 +152,22 @@ pub async fn handle_audio_transcription(
 
     info!("音频转录完成，返回 {} 字符", text.len());
 
-    // 10. 返回标准格式响应
-    Ok(Json(json!({
+    // 10. Epic-014 Story-014-02: Add experimental metadata for gemini-2.0-flash-exp
+    let mut response_json = json!({
         "text": text
-    })))
+    });
+
+    if model == "gemini-2.0-flash-exp" {
+        response_json["_antigravity"] = json!({
+            "experimental": true,
+            "warning": "gemini-2.0-flash-exp is EXPERIMENTAL and will be deprecated in Q2 2026. Please migrate to gemini-2.5-flash for production stability.",
+            "deprecation_timeline": "Q2 2026 (end-of-life)",
+            "migration_guide_url": "https://docs.antigravity-tools.com/guides/migration-gemini-2.0-flash-exp-to-2.5-flash",
+            "stable_alternative": "gemini-2.5-flash"
+        });
+        warn!("Experimental model used: {} (deprecated Q2 2026)", model);
+    }
+
+    // 11. 返回响应
+    Ok(Json(response_json))
 }
