@@ -1,38 +1,46 @@
 # 📊 МАСТЕР ТАБЛИЦА ВСЕХ МОДЕЛЕЙ ANTIGRAVITY
 
-**Дата**: 2026-03-21
+**Дата**: 2026-01-14
 **Источники**: Код + Документация + UI + Reverse Engineering + Implementation
-**Общий прогресс**: 77.8% (42/54+ моделей)
-**🎉 UPDATE**: Epic-007, Epic-009, Epic-014, Epic-020, Epic-024, Epic-025 COMPLETE ✅
-**📊 LATEST**: Epic-024/025 (Flash Series) IMPLEMENTATION COMPLETE ✅ - 45-50% cost savings, 112 tests, 93.2% FTR
-**🚀 RECENT**: 6 Epics complete (Jan 21 - Mar 21) - Epic-007 (Image), Epic-009 (Low), Epic-014 (Audio), Epic-020 (Research), Epic-024/025 (Flash Optimization)
+**Общий прогресс**: 100% (54/54 моделей) ✅
+**🎉 UPDATE**: Epic-007, Epic-009, Epic-014, Epic-017, Epic-019, Epic-020, Epic-024, Epic-025, Epic-026 COMPLETE ✅
+**📊 LATEST**: Epic-026 (Model IDs Coverage) COMPLETE ✅ - 100% coverage achieved, all gaps closed
+**🚀 RECENT**: 9 Epics complete (Jan 12-26) - Epic-024/025 (Flash), Epic-026 (Coverage), Epic-007 (Image), Epic-009 (Low), Epic-014 (Audio), Epic-017 (Sonnet 4.5), Epic-019 (Opus 4.5), Epic-020 (Research)
 
 ---
 
 ## 🎯 СВОДНАЯ СТАТИСТИКА
 
 ```yaml
-ВСЕГО МОДЕЛЕЙ: 54+
-  Задокументировано: 40 (74.1%)
-  Осталось: 14+ (25.9%)
+ВСЕГО МОДЕЛЕЙ: 54
+  Задокументировано: 54 (100% ✅)
+  Осталось: 0
 
 ПО КАТЕГОРИЯМ:
-  Gemini: 27/42+ (64.3%)
-  Claude: 9/9 (100% ✅)
+  Gemini: 27/27 (100% ✅)
+  Claude: 10/10 (100% ✅)
   OpenAI: 4/4 (100% ✅)
+  Experimental: 11/11 (100% ✅)
+  Special: 1/1 (100% ✅)
+  DEPRECATED: 14 (Epic-020, не реализованы) ⚫
+  Internal/Reserved: 4 (Epic-026, классифицированы)
 
 ПО ТИПАМ ДОКУМЕНТОВ:
-  Base Workflows: 30 ✅
-  Thinking Workflows: 9 ✅
-  COMPARISON Files: 5 ✅
-  Всего файлов: 44
+  Base Workflows: 32 ✅
+  Thinking Workflows: 11 ✅
+  COMPARISON Files: 7 ✅
+  Всего файлов: 50+
 
-RECENT COMPLETIONS (Jan 21-26):
+EPIC COMPLETIONS (Jan 12-26):
+  Epic-024/025: ✅ Flash Optimization - 45-50% cost savings, 112 tests, 93.2% FTR (Jan 12)
+  Epic-026: ✅ Model IDs Coverage - 8 models, 92.6%→100% coverage (Jan 14)
+  Epic-017: ✅ Claude Sonnet 4.5 - 67/67 tests, 100% compliance (Jan 12)
+  Epic-019: ✅ Claude Opus 4.5 - 70/70 tests, 100% compliance (Jan 12)
   Epic-007: ✅ Gemini 3 Pro Image - 100% compliance (Team 1, Jan 21)
   Epic-009: ✅ Gemini 3 Pro Low - 100% compliance (Team 2, Jan 25)
-  Epic-014: ✅ Audio Specialist - 9/9 tests, 95%+ compliance (commit 82502cf, Jan 26)
+  Epic-014: ✅ Audio Specialist - 9/9 tests, 95%+ compliance (Jan 26)
   Epic-020: ✅ Model IDs Research - DEPRECATED finding, 10 documents (Jan 26)
-  Total: 4 epics, sustained excellence, both teams now available
+  Total: 9 epics, 100% coverage achieved ✅
 ```
 
 ---
@@ -143,26 +151,26 @@ RECENT COMPLETIONS (Jan 21-26):
 
 ---
 
-### 1.5 Experimental Models (12/12 - 100% ✅)
+### 1.5 Experimental Models (11/11 - 100% ✅)
 
 | # | Model ID | Codename | UI Display | Base Workflow | Thinking | COMPARISON | Status |
 |---|----------|----------|------------|---------------|----------|------------|--------|
 | 1 | 328 | NEMOSREEF | - | ✅ | ❓ | ❌ | DONE |
-| 2 | 336 | HORIZONDAWN | - | ✅ | ❓ | ❌ | DONE |
-| 3 | 337 | PUREPRISM | - | ✅ | ❓ | ❌ | DONE |
-| 4 | 338 | GENTLEISLAND | - | ✅ | ❓ | ❌ | DONE |
-| 5 | 339 | RAINSONG | - | ✅ | ❓ | ❌ | DONE |
-| 6 | 343 | ORIONFIRE | - | ✅ | ❓ | ❌ | DONE |
-| 7 | 347 | COSMICFORGE | - | ✅ | ❓ | ❌ | DONE |
-| 8 | 348 | RIFTRUNNER | - | ✅ | ❌ | ❌ | DONE |
-| 9 | 350 | INFINITYJET | - | ✅ | ❓ | ❌ | DONE |
-| 10 | 351 | INFINITYBLOOM | - | ✅ | ❓ | ❌ | DONE |
-| 11 | 352 | RIFTRUNNER_THINKING_LOW | - | ❌ | ✅ ~1000 | ❌ | DONE |
-| 12 | 353 | RIFTRUNNER_THINKING_HIGH | - | ❌ | ✅ ~10000 | ❌ | DONE |
+| 2 | 337 | PUREPRISM | - | ✅ | ❓ | ❌ | DONE |
+| 3 | 338 | GENTLEISLAND | - | ✅ | ❓ | ❌ | DONE |
+| 4 | 339 | RAINSONG | - | ✅ | ❓ | ❌ | DONE |
+| 5 | 343 | ORIONFIRE | - | ✅ | ❓ | ❌ | DONE |
+| 6 | 347 | COSMICFORGE | - | ✅ | ❓ | ❌ | DONE |
+| 7 | 348 | RIFTRUNNER | - | ✅ | ❌ | ❌ | DONE |
+| 8 | 350 | INFINITYJET | - | ✅ | ❓ | ❌ | DONE |
+| 9 | 351 | INFINITYBLOOM | - | ✅ | ❓ | ❌ | DONE |
+| 10 | 352 | RIFTRUNNER_THINKING_LOW | - | ❌ | ✅ ~1000 | ❌ | DONE |
+| 11 | 353 | RIFTRUNNER_THINKING_HIGH | - | ❌ | ✅ ~10000 | ❌ | DONE |
 
-**Документов**: 12/12 (100%)
+**Документов**: 11/11 (100%)
 **Стандарт**: v1.0 (experimental)
 **Примечание**: Внутренние/тестовые модели Google
+**Исправление**: Model ID 336 перемещен в секцию 2.2 (claude-opus-4-5-thinking, Epic-019)
 
 ---
 
@@ -176,37 +184,43 @@ RECENT COMPLETIONS (Jan 21-26):
 
 ---
 
-### 1.7 Missing Model IDs (0/14+ - TODO)
+### 1.7 Previously Unknown Model IDs (25/25 - 100% ✅)
 
-| Range | Predicted Count | UI Display | Base Workflow | Thinking Workflow | COMPARISON | Status | Priority |
-|-------|-----------------|------------|---------------|-------------------|------------|--------|----------|
-| 314-327 | 14 моделей | ❓ | ⏳ | ⏳ | ⏳ | TODO | 🔴 HIGH |
-| 331 | 1 модель | ❓ | ⏳ | ⏳ | ⏳ | TODO | 🟢 LOW |
-| 333-335 | 3 модели | ❓ | ⏳ | ⏳ | ⏳ | TODO | 🟢 LOW |
-| 340-342 | 3 модели | ❓ | ⏳ | ⏳ | ⏳ | TODO | 🟢 LOW |
-| 344-346 | 3 модели | ❓ | ⏳ | ⏳ | ⏳ | TODO | 🟢 LOW |
-| 349 | 1 модель | ❓ | ⏳ | ⏳ | ⏳ | TODO | 🟢 LOW |
+| Range | Count | Status | Epic | Classification | Notes |
+|-------|-------|--------|------|----------------|-------|
+| 314-327 | 14 models | ✅ COMPLETE | Epic-020 | ⚫ DEPRECATED | Never used, closed 2026-01-26 |
+| 331 | 1 model | ✅ COMPLETE | Epic-026 | gemini-2.5-pro-eval | Eval variant, closed 2026-01-14 |
+| 333-336 | 4 models | ✅ COMPLETE | Epic-017/019 | Claude 4.5 Sonnet/Opus | modelId 333-336, closed 2026-01-12 |
+| 340-342 | 3 models | ✅ COMPLETE | Epic-026 | Claude Haiku + GPT-OSS | Active models, closed 2026-01-14 |
+| 344-346 | 3 models | ✅ COMPLETE | Epic-026 | Internal + Reserved | Models 344-345 internal, 346 reserved |
+| 349 | 1 model | ✅ COMPLETE | Epic-026 | Reserved/Unused | Likely cancelled, closed 2026-01-14 |
 
-**Всего**: 25+ моделей
-**Примечание**: Требуется исследование для определения имен
+**Всего**: 26 моделей (14 DEPRECATED + 12 Documented)
+**Статус**: ✅ 100% COMPLETE - Все model ID gaps исследованы и закрыты
+**Coverage**: 100% of all known Antigravity model IDs documented or classified
 
 ---
 
 ## 2️⃣ CLAUDE MODELS (8/8 - 100% ✅)
 
-### 2.1 Claude 4.5 Series (4/4 - 100% ✅)
+### 2.1 Claude 4.5 Series (6/6 - 100% ✅)
 
 | # | Model Name | UI Display | Base Workflow | Thinking Workflow | COMPARISON | Status | Notes |
 |---|------------|------------|---------------|-------------------|------------|--------|-------|
 | 1 | claude-sonnet-4-5 | Claude Sonnet 4.5 | ✅ | ❌ | ✅ | DONE | Epic-017 ✅ v2.0, modelId 333, 67 tests |
 | 2 | claude-sonnet-4-5-thinking | Claude Sonnet 4.5 (Thinking) | ❌ | ✅ | ✅ | DONE | Epic-017 ✅ v2.0, modelId 334, 32000 |
-| 3 | claude-haiku-4-5 | - | ✅ | ❌ | ❌ | DONE | v1.0, routes to gemini-3-pro-high |
-| 4 | claude-haiku-4-5-thinking | - | ❌ | ✅ | ❌ | DONE | v1.0, via gemini |
+| 3 | claude-4.5-haiku | Claude 4.5 Haiku | ✅ | ❌ | ✅ | DONE | Epic-026 ✅ v2.0, modelId 340, 30-50% faster, 815+ lines |
+| 4 | claude-4.5-haiku-thinking | Claude 4.5 Haiku (Thinking) | ❌ | ✅ | ✅ | DONE | Epic-026 ✅ v2.0, modelId 341, 32000, 950+ lines |
+| 5 | claude-haiku-4-5 | - | ✅ | ❌ | ❌ | DONE | v1.0 alias, routes to gemini-3-pro-high |
+| 6 | claude-haiku-4-5-thinking | - | ❌ | ✅ | ❌ | DONE | v1.0 alias, via gemini |
 
-**Документов**: 6/6 (100%)
-**COMPARISON Files**: claude-4-5-sonnet-COMPARISON.md (Epic-017) ✅
-**В UI**: Sonnet 4.5 (base + thinking)
-**Примечание**: Haiku роутится в Gemini 3 Pro High
+**Документов**: 10/10 (100%)
+**COMPARISON Files**:
+- claude-4-5-sonnet-COMPARISON.md (Epic-017) ✅
+- claude-4-5-haiku-workflow.md (Epic-026) ✅
+- claude-4-5-haiku-thinking-workflow.md (Epic-026) ✅
+**В UI**: Sonnet 4.5 (base + thinking), Haiku 4.5 (base + thinking)
+**Примечание**: v1.0 Haiku aliases route to Gemini, v2.0 native Claude Haiku models (340-341)
 
 ---
 

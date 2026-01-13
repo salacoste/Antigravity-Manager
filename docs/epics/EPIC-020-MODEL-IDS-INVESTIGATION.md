@@ -78,8 +78,8 @@ Total: 14 models
 **COMPARISON Files Inventory**:
 ```
 docs/comparison/
-├── COMPARISON-GEMINI-1.5-FLASH.md
-├── COMPARISON-GEMINI-1.5-PRO.md
+├── COMPARISON-GEMINI-1.5-FLASH.md    ⚫ DEPRECATED (2026-01-14)
+├── COMPARISON-GEMINI-1.5-PRO.md      ⚫ DEPRECATED (2026-01-14)
 ├── COMPARISON-GEMINI-2.0-FLASH-EXP.md
 ├── COMPARISON-GEMINI-2.0-FLASH-THINKING-EXP.md
 └── ... (39 total files)
@@ -200,7 +200,7 @@ async fn test_model_features(model_id: u32) -> Result<ModelCapabilities> {
 
 **Characteristics**:
 - Same underlying model, different endpoint/naming convention
-- Example: `gemini-1.5-pro` vs. `models/gemini-1.5-pro`
+- Example: `gemini-1.5-pro` vs. `models/gemini-1.5-pro` (⚫ DEPRECATED models)
 - No new features or capabilities
 - Simple aliasing in model_mapping.rs required
 
@@ -217,7 +217,7 @@ async fn test_model_features(model_id: u32) -> Result<ModelCapabilities> {
   pub fn normalize_model_name(model: &str) -> &str {
       match model {
           "gemini-2.0-flash-thinking-exp-01-21" => "gemini-2.0-flash-thinking-exp",
-          "models/gemini-314" => "gemini-1.5-pro-002",
+          "models/gemini-314" => "gemini-1.5-pro-002",  // ⚫ DEPRECATED model
           // ... additional aliases
           _ => model,
       }
@@ -339,13 +339,14 @@ async fn test_model_features(model_id: u32) -> Result<ModelCapabilities> {
 
 **Example Distribution**:
 ```
-Model 314: Alias of gemini-1.5-pro-002 → Scenario A (1 day)
+Model 314: Alias of gemini-1.5-pro-002 → Scenario A (⚫ DEPRECATED base model)
 Model 315: New thinking mode variant → Scenario B (2 weeks)
 Model 316: Deprecated experimental → Scenario C (0.5 days)
 Model 317: Alias of gemini-2.0-flash → Scenario A (1 day)
 Model 318: Unique vision model → Scenario B (2 weeks)
 ...
 Total: ~14 models × mixed effort = 1-4 weeks
+Note: gemini-1.5 aliases are DEPRECATED (2026-01-14)
 ```
 
 **Implementation Effort**: **1-4 weeks** (depends on distribution)

@@ -105,36 +105,37 @@ gemini_2_0:
   когда: "Q2 2026 если нужна детальная feature matrix"
 ```
 
-#### 2.2 Gemini 1.5 Legacy Series (12 моделей)
+#### 2.2 Gemini 1.5 Legacy Series (12 моделей) ⚫ DEPRECATED
 
 | # | Model Name | Base Workflow | COMPARISON | Status |
 |---|------------|---------------|------------|--------|
-| 1 | gemini-1.5-pro-002 | ✅ | ❌ | Legacy |
-| 2 | gemini-1.5-pro-exp-0827 | ✅ | ❌ | Experimental |
-| 3 | gemini-1.5-flash-002 | ✅ | ❌ | Legacy |
-| 4 | gemini-1.5-flash-8b | ✅ | ❌ | Small variant |
-| 5 | gemini-1.5-flash-latest | ✅ | ❌ | Latest alias |
-| 6 | gemini-1.5-pro-latest | ✅ | ❌ | Latest alias |
-| 7 | gemini-1.5-flash | ✅ | ❌ | Base |
-| 8 | gemini-1.5-pro | ✅ | ❌ | Base |
-| 9 | gemini-1.5-flash-thinking | ✅ | ❌ | Thinking |
-| 10 | gemini-1.5-pro-thinking | ✅ | ❌ | Thinking |
-| 11 | gemini-1.5-flash-8b-thinking | ✅ | ❌ | Small thinking |
-| 12 | gemini-1.5-pro-thinking-exp-0827 | ✅ | ❌ | Experimental |
+| 1 | gemini-1.5-pro-002 | ✅ | ❌ | ⚫ DEPRECATED |
+| 2 | gemini-1.5-pro-exp-0827 | ✅ | ❌ | ⚫ DEPRECATED |
+| 3 | gemini-1.5-flash-002 | ✅ | ❌ | ⚫ DEPRECATED |
+| 4 | gemini-1.5-flash-8b | ✅ | ❌ | ⚫ DEPRECATED |
+| 5 | gemini-1.5-flash-latest | ✅ | ❌ | ⚫ DEPRECATED |
+| 6 | gemini-1.5-pro-latest | ✅ | ❌ | ⚫ DEPRECATED |
+| 7 | gemini-1.5-flash | ✅ | ❌ | ⚫ DEPRECATED |
+| 8 | gemini-1.5-pro | ✅ | ❌ | ⚫ DEPRECATED |
+| 9 | gemini-1.5-flash-thinking | ✅ | ❌ | ⚫ DEPRECATED |
+| 10 | gemini-1.5-pro-thinking | ✅ | ❌ | ⚫ DEPRECATED |
+| 11 | gemini-1.5-flash-8b-thinking | ✅ | ❌ | ⚫ DEPRECATED |
+| 12 | gemini-1.5-pro-thinking-exp-0827 | ✅ | ❌ | ⚫ DEPRECATED |
 
-**Status**: Все legacy, имеют только Base Workflow
+**Status**: ⚫ DEPRECATED - Все модели устарели, имеют только Base Workflow для backward compatibility
 
 **Почему нет COMPARISON?**
 ```yaml
 причина:
-  - "Legacy модели (Gemini 1.5 → superseded by 2.5 и 3.x)"
-  - "Low priority для детального анализа"
+  - "⚫ DEPRECATED: Legacy модели (Gemini 1.5 → superseded by 2.5 и 3.x)"
+  - "⚫ Официально признаны устаревшими, не будут реализовываться"
   - "Workflow достаточно для backward compatibility"
 
 нужен_ли_comparison:
-  priority: "VERY LOW"
-  reason: "Legacy модели, постепенно deprecated"
-  recommendation: "НЕ создавать COMPARISON для 1.5 series"
+  priority: "⚫ CANCELLED"
+  reason: "⚫ DEPRECATED модели - официально отменены"
+  recommendation: "⚫ НЕ создавать COMPARISON для 1.5 series - DEPRECATED"
+  decision: "2026-01-14 - Officially marked as DEPRECATED, no implementation"
 ```
 
 #### 2.3 Experimental Models (12 моделей)
@@ -232,9 +233,9 @@ comparison_creation_triggers:
 
 comparison_NOT_created:
   1_legacy_models:
-    condition: "Старые стабильные модели"
-    example: "Gemini 1.5, 2.5 production"
-    reason: "Работают стабильно, нет gaps"
+    condition: "⚫ DEPRECATED - Старые устаревшие модели"
+    example: "Gemini 1.5 (⚫ DEPRECATED 2026-01-14), 2.5 production"
+    reason: "⚫ Gemini 1.5 DEPRECATED - will NOT be implemented"
 
   2_experimental:
     condition: "Экспериментальные codename модели"
@@ -310,9 +311,9 @@ versus_other_models:
     prep_time: "4-6 дней для создания COMPARISON"
 
   gemini_1_5_pro:
-    comparison: "❌ НЕТ"
-    prep_time: "4-6 дней"
-    note: "Legacy model, LOW priority"
+    comparison: "⚫ DEPRECATED"
+    prep_time: "N/A"
+    note: "⚫ DEPRECATED - Legacy model, will NOT be implemented"
 
   gemini_3_pro_low:
     comparison: "✅ ЕСТЬ но Epic-009 IN PROGRESS"
@@ -377,8 +378,9 @@ decision: "Defer to Q3 2026 или later"
 ```yaml
 dont_create:
   gemini_1_5_series:
-    reason: "Legacy models (superseded by 2.5 и 3.x)"
-    recommendation: "НЕ создавать"
+    reason: "⚫ DEPRECATED: Legacy models (superseded by 2.5 и 3.x)"
+    recommendation: "⚫ НЕ создавать - OFFICIALLY DEPRECATED (2026-01-14)"
+    status: "⚫ DEPRECATED - Will NOT be implemented"
 
   experimental_models:
     reason: "Codename models, не stable"
@@ -504,7 +506,7 @@ when_to_create:
   trigger_3: "Active development/optimization needed"
 
 when_NOT_to_create:
-  - "Legacy models (Gemini 1.5)"
+  - "⚫ DEPRECATED models (Gemini 1.5 - officially deprecated 2026-01-14)"
   - "Experimental codename models"
   - "Low usage models"
   - "Stable models without optimization needs"

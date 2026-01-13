@@ -244,7 +244,7 @@ after_epic_024_025:
   remaining_models: "12 models (22.2%)"
 
 high_priority_remaining:
-  - "gemini-1.5 series (legacy, 12 models)"
+  - "gemini-1.5 series (legacy, 12 models) ⚫ DEPRECATED - NOT TO BE IMPLEMENTED"
   - "Other 2.5 variants (low usage)"
 
 recommendation:

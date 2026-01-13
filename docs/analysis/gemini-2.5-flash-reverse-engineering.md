@@ -179,7 +179,7 @@ let mut inner_request = deep_clean_undefined(body);
 #### 2.3.2 MaxOutputTokens Removal (lines 31-33)
 ```rust
 // [FIX] Removed forced maxOutputTokens (64000)
-// Exceeded limits for Gemini 1.5 Flash/Pro (8192 max)
+// Exceeded limits for Gemini 1.5 Flash/Pro (8192 max) - ⚫ DEPRECATED models
 // Caused empty responses → 'NoneType' errors
 inner_request.as_object_mut()?.remove("maxOutputTokens");
 ```

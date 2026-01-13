@@ -13,8 +13,9 @@
 
 **Model Name**: [e.g., gemini-2.0-flash-thinking-exp-01-21]
 **Full API Path**: [e.g., models/gemini-2.0-flash-thinking-exp-01-21]
-**Model Family**: [e.g., Gemini 2.0 Flash, Gemini 1.5 Pro]
+**Model Family**: [e.g., Gemini 2.0 Flash, Gemini 1.5 Pro (⚫ DEPRECATED)]
 **Status**: [Active/Deprecated/Experimental/Unknown]
+**Note**: ⚫ Gemini 1.5 family is DEPRECATED as of 2026-01-14
 
 ### Identification Sources
 
@@ -379,7 +380,8 @@
 
 ### Similar Models
 
-**Most Similar Model**: [e.g., gemini-1.5-pro-002]
+**Most Similar Model**: [e.g., gemini-1.5-pro-002 (⚫ DEPRECATED)]
+**Note**: If comparing to Gemini 1.5 models, note they are DEPRECATED as of 2026-01-14
 
 **Key Differences**:
 1. [Difference 1]

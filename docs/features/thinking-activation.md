@@ -657,7 +657,7 @@ let is_gemini_3_thinking = mapped_model.contains("gemini-3")
 - `gemini-3-pro-high` ✅
 - `gemini-3-pro-low` ✅
 - `gemini-3-pro` ✅
-- `gemini-1.5-pro` ❌ (not Gemini 3)
+- `gemini-1.5-pro` ❌ (not Gemini 3, ⚫ DEPRECATED)
 - `gemini-3-flash` ❌ (no pro/high/low suffix)
 
 ### Transformation Process
@@ -798,12 +798,14 @@ if is_gemini_3_thinking {
 - ✅ Budget set to 16000 tokens
 - ✅ `includeThoughts` enabled
 
-#### Example 2: Non-Gemini 3 Model (No Injection)
+#### Example 2: Non-Gemini 3 Model (No Injection) ⚫ DEPRECATED MODEL
+
+**Note**: ⚫ gemini-1.5-flash is DEPRECATED as of 2026-01-14 and shown here only for reference.
 
 **Before** (OpenAI protocol):
 ```json
 {
-  "model": "gemini-1.5-flash",
+  "model": "gemini-1.5-flash",  // ⚫ DEPRECATED
   "messages": [
     {"role": "user", "content": "Quick question"}
   ],
@@ -815,7 +817,7 @@ if is_gemini_3_thinking {
 ```json
 {
   "project": "test-project",
-  "model": "gemini-1.5-flash",
+  "model": "gemini-1.5-flash",  // ⚫ DEPRECATED
   "request": {
     "contents": [
       {
