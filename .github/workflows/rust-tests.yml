@@ -60,21 +60,24 @@ jobs:
 
       - name: Run unit tests
         working-directory: ./src-tauri
-        run: cargo test --lib
+        timeout-minutes: 15
+        run: cargo test --lib -- --test-threads=1
 
       - name: Run image generation E2E tests (mocked only)
         working-directory: ./src-tauri
+        timeout-minutes: 5
         env:
           ANTIGRAVITY_API_KEY: "test-key-for-ci"
         run: |
           # Run only mocked tests (skip live API tests marked with #[ignore])
-          cargo test image_generation --lib -- --skip live
+          cargo test image_generation --lib -- --skip live --test-threads=1
         continue-on-error: false
 
       - name: Check test coverage
         working-directory: ./src-tauri
+        timeout-minutes: 20
         run: |
-          cargo test --no-fail-fast --all-features
+          cargo test --no-fail-fast --all-features -- --test-threads=1
         continue-on-error: true
 
   lint:
