@@ -1,17 +1,19 @@
 pub mod account;
+pub mod budget_detector; // Epic-025 Story-025-03
 pub mod budget_optimizer; // Epic-025 Story-025-01
 pub mod config;
 pub mod db;
 pub mod i18n;
 pub mod logger;
 pub mod migration;
-pub mod model_selector; // Epic-024 Story-024-02
+// pub mod model_selector; // Epic-024 Story-024-02 (not yet implemented)
 pub mod oauth;
 pub mod oauth_server;
 pub mod process;
 pub mod proxy_db;
 pub mod quota;
-pub mod signature_cache;
+pub mod signature_cache; // Epic-025 Story-025-02
+pub mod thinking_quality; // Epic-025 Story-025-04
 pub mod tray;
 
 use crate::models;

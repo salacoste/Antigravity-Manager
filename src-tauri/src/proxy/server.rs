@@ -40,6 +40,8 @@ pub struct AppState {
     pub response_cache: Option<Arc<crate::proxy::response_cache::ResponseCache>>,
     /// Story-024-04: Detection monitoring and alerting
     pub detection_monitor: Arc<crate::proxy::detection::DetectionMonitor>,
+    /// Epic-025 Story-025-04: Thinking quality monitoring
+    pub quality_monitor: Arc<crate::modules::thinking_quality::ThinkingQualityMonitor>,
 }
 
 /// Axum 服务器实例
@@ -282,6 +284,10 @@ impl AxumServer {
             response_cache: response_cache_opt,
             // Story-024-04: Detection monitor initialized above
             detection_monitor: detection_monitor.clone(),
+            // Epic-025 Story-025-04: Quality monitor for thinking requests
+            quality_monitor: Arc::new(
+                crate::modules::thinking_quality::ThinkingQualityMonitor::new(),
+            ),
         };
 
         // 构建路由 - 使用新架构的 handlers！

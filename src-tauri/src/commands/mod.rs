@@ -10,6 +10,8 @@ pub mod autostart;
 pub mod detection;
 // 导出 budget 命令 (Epic-025 Story-025-01)
 pub mod budget;
+// Epic-025 Story-025-04: Quality monitoring commands
+pub mod quality;
 
 /// 列出所有账号
 #[tauri::command]

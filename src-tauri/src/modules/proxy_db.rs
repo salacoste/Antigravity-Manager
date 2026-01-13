@@ -58,6 +58,9 @@ pub fn init_db() -> Result<(), String> {
     // 🆕 Epic-014 Story-014-04: Run migration for audio_metrics table
     migrate_audio_metrics_table()?;
 
+    // 🆕 Epic-025 Story-025-04: Run migration for quality_analyses table
+    migrate_quality_analyses_table()?;
+
     Ok(())
 }
 
@@ -866,4 +869,237 @@ pub fn get_audio_analytics(days: u32) -> Result<crate::db::audio_metrics::AudioA
 
     crate::db::audio_metrics::get_audio_analytics(&conn, days)
         .map_err(|e| format!("Failed to get audio analytics: {}", e))
+}
+
+// ==================== Epic-025 Story-025-04: Quality Monitoring ====================
+
+/// Migrate quality_analyses table for thinking quality monitoring
+/// Epic-025 Story-025-04: Quality monitoring database integration
+fn migrate_quality_analyses_table() -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    // Create quality_analyses table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS quality_analyses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            request_id TEXT UNIQUE NOT NULL,
+            timestamp INTEGER NOT NULL,
+            thinking_tokens INTEGER NOT NULL,
+            output_tokens INTEGER NOT NULL,
+            thinking_budget INTEGER NOT NULL,
+            budget_utilization REAL NOT NULL,
+            efficiency_score REAL NOT NULL,
+            completeness_score REAL NOT NULL,
+            coherence_score REAL NOT NULL,
+            overall_score REAL NOT NULL,
+            first_time_right INTEGER NOT NULL,
+            escalation_count INTEGER NOT NULL,
+            finish_reason TEXT NOT NULL,
+            user_rating REAL
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create quality_analyses table: {}", e))?;
+
+    // Create indices for faster queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_quality_analyses_timestamp
+         ON quality_analyses(timestamp DESC)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create timestamp index: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_quality_analyses_first_time_right
+         ON quality_analyses(first_time_right)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create first_time_right index: {}", e))?;
+
+    tracing::info!("[ProxyDB] Successfully migrated quality_analyses table");
+    Ok(())
+}
+
+/// Save quality analysis to database
+/// Epic-025 Story-025-04: Persist quality metrics for dashboard and weekly feedback
+pub fn save_quality_analysis(
+    analysis: &crate::modules::thinking_quality::QualityAnalysis,
+) -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO quality_analyses (
+            request_id,
+            timestamp,
+            thinking_tokens,
+            output_tokens,
+            thinking_budget,
+            budget_utilization,
+            efficiency_score,
+            completeness_score,
+            coherence_score,
+            overall_score,
+            first_time_right,
+            escalation_count,
+            finish_reason,
+            user_rating
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        params![
+            analysis.request_id,
+            analysis.timestamp.timestamp(),
+            analysis.thinking_tokens as i64,
+            analysis.output_tokens as i64,
+            analysis.thinking_budget as i64,
+            analysis.budget_utilization,
+            analysis.efficiency_score,
+            analysis.completeness_score,
+            analysis.coherence_score,
+            analysis.overall_score,
+            if analysis.first_time_right { 1 } else { 0 },
+            analysis.escalation_count as i64,
+            analysis.finish_reason,
+            analysis.user_rating,
+        ],
+    )
+    .map_err(|e| format!("Failed to save quality analysis: {}", e))?;
+
+    Ok(())
+}
+
+/// Load quality analyses since timestamp
+/// Epic-025 Story-025-04: Weekly feedback aggregation
+pub fn load_quality_analyses_since(
+    since_timestamp: i64,
+) -> Result<Vec<crate::modules::thinking_quality::QualityAnalysis>, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT request_id, timestamp, thinking_tokens, output_tokens,
+                    thinking_budget, budget_utilization, efficiency_score,
+                    completeness_score, coherence_score, overall_score,
+                    first_time_right, escalation_count, finish_reason, user_rating
+             FROM quality_analyses
+             WHERE timestamp >= ?1
+             ORDER BY timestamp DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let analyses_iter = stmt
+        .query_map([since_timestamp], |row| {
+            use crate::modules::thinking_quality::QualityAnalysis;
+
+            let timestamp_i64: i64 = row.get(1)?;
+            let ftr_flag: i64 = row.get(10)?;
+
+            Ok(QualityAnalysis {
+                request_id: row.get(0)?,
+                timestamp: chrono::DateTime::from_timestamp(timestamp_i64, 0)
+                    .unwrap_or_else(chrono::Utc::now),
+                thinking_tokens: row.get::<_, i64>(2)? as u32,
+                output_tokens: row.get::<_, i64>(3)? as u32,
+                thinking_budget: row.get::<_, i64>(4)? as u32,
+                budget_utilization: row.get(5)?,
+                efficiency_score: row.get(6)?,
+                completeness_score: row.get(7)?,
+                coherence_score: row.get(8)?,
+                overall_score: row.get(9)?,
+                first_time_right: ftr_flag != 0,
+                escalation_count: row.get::<_, i64>(11)? as u32,
+                finish_reason: row.get(12)?,
+                user_rating: row.get(13)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut analyses = Vec::new();
+    for analysis in analyses_iter {
+        analyses.push(analysis.map_err(|e| e.to_string())?);
+    }
+    Ok(analyses)
+}
+
+/// Load recent quality analyses with limit
+/// Epic-025 Story-025-04: Quality history for dashboard
+pub fn load_quality_analyses(
+    limit: usize,
+) -> Result<Vec<crate::modules::thinking_quality::QualityAnalysis>, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT request_id, timestamp, thinking_tokens, output_tokens,
+                    thinking_budget, budget_utilization, efficiency_score,
+                    completeness_score, coherence_score, overall_score,
+                    first_time_right, escalation_count, finish_reason, user_rating
+             FROM quality_analyses
+             ORDER BY timestamp DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let analyses_iter = stmt
+        .query_map([limit], |row| {
+            use crate::modules::thinking_quality::QualityAnalysis;
+
+            let timestamp_i64: i64 = row.get(1)?;
+            let ftr_flag: i64 = row.get(10)?;
+
+            Ok(QualityAnalysis {
+                request_id: row.get(0)?,
+                timestamp: chrono::DateTime::from_timestamp(timestamp_i64, 0)
+                    .unwrap_or_else(chrono::Utc::now),
+                thinking_tokens: row.get::<_, i64>(2)? as u32,
+                output_tokens: row.get::<_, i64>(3)? as u32,
+                thinking_budget: row.get::<_, i64>(4)? as u32,
+                budget_utilization: row.get(5)?,
+                efficiency_score: row.get(6)?,
+                completeness_score: row.get(7)?,
+                coherence_score: row.get(8)?,
+                overall_score: row.get(9)?,
+                first_time_right: ftr_flag != 0,
+                escalation_count: row.get::<_, i64>(11)? as u32,
+                finish_reason: row.get(12)?,
+                user_rating: row.get(13)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut analyses = Vec::new();
+    for analysis in analyses_iter {
+        analyses.push(analysis.map_err(|e| e.to_string())?);
+    }
+    Ok(analyses)
+}
+
+/// Update user rating for a quality analysis
+/// Epic-025 Story-025-04: User feedback integration
+pub fn update_quality_user_rating(request_id: &str, rating: f64) -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let updated = conn
+        .execute(
+            "UPDATE quality_analyses SET user_rating = ?1 WHERE request_id = ?2",
+            params![rating, request_id],
+        )
+        .map_err(|e| format!("Failed to update user rating: {}", e))?;
+
+    if updated == 0 {
+        Err(format!(
+            "No quality analysis found for request_id: {}",
+            request_id
+        ))
+    } else {
+        tracing::info!(
+            "[Epic-025] User rating updated: request_id={}, rating={}",
+            request_id,
+            rating
+        );
+        Ok(())
+    }
 }
