@@ -9,6 +9,8 @@
 // - Unnecessary escalations: <5%
 // - Performance overhead: <50ms
 
+#![allow(dead_code)] // WIP: Epic-025 Story-025-03 implementation
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

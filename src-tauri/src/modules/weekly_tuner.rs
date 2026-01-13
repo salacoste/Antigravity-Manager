@@ -1,6 +1,8 @@
 // Epic-025 Week 7: Automated Weekly Tuning System
 // Automatically analyzes quality metrics and adjusts budget optimizer parameters
 
+#![allow(dead_code)] // WIP: Epic-025 Week 7 implementation
+
 use crate::modules::thinking_quality::{ThinkingQualityMonitor, WeeklyFeedback};
 use chrono::{Datelike, Timelike};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -129,8 +131,7 @@ impl WeeklyTuner {
         }
 
         // Save tuning report
-        self.save_tuning_report(&feedback, &recommendations)
-            .await?;
+        self.save_tuning_report(&feedback, &recommendations).await?;
 
         info!(
             "[Epic-025] Weekly tuning complete: {}/{} recommendations applied",
@@ -142,7 +143,10 @@ impl WeeklyTuner {
     }
 
     /// Generate tuning recommendations based on weekly feedback
-    fn generate_tuning_recommendations(&self, feedback: &WeeklyFeedback) -> Vec<TuningRecommendation> {
+    fn generate_tuning_recommendations(
+        &self,
+        feedback: &WeeklyFeedback,
+    ) -> Vec<TuningRecommendation> {
         let mut recommendations = Vec::new();
 
         // Check first-time-right rate
@@ -157,7 +161,11 @@ impl WeeklyTuner {
                 ),
                 auto_apply: false, // Manual approval required for budget increases
                 confidence: 0.85,
-                impact_estimate: format!("+{:.1}% cost, +{:.1}% quality", increase_pct, increase_pct * 0.8),
+                impact_estimate: format!(
+                    "+{:.1}% cost, +{:.1}% quality",
+                    increase_pct,
+                    increase_pct * 0.8
+                ),
             });
         } else if feedback.first_time_right_rate > 0.95 {
             recommendations.push(TuningRecommendation {
@@ -267,7 +275,10 @@ impl WeeklyTuner {
                     if let Some(pct) = pct_str.split('%').next() {
                         if let Ok(pct_val) = pct.parse::<f64>() {
                             let adjustment = -pct_val / 100.0;
-                            info!("[Epic-025] Would adjust budgets by {:.2}%", adjustment * 100.0);
+                            info!(
+                                "[Epic-025] Would adjust budgets by {:.2}%",
+                                adjustment * 100.0
+                            );
                             // TODO: budget_optimizer.adjust_default_budgets(adjustment).await?;
                         }
                     }
@@ -318,8 +329,7 @@ impl WeeklyTuner {
         let feedback = self.quality_monitor.get_weekly_feedback(7).await?;
         let recommendations = self.generate_tuning_recommendations(&feedback);
 
-        self.save_tuning_report(&feedback, &recommendations)
-            .await?;
+        self.save_tuning_report(&feedback, &recommendations).await?;
 
         Ok(recommendations)
     }

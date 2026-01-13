@@ -220,9 +220,9 @@ mod epic_025_integration_tests {
 
         // Simulate 100 requests with mix of complexities
         let test_requests = vec![
-            ("What is Rust?", "simple", 50),                    // 50 simple
-            ("Implement quicksort", "moderate", 30),            // 30 moderate
-            ("Design a distributed system", "complex", 20),     // 20 complex
+            ("What is Rust?", "simple", 50),                // 50 simple
+            ("Implement quicksort", "moderate", 30),        // 30 moderate
+            ("Design a distributed system", "complex", 20), // 20 complex
         ];
 
         let mut total_cost_without_optimization = 0;
@@ -243,8 +243,14 @@ mod epic_025_integration_tests {
             / total_cost_without_optimization as f64)
             * 100.0;
 
-        println!("Total cost without optimization: {}", total_cost_without_optimization);
-        println!("Total cost with optimization: {}", total_cost_with_optimization);
+        println!(
+            "Total cost without optimization: {}",
+            total_cost_without_optimization
+        );
+        println!(
+            "Total cost with optimization: {}",
+            total_cost_with_optimization
+        );
         println!("Savings: {:.1}%", savings);
 
         // Verify Epic-025 target: 20-30% savings
@@ -304,7 +310,8 @@ mod epic_025_integration_tests {
         // Simulate varied quality over 7 days
         for day in 0..7 {
             for request in 0..10 {
-                let req = create_test_request(&format!("Day {} Request {}", day, request), "moderate");
+                let req =
+                    create_test_request(&format!("Day {} Request {}", day, request), "moderate");
                 let resp = create_mock_response("STOP", 8000);
 
                 quality_monitor

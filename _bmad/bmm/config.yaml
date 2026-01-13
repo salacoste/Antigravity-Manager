@@ -5,8 +5,8 @@
 
 project_name: Antigravity-Manager
 user_skill_level: intermediate
-planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
-implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
+planning_artifacts: "{project-root}/docs/epics"
+implementation_artifacts: "{project-root}/docs/stories"
 project_knowledge: "{project-root}/docs"
 tea_use_mcp_enhancements: false
 tea_use_playwright_utils: false
@@ -15,4 +15,4 @@ tea_use_playwright_utils: false
 user_name: Ivan
 communication_language: English
 document_output_language: English
-output_folder: "{project-root}/_bmad-output"
+output_folder: "{project-root}/docs"
