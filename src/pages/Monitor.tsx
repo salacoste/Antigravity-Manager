@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, Shield } from 'lucide-react';
+import { ArrowLeft, TrendingUp, Shield, Music } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ProxyMonitor } from '../components/proxy/ProxyMonitor';
 import { ComplianceMetrics } from '../components/proxy/ComplianceMetrics';
 import { DetectionPanel } from '../components/monitor/DetectionPanel';
+import { AudioAnalyticsPanel } from '../components/monitor/AudioAnalyticsPanel';
 
 const Monitor: React.FC = () => {
     const navigate = useNavigate();
     const { t } = useTranslation();
     const [showCompliance, setShowCompliance] = useState(true);
     const [showDetection, setShowDetection] = useState(true);
+    const [showAudio, setShowAudio] = useState(true);
 
     return (
         <div className="h-full w-full flex flex-col bg-gray-50 dark:bg-base-200">
@@ -52,6 +54,14 @@ const Monitor: React.FC = () => {
                         <TrendingUp size={16} />
                         <span className="hidden sm:inline">{t('monitor.compliance')}</span>
                     </button>
+                    <button
+                        onClick={() => setShowAudio(!showAudio)}
+                        className={`btn btn-sm ${showAudio ? 'btn-primary' : 'btn-ghost'}`}
+                        title={showAudio ? 'Hide Audio Analytics' : 'Show Audio Analytics'}
+                    >
+                        <Music size={16} />
+                        <span className="hidden sm:inline">Audio</span>
+                    </button>
                 </div>
             </div>
 
@@ -61,6 +71,11 @@ const Monitor: React.FC = () => {
                     {/* Detection Dashboard (Story-024-04 Part 2) */}
                     {showDetection && (
                         <DetectionPanel className="border border-gray-200 dark:border-base-300" />
+                    )}
+
+                    {/* Audio Analytics Dashboard (Epic-014 Story-014-04) */}
+                    {showAudio && (
+                        <AudioAnalyticsPanel className="border border-gray-200 dark:border-base-300" />
                     )}
 
                     {/* Compliance Dashboard */}

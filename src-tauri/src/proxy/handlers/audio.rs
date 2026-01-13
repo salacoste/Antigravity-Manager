@@ -5,10 +5,14 @@ use axum::{
     Json,
 };
 use serde_json::{json, Value};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use crate::modules::proxy_db::AudioMetric;
 use crate::proxy::{audio::AudioProcessor, server::AppState};
+use crate::utils::audio_validation::{
+    AudioHeaderValidator, AudioDurationValidator, CodecValidator, DurationWarning,
+};
 
 /// 处理音频转录请求 (OpenAI Whisper API 兼容)
 pub async fn handle_audio_transcription(
@@ -76,7 +80,33 @@ pub async fn handle_audio_transcription(
         ));
     }
 
-    // 4. 使用 Inline Data 方式
+    // 4. Epic-014 Story-014-01: Validate audio file header (magic bytes)
+    AudioHeaderValidator::validate_header(&audio_bytes, &mime_type)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    // 5. Epic-014 Story-014-01: Validate codec compatibility
+    CodecValidator::validate_codec(&audio_bytes, &mime_type)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    // 6. Epic-014 Story-014-01: Validate duration (with warnings for long files)
+    match AudioDurationValidator::validate_duration(&audio_bytes, &mime_type) {
+        Ok(DurationWarning::ExceedsRecommended { message, duration_minutes, .. }) => {
+            warn!(
+                "Audio duration warning ({}min): {}",
+                duration_minutes, message
+            );
+            // Continue processing with warning log
+        }
+        Ok(DurationWarning::None) => {
+            // No warning, continue
+        }
+        Err(e) => {
+            // Hard error (exceeds 3-hour limit)
+            return Err((StatusCode::BAD_REQUEST, e.to_string()));
+        }
+    }
+
+    // 7. 使用 Inline Data 方式
     debug!("使用 Inline Data 方式处理");
     let base64_audio = AudioProcessor::encode_to_base64(&audio_bytes);
 
@@ -152,8 +182,38 @@ pub async fn handle_audio_transcription(
 
     info!("音频转录完成，返回 {} 字符", text.len());
 
-    // 10. 返回标准格式响应
-    Ok(Json(json!({
+    // 10. Epic-014 Story-014-02: Add experimental metadata for gemini-2.0-flash-exp
+    let mut response_json = json!({
         "text": text
-    })))
+    });
+
+    if model == "gemini-2.0-flash-exp" {
+        response_json["_antigravity"] = json!({
+            "experimental": true,
+            "warning": "gemini-2.0-flash-exp is EXPERIMENTAL and will be deprecated in Q2 2026. Please migrate to gemini-2.5-flash for production stability.",
+            "deprecation_timeline": "Q2 2026 (end-of-life)",
+            "migration_guide_url": "https://docs.antigravity-tools.com/guides/migration-gemini-2.0-flash-exp-to-2.5-flash",
+            "stable_alternative": "gemini-2.5-flash"
+        });
+        warn!("Experimental model used: {} (deprecated Q2 2026)", model);
+    }
+
+    // 11. Epic-014 Story-014-04: Record audio analytics metric
+    let audio_metric = AudioMetric {
+        timestamp: chrono::Utc::now().timestamp(),
+        model_id: model.clone(),
+        duration_secs: None, // TODO: Extract from validation if available
+        format: mime_type.split('/').last().unwrap_or("unknown").to_string(),
+        file_size_bytes: audio_bytes.len(),
+        success: true,
+        error_message: None,
+    };
+
+    // Record metric (non-blocking - don't fail transcription if analytics fails)
+    if let Err(e) = crate::modules::proxy_db::record_audio_metric(&audio_metric) {
+        warn!("Failed to record audio metric: {}", e);
+    }
+
+    // 12. 返回响应
+    Ok(Json(response_json))
 }
