@@ -68,7 +68,6 @@ pub async fn clear_detection_events(state: State<'_, ProxyServiceState>) -> Resu
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::proxy::detection::{DetectionEvent, DetectionEventType, DetectionMonitor, Severity};
     use std::collections::HashMap;
     use std::sync::Arc;

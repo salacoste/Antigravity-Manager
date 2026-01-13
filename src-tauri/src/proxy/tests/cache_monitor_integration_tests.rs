@@ -90,14 +90,14 @@ mod cache_monitor_integration_tests {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let metrics = runtime.block_on(async { monitor.export_metrics().await });
 
-        // Should not crash - metrics should exist
-        assert!(
-            metrics.hit_count >= 0,
-            "Hit count should be valid (not crash)"
+        // Should not crash - metrics should exist (u64 is always >= 0)
+        assert_eq!(
+            metrics.hit_count, 0,
+            "Hit count should be 0 for new monitor"
         );
-        assert!(
-            metrics.miss_count >= 0,
-            "Miss count should be valid (not crash)"
+        assert_eq!(
+            metrics.miss_count, 0,
+            "Miss count should be 0 for new monitor"
         );
         assert!(
             metrics.hit_rate >= 0.0,

@@ -579,7 +579,7 @@ mod tests {
     /// 🔴 RED: ViolationMetrics ещё не существует
     #[tokio::test]
     async fn test_violation_metrics_creation() {
-        let metrics = ViolationMetrics::new();
+        let _metrics = ViolationMetrics::new();
 
         // Should be created successfully
         assert!(true);

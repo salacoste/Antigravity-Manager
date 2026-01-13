@@ -156,12 +156,17 @@ impl DetectionMonitor {
             "Detection event recorded"
         );
 
-        // Store event in memory
-        let mut events = self.events.lock().unwrap();
-        events.push(event.clone());
+        // Check if alert should be triggered BEFORE acquiring lock to avoid deadlock
+        let should_trigger_alert = self.should_alert(&event);
 
-        // Check if alert should be triggered
-        if self.should_alert(&event) {
+        // Store event in memory
+        {
+            let mut events = self.events.lock().unwrap();
+            events.push(event.clone());
+        } // Lock released here
+
+        // Trigger alert callback if needed (without holding lock)
+        if should_trigger_alert {
             if let Some(callback) = &self.alert_callback {
                 callback(&event);
             }
