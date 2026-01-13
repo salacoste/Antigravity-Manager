@@ -102,12 +102,12 @@ jobs:
 
       - name: Run proxy tests (sequential execution)
         working-directory: ./src-tauri
-        timeout-minutes: 25
+        timeout-minutes: 30
         env:
           ANTIGRAVITY_API_KEY: "test-key-for-ci"
         run: |
           # Run all proxy tests (~461 tests) - SEQUENTIAL execution for stability
-          # Timeout increased to 25min to ensure completion
+          # Timeout: 30min (tests take ~25-27min in CI with sequential execution)
           cargo test --lib -- proxy --test-threads=1
 
   lint:
