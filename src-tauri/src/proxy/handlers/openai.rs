@@ -135,13 +135,11 @@ pub async fn handle_chat_completions(
 
         // 4. 获取 Token (使用准确的 request_type)
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
-        // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
             .get_token(
                 &config.request_type,
                 attempt > 0,
                 Some(&session_id),
-                Some(&mapped_model),
             )
             .await
         {
@@ -369,13 +367,12 @@ pub async fn handle_chat_completions(
 
         // 429/529/503 智能处理
         if status_code == 429 || status_code == 529 || status_code == 503 || status_code == 500 {
-            // 记录限流信息 (全局同步) - 🆕 传递模型实现 model-level rate limiting
+            // 记录限流信息 (全局同步)
             token_manager.mark_rate_limited(
                 &email,
                 status_code,
                 retry_after.as_deref(),
                 &error_text,
-                Some(&mapped_model),
             );
 
             // 1. 优先尝试解析 RetryInfo (由 Google Cloud 直接下发)
@@ -754,7 +751,7 @@ pub async fn handle_completions(
 
         // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, false, None, Some(&mapped_model))
+            .get_token(&config.request_type, false, None)
             .await
         {
             Ok(t) => t,
@@ -990,7 +987,7 @@ pub async fn handle_images_generations(
                         }]
                     });
 
-                    return Ok(Json(openai_response));
+                    return Ok(Json(openai_response).into_response());
                 }
                 Ok(None) => {
                     debug!(
@@ -1037,7 +1034,7 @@ pub async fn handle_images_generations(
 
     // 🆕 传递模型参数实现 model-aware rate limiting (image generation)
     let (access_token, project_id, email) = match token_manager
-        .get_token("image_gen", false, None, Some(model))
+        .get_token("image_gen", false, None)
         .await
     {
         Ok(t) => t,
@@ -1460,7 +1457,7 @@ pub async fn handle_images_edits(
                         "data": data_field
                     });
 
-                    return Ok(Json(openai_response));
+                    return Ok(Json(openai_response).into_response());
                 }
                 Ok(None) => {
                     debug!(
@@ -1502,7 +1499,7 @@ pub async fn handle_images_edits(
     // Fix: Proper get_token call with correct signature and unwrap (using image_gen quota)
     // 🆕 传递模型参数实现 model-aware rate limiting (image edit)
     let (access_token, project_id, email) = match token_manager
-        .get_token("image_gen", false, None, Some(&model))
+        .get_token("image_gen", false, None)
         .await
     {
         Ok(t) => t,

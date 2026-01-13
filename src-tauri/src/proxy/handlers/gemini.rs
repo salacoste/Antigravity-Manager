@@ -178,13 +178,11 @@ pub async fn handle_generate(
         let session_id = SessionManager::extract_gemini_session_id(&body, &model_name);
 
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
-        // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
             .get_token(
                 &config.request_type,
                 attempt > 0,
                 Some(&session_id),
-                Some(&mapped_model),
             )
             .await
         {
@@ -476,13 +474,12 @@ pub async fn handle_generate(
             || status_code == 403
             || status_code == 401
         {
-            // 记录限流信息 (全局同步) - 🆕 传递模型实现 model-level rate limiting
+            // 记录限流信息 (全局同步)
             token_manager.mark_rate_limited(
                 &email,
                 status_code,
                 retry_after.as_deref(),
                 &error_text,
-                Some(&mapped_model),
             );
 
             // 只有明确包含 "QUOTA_EXHAUSTED" 才停止 -> 【Fix PR#493】改为继续尝试下一个账号
@@ -562,7 +559,7 @@ pub async fn handle_count_tokens(
     // 🆕 count_tokens 工具不需要 model-specific rate limiting, 传递 None
     let (_access_token, _project_id, _) = state
         .token_manager
-        .get_token(model_group, false, None, None)
+        .get_token(model_group, false, None)
         .await
         .map_err(|e| {
             (

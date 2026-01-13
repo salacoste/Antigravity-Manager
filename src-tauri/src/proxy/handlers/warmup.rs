@@ -94,6 +94,7 @@ pub async fn handle_warmup(
             top_p: None,
             top_k: None,
             tools: None,
+            tool_choice: None,
             metadata: None,
             thinking: None,
             output_config: None,
@@ -103,7 +104,7 @@ pub async fn handle_warmup(
             &claude_request,
             &project_id,
         ) {
-            Ok(transformed) => transformed,
+            Ok((transformed, _violation_info)) => transformed,
             Err(e) => {
                 warn!("[Warmup-API] Step 2 FAILED: Claude transform error: {}", e);
                 return (

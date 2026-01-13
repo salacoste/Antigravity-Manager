@@ -133,7 +133,7 @@ pub async fn handle_audio_transcription(
     let token_manager = state.token_manager;
     // 🆕 传递模型参数实现 model-aware rate limiting (audio transcription)
     let (access_token, project_id, email) = token_manager
-        .get_token("text", false, None, Some(&model))
+        .get_token("text", false, None)
         .await
         .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e))?;
 

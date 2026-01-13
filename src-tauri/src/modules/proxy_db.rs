@@ -162,6 +162,16 @@ pub fn get_stats() -> Result<crate::proxy::monitor::ProxyStats, String> {
         total_requests,
         success_count,
         error_count,
+        // Epic-025 metrics (not tracked in simplified stats query)
+        thinking_budget_violations: 0,
+        thinking_position_violations: 0,
+        thinking_position_violations_user: 0,
+        thinking_position_violations_model: 0,
+        detection_events_total: 0,
+        detection_events_critical: 0,
+        detection_events_high: 0,
+        detection_events_medium: 0,
+        detection_events_low: 0,
     })
 }
 

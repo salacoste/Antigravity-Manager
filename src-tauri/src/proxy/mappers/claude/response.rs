@@ -397,9 +397,7 @@ impl NonStreamingProcessor {
                 cache_read_input_tokens: None,
                 cache_creation_input_tokens: None,
                 server_tool_use: None,
-            },
-            to_claude_usage,
-        );
+            });
 
         ClaudeResponse {
             id: gemini_response.response_id.clone().unwrap_or_else(|| {
