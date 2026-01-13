@@ -1,4 +1,5 @@
 mod commands;
+mod db; // Epic-014 Story-014-04: Audio analytics database
 pub mod error;
 pub mod models; // Public for integration testing (Story-024-02)
 mod modules;
@@ -131,6 +132,7 @@ pub fn run() {
             commands::proxy::get_analytics_report,  // 🆕 Story-013-06
             commands::proxy::get_cost_breakdown,    // 🆕 Story-013-06
             commands::proxy::reset_analytics,       // 🆕 Story-013-06
+            commands::proxy::get_audio_analytics,   // 🆕 Epic-014 Story-014-04
             commands::proxy::get_proxy_logs,
             commands::proxy::set_proxy_monitor_enabled,
             commands::proxy::clear_proxy_logs,
