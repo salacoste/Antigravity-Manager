@@ -92,3 +92,36 @@ pub async fn reset_quality_metrics(
     monitor.reset_metrics().await;
     Ok(())
 }
+
+/// Week 7: Get historical quality data for trends
+#[derive(serde::Serialize, Clone)]
+pub struct HistoricalDataPoint {
+    pub date: String,
+    pub overall_score: f64,
+    pub efficiency_score: f64,
+    pub completeness_score: f64,
+    pub coherence_score: f64,
+    pub ftr_rate: f64,
+    pub budget_utilization: f64,
+}
+
+#[tauri::command]
+pub async fn get_quality_history_with_trends(
+    days: Option<u32>,
+) -> Result<Vec<HistoricalDataPoint>, String> {
+    let days = days.unwrap_or(7);
+    proxy_db::get_quality_history_aggregated(days)
+}
+
+/// Week 7: Get budget utilization distribution
+#[derive(serde::Serialize, Clone)]
+pub struct BudgetDistribution {
+    pub range: String,
+    pub count: usize,
+}
+
+#[tauri::command]
+pub async fn get_budget_distribution(days: Option<u32>) -> Result<Vec<BudgetDistribution>, String> {
+    let days = days.unwrap_or(7);
+    proxy_db::get_budget_utilization_distribution(days)
+}

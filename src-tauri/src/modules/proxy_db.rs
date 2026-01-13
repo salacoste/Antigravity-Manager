@@ -1103,3 +1103,112 @@ pub fn update_quality_user_rating(request_id: &str, rating: f64) -> Result<(), S
         Ok(())
     }
 }
+
+/// Epic-025 Week 7: Get aggregated quality history for trends
+pub fn get_quality_history_aggregated(
+    days: u32,
+) -> Result<Vec<crate::commands::quality::HistoricalDataPoint>, String> {
+    use crate::commands::quality::HistoricalDataPoint;
+
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let cutoff_timestamp = chrono::Utc::now().timestamp() - (days as i64 * 86400);
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT
+                DATE(timestamp, 'unixepoch') as date,
+                AVG(overall_score) as overall_score,
+                AVG(efficiency_score) as efficiency_score,
+                AVG(completeness_score) as completeness_score,
+                AVG(coherence_score) as coherence_score,
+                SUM(CASE WHEN first_time_right = 1 THEN 1 ELSE 0 END) * 1.0 / COUNT(*) as ftr_rate,
+                AVG(budget_utilization) as budget_utilization
+            FROM quality_analyses
+            WHERE timestamp >= ?1
+            GROUP BY DATE(timestamp, 'unixepoch')
+            ORDER BY date DESC
+            "#,
+        )
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    let rows = stmt
+        .query_map(params![cutoff_timestamp], |row| {
+            Ok(HistoricalDataPoint {
+                date: row.get(0)?,
+                overall_score: row.get(1)?,
+                efficiency_score: row.get(2)?,
+                completeness_score: row.get(3)?,
+                coherence_score: row.get(4)?,
+                ftr_rate: row.get(5)?,
+                budget_utilization: row.get(6)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query history: {}", e))?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| format!("Failed to parse row: {}", e))?);
+    }
+
+    Ok(result)
+}
+
+/// Epic-025 Week 7: Get budget utilization distribution
+pub fn get_budget_utilization_distribution(
+    days: u32,
+) -> Result<Vec<crate::commands::quality::BudgetDistribution>, String> {
+    use crate::commands::quality::BudgetDistribution;
+
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let cutoff_timestamp = chrono::Utc::now().timestamp() - (days as i64 * 86400);
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT
+                CASE
+                    WHEN budget_utilization < 0.25 THEN '0-25%'
+                    WHEN budget_utilization < 0.50 THEN '25-50%'
+                    WHEN budget_utilization < 0.75 THEN '50-75%'
+                    WHEN budget_utilization < 0.85 THEN '75-85%'
+                    WHEN budget_utilization < 0.95 THEN '85-95%'
+                    ELSE '95-100%'
+                END as range,
+                COUNT(*) as count
+            FROM quality_analyses
+            WHERE timestamp >= ?1
+            GROUP BY range
+            ORDER BY
+                CASE range
+                    WHEN '0-25%' THEN 1
+                    WHEN '25-50%' THEN 2
+                    WHEN '50-75%' THEN 3
+                    WHEN '75-85%' THEN 4
+                    WHEN '85-95%' THEN 5
+                    ELSE 6
+                END
+            "#,
+        )
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    let rows = stmt
+        .query_map(params![cutoff_timestamp], |row| {
+            Ok(BudgetDistribution {
+                range: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query distribution: {}", e))?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| format!("Failed to parse row: {}", e))?);
+    }
+
+    Ok(result)
+}

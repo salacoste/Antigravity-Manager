@@ -1,4 +1,4 @@
-// Epic-025 Story-025-04: Thinking Quality Monitoring Dashboard (Week 5 - Foundation)
+// Epic-025 Story-025-04: Thinking Quality Monitoring Dashboard (Week 7 - Complete)
 
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
@@ -10,7 +10,23 @@ import {
   CheckCircle2,
   Target,
   Zap,
+  Download,
+  Star,
+  Calendar,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceLine,
+} from 'recharts';
 
 interface QualityMetrics {
   total_requests: number;
@@ -38,35 +54,113 @@ interface WeeklyFeedback {
   tuning_priority: 'Critical' | 'High' | 'Medium' | 'Low';
 }
 
+interface HistoricalDataPoint {
+  date: string;
+  overall_score: number;
+  efficiency_score: number;
+  completeness_score: number;
+  coherence_score: number;
+  ftr_rate: number;
+  budget_utilization: number;
+}
+
+interface BudgetDistribution {
+  range: string;
+  count: number;
+}
+
 const QualityDashboardPage = () => {
   const { t } = useTranslation();
   const [metrics, setMetrics] = useState<QualityMetrics | null>(null);
   const [weeklyFeedback, setWeeklyFeedback] = useState<WeeklyFeedback | null>(null);
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
+  const [budgetDistribution, setBudgetDistribution] = useState<BudgetDistribution[]>([]);
+  const [timeRange, setTimeRange] = useState<7 | 30 | 90>(7);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [userRating, setUserRating] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
-    // Refresh every 30 seconds
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [timeRange]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const [metricsData, feedbackData] = await Promise.all([
+      const [metricsData, feedbackData, historyData, distData] = await Promise.all([
         invoke<QualityMetrics>('get_quality_metrics'),
         invoke<WeeklyFeedback>('get_weekly_feedback', { days: 7 }),
+        invoke<HistoricalDataPoint[]>('get_quality_history_with_trends', { days: timeRange }),
+        invoke<BudgetDistribution[]>('get_budget_distribution', { days: timeRange }),
       ]);
       setMetrics(metricsData);
       setWeeklyFeedback(feedbackData);
+      setHistoricalData(historyData);
+      setBudgetDistribution(distData);
     } catch (err) {
       setError(err as string);
       console.error('Failed to load quality data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const submitRating = async () => {
+    if (selectedRequestId && userRating > 0) {
+      try {
+        await invoke('submit_user_rating', {
+          requestId: selectedRequestId,
+          rating: userRating
+        });
+        alert(t('quality.rating_submitted', 'Rating submitted successfully'));
+        setSelectedRequestId(null);
+        setUserRating(0);
+      } catch (err) {
+        alert(t('quality.rating_error', 'Failed to submit rating'));
+      }
+    }
+  };
+
+  const exportToCSV = async () => {
+    try {
+      const history = await invoke<HistoricalDataPoint[]>('get_quality_history_with_trends', { days: 90 });
+      const csv = [
+        'Date,Overall Score,Efficiency,Completeness,Coherence,FTR Rate,Budget Utilization',
+        ...history.map(d =>
+          `${d.date},${d.overall_score},${d.efficiency_score},${d.completeness_score},${d.coherence_score},${d.ftr_rate},${d.budget_utilization}`
+        )
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `quality-metrics-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(t('quality.export_error', 'Failed to export data'));
+    }
+  };
+
+  const exportToJSON = async () => {
+    try {
+      const history = await invoke<HistoricalDataPoint[]>('get_quality_history_with_trends', { days: 90 });
+      const json = JSON.stringify(history, null, 2);
+
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `quality-metrics-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(t('quality.export_error', 'Failed to export data'));
     }
   };
 
@@ -129,15 +223,51 @@ const QualityDashboardPage = () => {
             {t('quality.subtitle', 'Track thinking quality metrics to optimize budget classifier')}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={loadData}>
-          <TrendingUp className="h-5 w-5" />
-          {t('quality.refresh', 'Refresh')}
+        <div className="flex gap-2">
+          <div className="dropdown dropdown-end">
+            <button tabIndex={0} className="btn btn-outline">
+              <Download className="h-5 w-5" />
+              {t('quality.export', 'Export')}
+            </button>
+            <ul tabIndex={0} className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-52">
+              <li><a onClick={exportToCSV}>Export as CSV</a></li>
+              <li><a onClick={exportToJSON}>Export as JSON</a></li>
+            </ul>
+          </div>
+          <button className="btn btn-primary" onClick={loadData}>
+            <TrendingUp className="h-5 w-5" />
+            {t('quality.refresh', 'Refresh')}
+          </button>
+        </div>
+      </div>
+
+      {/* Time Range Selector */}
+      <div className="flex gap-2">
+        <button
+          className={`btn btn-sm ${timeRange === 7 ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setTimeRange(7)}
+        >
+          <Calendar className="h-4 w-4" />
+          7 Days
+        </button>
+        <button
+          className={`btn btn-sm ${timeRange === 30 ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setTimeRange(30)}
+        >
+          <Calendar className="h-4 w-4" />
+          30 Days
+        </button>
+        <button
+          className={`btn btn-sm ${timeRange === 90 ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setTimeRange(90)}
+        >
+          <Calendar className="h-4 w-4" />
+          90 Days
         </button>
       </div>
 
       {/* Quality Score Gauges */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* Overall Quality */}
         <div className="card bg-base-200 shadow-lg">
           <div className="card-body">
             <h3 className="card-title text-sm">
@@ -153,7 +283,6 @@ const QualityDashboardPage = () => {
           </div>
         </div>
 
-        {/* Efficiency */}
         <div className="card bg-base-200 shadow-lg">
           <div className="card-body">
             <h3 className="card-title text-sm">
@@ -169,7 +298,6 @@ const QualityDashboardPage = () => {
           </div>
         </div>
 
-        {/* Completeness */}
         <div className="card bg-base-200 shadow-lg">
           <div className="card-body">
             <h3 className="card-title text-sm">
@@ -185,7 +313,6 @@ const QualityDashboardPage = () => {
           </div>
         </div>
 
-        {/* Coherence */}
         <div className="card bg-base-200 shadow-lg">
           <div className="card-body">
             <h3 className="card-title text-sm">
@@ -198,6 +325,73 @@ const QualityDashboardPage = () => {
             <p className="text-xs text-base-content/60">
               {t('quality.coherence_desc', 'Thinking/output balance')}
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Historical Trends - Quality Scores */}
+      <div className="card bg-base-100 shadow-lg">
+        <div className="card-body">
+          <h2 className="card-title">
+            <TrendingUp className="h-6 w-6" />
+            {t('quality.trends_title', 'Quality Score Trends')}
+          </h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={historicalData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis domain={[0, 1]} />
+              <Tooltip formatter={(value: number) => formatPercentage(value)} />
+              <Legend />
+              <Line type="monotone" dataKey="overall_score" stroke="#8884d8" name="Overall" strokeWidth={2} />
+              <Line type="monotone" dataKey="efficiency_score" stroke="#82ca9d" name="Efficiency" />
+              <Line type="monotone" dataKey="completeness_score" stroke="#ffc658" name="Completeness" />
+              <Line type="monotone" dataKey="coherence_score" stroke="#ff7c7c" name="Coherence" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Historical Trends - FTR Rate */}
+      <div className="card bg-base-100 shadow-lg">
+        <div className="card-body">
+          <h2 className="card-title">
+            <CheckCircle2 className="h-6 w-6" />
+            {t('quality.ftr_trends_title', 'First-Time-Right Rate Trend')}
+          </h2>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={historicalData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis domain={[0, 1]} />
+              <Tooltip formatter={(value: number) => formatPercentage(value)} />
+              <Legend />
+              <Line type="monotone" dataKey="ftr_rate" stroke="#82ca9d" name="FTR Rate" strokeWidth={2} />
+              <ReferenceLine y={0.9} stroke="red" strokeDasharray="3 3" label="Target: 90%" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Budget Utilization Distribution */}
+      <div className="card bg-base-100 shadow-lg">
+        <div className="card-body">
+          <h2 className="card-title">
+            <Target className="h-6 w-6" />
+            {t('quality.budget_dist_title', 'Budget Utilization Distribution')}
+          </h2>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={budgetDistribution}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="range" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="count" fill="#8884d8" name="Request Count" />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="text-sm text-base-content/60 mt-2">
+            <span className="badge badge-success">75-95%</span> Optimal Range
           </div>
         </div>
       </div>
@@ -256,6 +450,47 @@ const QualityDashboardPage = () => {
                 {t('quality.optimal_range', 'Optimal Range')}
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* User Rating Interface */}
+      <div className="card bg-base-100 shadow-lg">
+        <div className="card-body">
+          <h2 className="card-title">
+            <Star className="h-6 w-6" />
+            {t('quality.user_rating_title', 'Submit Quality Rating')}
+          </h2>
+          <p className="text-sm text-base-content/60">
+            {t('quality.user_rating_desc', 'Help improve quality by rating recent responses')}
+          </p>
+          <div className="flex items-center gap-4 mt-4">
+            <input
+              type="text"
+              placeholder={t('quality.request_id_placeholder', 'Enter Request ID')}
+              className="input input-bordered flex-1"
+              value={selectedRequestId || ''}
+              onChange={(e) => setSelectedRequestId(e.target.value)}
+            />
+            <div className="rating rating-lg">
+              {[1, 2, 3, 4, 5].map(star => (
+                <input
+                  key={star}
+                  type="radio"
+                  name="rating"
+                  className="mask mask-star-2 bg-orange-400"
+                  checked={userRating === star}
+                  onChange={() => setUserRating(star)}
+                />
+              ))}
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={submitRating}
+              disabled={!selectedRequestId || userRating === 0}
+            >
+              {t('quality.submit_rating', 'Submit')}
+            </button>
           </div>
         </div>
       </div>

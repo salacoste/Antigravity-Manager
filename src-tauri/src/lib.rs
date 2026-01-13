@@ -6,6 +6,9 @@ mod modules;
 pub mod proxy; // 反代服务模块 (public for testing)
 mod utils;
 
+#[cfg(test)]
+mod tests;
+
 use modules::logger;
 use tauri::Manager;
 use tracing::{error, info};
@@ -163,6 +166,8 @@ pub fn run() {
             commands::quality::get_quality_history,
             commands::quality::submit_user_rating,
             commands::quality::reset_quality_metrics,
+            commands::quality::get_quality_history_with_trends,
+            commands::quality::get_budget_distribution,
             // 测试命令
             commands::test_model_fallback_notification,
             commands::open_devtools,
