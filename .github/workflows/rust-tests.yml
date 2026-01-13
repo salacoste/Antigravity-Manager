@@ -62,7 +62,7 @@ jobs:
           cargo test --lib commands -- --test-threads=1
 
   test-proxy:
-    name: Proxy Tests (mappers, handlers, rate limiting)
+    name: Proxy Tests (parallel execution)
     runs-on: ubuntu-latest
 
     steps:
@@ -100,14 +100,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Run proxy tests
+      - name: Run proxy tests (parallel execution)
         working-directory: ./src-tauri
-        timeout-minutes: 20
+        timeout-minutes: 15
         env:
           ANTIGRAVITY_API_KEY: "test-key-for-ci"
         run: |
-          # Run all proxy module tests (~461 tests)
-          cargo test --lib proxy -- --test-threads=1
+          # Run all proxy tests (~461 tests) - PARALLEL execution for speed
+          # Risk: may hang like before, but much faster if successful
+          cargo test --lib -- proxy
 
   lint:
     name: Linting
