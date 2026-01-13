@@ -55,6 +55,9 @@ pub fn init_db() -> Result<(), String> {
     // 🆕 Story-008-01: Run migration for budget_patterns table
     migrate_budget_patterns_table()?;
 
+    // 🆕 Epic-014 Story-014-04: Run migration for audio_metrics table
+    migrate_audio_metrics_table()?;
+
     Ok(())
 }
 
@@ -750,4 +753,105 @@ pub fn load_budget_patterns() -> Result<Vec<crate::proxy::budget_optimizer::Budg
         patterns.push(pattern.map_err(|e| e.to_string())?);
     }
     Ok(patterns)
+}
+
+// ==================== Epic-014 Story-014-04: Audio Metrics ====================
+
+/// Audio metrics record structure
+#[derive(Debug, Clone)]
+pub struct AudioMetric {
+    pub timestamp: i64,
+    pub model_id: String,
+    pub duration_secs: Option<u64>,
+    pub format: String,
+    pub file_size_bytes: usize,
+    pub success: bool,
+    pub error_message: Option<String>,
+}
+
+/// Migrate audio_metrics table for audio usage analytics
+fn migrate_audio_metrics_table() -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    // Create audio_metrics table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS audio_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp INTEGER NOT NULL,
+            model_id TEXT NOT NULL,
+            duration_secs INTEGER,
+            format TEXT NOT NULL,
+            file_size_bytes INTEGER NOT NULL,
+            success INTEGER NOT NULL,
+            error_message TEXT
+        )",
+        [],
+    )
+    .map_err(|e| format!("Failed to create audio_metrics table: {}", e))?;
+
+    // Create indices for faster queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audio_metrics_timestamp
+         ON audio_metrics(timestamp DESC)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create timestamp index: {}", e))?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audio_metrics_model
+         ON audio_metrics(model_id)",
+        [],
+    )
+    .map_err(|e| format!("Failed to create model index: {}", e))?;
+
+    tracing::info!("[ProxyDB] Successfully migrated audio_metrics table");
+    Ok(())
+}
+
+/// Record audio transcription metric
+pub fn record_audio_metric(metric: &AudioMetric) -> Result<(), String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO audio_metrics
+         (timestamp, model_id, duration_secs, format, file_size_bytes, success, error_message)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            metric.timestamp,
+            metric.model_id,
+            metric.duration_secs.map(|d| d as i64),
+            metric.format,
+            metric.file_size_bytes as i64,
+            metric.success as i32,
+            metric.error_message,
+        ],
+    )
+    .map_err(|e| format!("Failed to record audio metric: {}", e))?;
+
+    Ok(())
+}
+
+/// Clean up old audio metrics (older than N days)
+pub fn cleanup_old_audio_metrics(days: u32) -> Result<usize, String> {
+    let db_path = get_proxy_db_path()?;
+    let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+
+    let cutoff_timestamp = chrono::Utc::now().timestamp() - (days as i64 * 86400);
+
+    let deleted = conn
+        .execute(
+            "DELETE FROM audio_metrics WHERE timestamp < ?1",
+            params![cutoff_timestamp],
+        )
+        .map_err(|e| format!("Failed to cleanup old audio metrics: {}", e))?;
+
+    tracing::info!(
+        "[ProxyDB] Cleaned up {} old audio metrics (older than {} days)",
+        deleted,
+        days
+    );
+
+    Ok(deleted)
 }
