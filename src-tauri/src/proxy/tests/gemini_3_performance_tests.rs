@@ -192,9 +192,9 @@ mod performance_tests {
         assert_eq!(level, "MEDIUM");
 
         // Verify level is a static string (no heap allocation)
-        let ptr1 = level.as_ptr();
+        let _ptr1 = level.as_ptr();
         let level2 = determine_thinking_level(model, budget);
-        let ptr2 = level2.as_ptr();
+        let _ptr2 = level2.as_ptr();
 
         // If both are static strings with same value, they should point to same memory
         // (This is implementation-dependent but common for static strings)
@@ -217,7 +217,6 @@ mod performance_tests {
     #[test]
     fn test_error_message_quality() {
         // Validation errors are clear and actionable
-        use crate::proxy::mappers::common::gemini_api_validator::GeminiApiValidationError;
 
         // Test 1: Gemini 3.x with thinkingBudget
         let request_3_budget = json!({

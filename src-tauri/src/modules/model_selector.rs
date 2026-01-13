@@ -349,8 +349,6 @@ impl PromptAnalyzer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_complexity_analyzer_simple() {
         // TODO: Week 2 - Test simple request classification

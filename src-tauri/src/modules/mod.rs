@@ -11,6 +11,8 @@ pub mod oauth_server;
 pub mod process;
 pub mod proxy_db;
 pub mod quota;
+pub mod quota_cache;
+pub mod quota_fetcher;
 pub mod signature_cache;
 pub mod tray;
 
