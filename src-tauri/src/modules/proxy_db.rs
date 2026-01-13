@@ -834,6 +834,8 @@ pub fn record_audio_metric(metric: &AudioMetric) -> Result<(), String> {
 }
 
 /// Clean up old audio metrics (older than N days)
+/// Epic-014: Data retention management
+#[allow(dead_code)]
 pub fn cleanup_old_audio_metrics(days: u32) -> Result<usize, String> {
     let db_path = get_proxy_db_path()?;
     let conn = Connection::open(db_path).map_err(|e| e.to_string())?;

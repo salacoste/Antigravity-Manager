@@ -7,8 +7,6 @@
 // - Codec compatibility checks (WAV, M4A)
 // - Format-specific actionable error messages
 
-use std::time::Duration;
-
 /// Maximum recommended audio duration (1 hour)
 const RECOMMENDED_MAX_DURATION_SECS: u64 = 60 * 60;
 
@@ -39,6 +37,8 @@ pub enum ValidationError {
     },
 
     /// Audio file exceeds size limit
+    /// Epic-014: Reserved for future file size validation
+    #[allow(dead_code)]
     #[error("Audio file exceeds 15MB limit ({size_mb:.1}MB). Please compress or split the file.")]
     FileSizeTooLarge { size_mb: f64 },
 
@@ -62,6 +62,7 @@ pub enum DurationWarning {
     /// Duration exceeds recommended limit but below hard max
     ExceedsRecommended {
         duration_minutes: u64,
+        #[allow(dead_code)]
         recommended_minutes: u64,
         message: String,
     },

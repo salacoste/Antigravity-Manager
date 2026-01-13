@@ -207,7 +207,11 @@ pub async fn handle_audio_transcription(
         timestamp: chrono::Utc::now().timestamp(),
         model_id: model.clone(),
         duration_secs: None, // TODO: Extract from validation if available
-        format: mime_type.split('/').last().unwrap_or("unknown").to_string(),
+        format: mime_type
+            .split('/')
+            .next_back()
+            .unwrap_or("unknown")
+            .to_string(),
         file_size_bytes: audio_bytes.len(),
         success: true,
         error_message: None,

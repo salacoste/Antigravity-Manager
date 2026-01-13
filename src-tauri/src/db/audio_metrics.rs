@@ -3,9 +3,10 @@
 
 use rusqlite::{params, Connection, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 /// Audio metrics record for analytics
+/// Epic-014: This will be used by Story-014-04 audio analytics dashboard
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioMetric {
     pub id: Option<i64>,
@@ -58,6 +59,8 @@ pub struct FileSizeDistribution {
 }
 
 /// Initialize audio_metrics table
+/// Epic-014: Database schema initialization
+#[allow(dead_code)]
 pub fn init_audio_metrics_table(conn: &Connection) -> SqliteResult<()> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS audio_metrics (
@@ -91,6 +94,8 @@ pub fn init_audio_metrics_table(conn: &Connection) -> SqliteResult<()> {
 }
 
 /// Record audio transcription metric
+/// Epic-014: Metrics collection (will be used by audio handler)
+#[allow(dead_code)]
 pub fn record_audio_metric(conn: &Connection, metric: &AudioMetric) -> SqliteResult<()> {
     conn.execute(
         "INSERT OR REPLACE INTO audio_metrics
@@ -310,6 +315,8 @@ fn percentile(sorted_data: &[u64], p: u8) -> u64 {
 }
 
 /// Clean up old metrics (older than N days)
+/// Epic-014: Maintenance function for data retention
+#[allow(dead_code)]
 pub fn cleanup_old_metrics(conn: &Connection, days: u32) -> SqliteResult<usize> {
     let cutoff_timestamp = chrono::Utc::now().timestamp() - (days as i64 * 86400);
 
