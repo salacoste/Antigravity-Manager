@@ -131,7 +131,8 @@ pub fn get_audio_analytics(conn: &Connection, days: u32) -> SqliteResult<AudioAn
     let duration_stats = calculate_duration_stats(conn, cutoff_timestamp)?;
 
     // Format distribution
-    let format_distribution = calculate_format_distribution(conn, cutoff_timestamp, total_requests)?;
+    let format_distribution =
+        calculate_format_distribution(conn, cutoff_timestamp, total_requests)?;
 
     // File size distribution
     let file_size_distribution = calculate_file_size_distribution(conn, cutoff_timestamp)?;
@@ -157,7 +158,10 @@ pub fn get_audio_analytics(conn: &Connection, days: u32) -> SqliteResult<AudioAn
 }
 
 /// Calculate duration statistics (percentiles)
-fn calculate_duration_stats(conn: &Connection, cutoff_timestamp: i64) -> SqliteResult<DurationStats> {
+fn calculate_duration_stats(
+    conn: &Connection,
+    cutoff_timestamp: i64,
+) -> SqliteResult<DurationStats> {
     // Get all durations for percentile calculation
     let mut stmt = conn.prepare(
         "SELECT duration_secs FROM audio_metrics
@@ -166,7 +170,9 @@ fn calculate_duration_stats(conn: &Connection, cutoff_timestamp: i64) -> SqliteR
     )?;
 
     let durations: Vec<u64> = stmt
-        .query_map(params![cutoff_timestamp], |row| row.get::<_, i64>(0).map(|v| v as u64))?
+        .query_map(params![cutoff_timestamp], |row| {
+            row.get::<_, i64>(0).map(|v| v as u64)
+        })?
         .filter_map(Result::ok)
         .collect();
 
@@ -270,7 +276,9 @@ fn calculate_file_size_distribution(
     )?;
 
     let file_sizes: Vec<u64> = stmt
-        .query_map(params![cutoff_timestamp], |row| row.get::<_, i64>(0).map(|v| v as u64))?
+        .query_map(params![cutoff_timestamp], |row| {
+            row.get::<_, i64>(0).map(|v| v as u64)
+        })?
         .filter_map(Result::ok)
         .collect();
 

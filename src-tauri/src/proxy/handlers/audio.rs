@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::modules::proxy_db::AudioMetric;
 use crate::proxy::{audio::AudioProcessor, server::AppState};
 use crate::utils::audio_validation::{
-    AudioHeaderValidator, AudioDurationValidator, CodecValidator, DurationWarning,
+    AudioDurationValidator, AudioHeaderValidator, CodecValidator, DurationWarning,
 };
 
 /// 处理音频转录请求 (OpenAI Whisper API 兼容)
@@ -90,7 +90,11 @@ pub async fn handle_audio_transcription(
 
     // 6. Epic-014 Story-014-01: Validate duration (with warnings for long files)
     match AudioDurationValidator::validate_duration(&audio_bytes, &mime_type) {
-        Ok(DurationWarning::ExceedsRecommended { message, duration_minutes, .. }) => {
+        Ok(DurationWarning::ExceedsRecommended {
+            message,
+            duration_minutes,
+            ..
+        }) => {
             warn!(
                 "Audio duration warning ({}min): {}",
                 duration_minutes, message
