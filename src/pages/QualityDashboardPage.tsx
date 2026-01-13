@@ -341,7 +341,7 @@ const QualityDashboardPage = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis domain={[0, 1]} />
-              <Tooltip formatter={(value: number) => formatPercentage(value)} />
+              <Tooltip formatter={(value: number | undefined) => value !== undefined ? formatPercentage(value) : 'N/A'} />
               <Legend />
               <Line type="monotone" dataKey="overall_score" stroke="#8884d8" name="Overall" strokeWidth={2} />
               <Line type="monotone" dataKey="efficiency_score" stroke="#82ca9d" name="Efficiency" />
@@ -364,7 +364,7 @@ const QualityDashboardPage = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis domain={[0, 1]} />
-              <Tooltip formatter={(value: number) => formatPercentage(value)} />
+              <Tooltip formatter={(value: number | undefined) => value !== undefined ? formatPercentage(value) : 'N/A'} />
               <Legend />
               <Line type="monotone" dataKey="ftr_rate" stroke="#82ca9d" name="FTR Rate" strokeWidth={2} />
               <ReferenceLine y={0.9} stroke="red" strokeDasharray="3 3" label="Target: 90%" />

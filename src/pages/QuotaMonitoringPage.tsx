@@ -116,7 +116,7 @@ function QuotaHistoryChart() {
               borderRadius: '8px',
               fontSize: '12px',
             }}
-            formatter={(value: number) => [`${value.toFixed(1)}%`, 'Quota']}
+            formatter={(value: number | undefined) => value !== undefined ? [`${value.toFixed(1)}%`, 'Quota'] : ['N/A', 'Quota']}
           />
           <Legend
             wrapperStyle={{ fontSize: '12px' }}
