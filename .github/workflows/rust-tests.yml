@@ -11,8 +11,8 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  test:
-    name: Test Suite
+  test-core:
+    name: Core Tests (models, modules, utils, db, commands)
     runs-on: ubuntu-latest
 
     steps:
@@ -50,35 +50,64 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Run cargo fmt check
-        working-directory: ./src-tauri
-        run: cargo fmt -- --check
-
-      - name: Run cargo clippy
-        working-directory: ./src-tauri
-        run: cargo clippy -- -D warnings
-
-      - name: Run unit tests
-        working-directory: ./src-tauri
-        timeout-minutes: 15
-        run: cargo test --lib -- --test-threads=1
-
-      - name: Run image generation E2E tests (mocked only)
+      - name: Run core unit tests (exclude proxy)
         working-directory: ./src-tauri
         timeout-minutes: 5
+        run: |
+          # Run tests for models, modules, utils, db, commands (~59 tests)
+          cargo test --lib models -- --test-threads=1
+          cargo test --lib modules -- --test-threads=1
+          cargo test --lib utils -- --test-threads=1
+          cargo test --lib db -- --test-threads=1
+          cargo test --lib commands -- --test-threads=1
+
+  test-proxy:
+    name: Proxy Tests (mappers, handlers, rate limiting)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: src-tauri/target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install system dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Run proxy tests
+        working-directory: ./src-tauri
+        timeout-minutes: 20
         env:
           ANTIGRAVITY_API_KEY: "test-key-for-ci"
         run: |
-          # Run only mocked tests (skip live API tests marked with #[ignore])
-          cargo test image_generation --lib -- --skip live --test-threads=1
-        continue-on-error: false
-
-      - name: Check test coverage
-        working-directory: ./src-tauri
-        timeout-minutes: 20
-        run: |
-          cargo test --no-fail-fast --all-features -- --test-threads=1
-        continue-on-error: true
+          # Run all proxy module tests (~461 tests)
+          cargo test --lib proxy -- --test-threads=1
 
   lint:
     name: Linting
