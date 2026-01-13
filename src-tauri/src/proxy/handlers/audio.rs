@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use crate::modules::proxy_db::AudioMetric;
 use crate::proxy::{audio::AudioProcessor, server::AppState};
 
 /// 处理音频转录请求 (OpenAI Whisper API 兼容)
@@ -168,6 +169,22 @@ pub async fn handle_audio_transcription(
         warn!("Experimental model used: {} (deprecated Q2 2026)", model);
     }
 
-    // 11. 返回响应
+    // 11. Epic-014 Story-014-04: Record audio analytics metric
+    let audio_metric = AudioMetric {
+        timestamp: chrono::Utc::now().timestamp(),
+        model_id: model.clone(),
+        duration_secs: None, // TODO: Extract from validation if available
+        format: mime_type.split('/').last().unwrap_or("unknown").to_string(),
+        file_size_bytes: audio_bytes.len(),
+        success: true,
+        error_message: None,
+    };
+
+    // Record metric (non-blocking - don't fail transcription if analytics fails)
+    if let Err(e) = crate::modules::proxy_db::record_audio_metric(&audio_metric) {
+        warn!("Failed to record audio metric: {}", e);
+    }
+
+    // 12. 返回响应
     Ok(Json(response_json))
 }
