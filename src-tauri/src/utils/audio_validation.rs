@@ -29,7 +29,9 @@ pub enum ValidationError {
     UnsupportedCodec(String),
 
     /// Audio duration exceeds hard maximum limit
-    #[error("Audio file exceeds {max_minutes}-minute limit ({duration_minutes} minutes). {message}")]
+    #[error(
+        "Audio file exceeds {max_minutes}-minute limit ({duration_minutes} minutes). {message}"
+    )]
     DurationTooLong {
         duration_minutes: u64,
         max_minutes: u64,
@@ -41,7 +43,9 @@ pub enum ValidationError {
     FileSizeTooLarge { size_mb: f64 },
 
     /// Unsupported audio format
-    #[error("Audio format '{0}' not supported. Supported formats: MP3, WAV, M4A, OGG, FLAC, AIFF.")]
+    #[error(
+        "Audio format '{0}' not supported. Supported formats: MP3, WAV, M4A, OGG, FLAC, AIFF."
+    )]
     UnsupportedFormat(String),
 
     /// File too short to validate
@@ -109,7 +113,8 @@ impl AudioHeaderValidator {
 
             if frame_start + 2 > data.len() {
                 return Err(ValidationError::InvalidHeader(
-                    "MP3 file corrupted (ID3 tag incomplete). Expected: complete ID3v2 tag.".to_string()
+                    "MP3 file corrupted (ID3 tag incomplete). Expected: complete ID3v2 tag."
+                        .to_string(),
                 ));
             }
 
@@ -124,7 +129,7 @@ impl AudioHeaderValidator {
     fn check_mp3_frame_sync(data: &[u8]) -> Result<(), ValidationError> {
         if data.len() < 2 {
             return Err(ValidationError::InvalidHeader(
-                "MP3 file too short (less than 2 bytes after ID3 tag)".to_string()
+                "MP3 file too short (less than 2 bytes after ID3 tag)".to_string(),
             ));
         }
 
@@ -142,7 +147,7 @@ impl AudioHeaderValidator {
     fn parse_id3v2_size(size_bytes: &[u8]) -> Result<usize, ValidationError> {
         if size_bytes.len() < 4 {
             return Err(ValidationError::InvalidHeader(
-                "ID3v2 tag size incomplete".to_string()
+                "ID3v2 tag size incomplete".to_string(),
             ));
         }
 
@@ -169,7 +174,8 @@ impl AudioHeaderValidator {
         // Check RIFF header
         if &data[0..4] != b"RIFF" {
             return Err(ValidationError::InvalidHeader(
-                "WAV file corrupted (invalid RIFF header). Expected: 'RIFF' at bytes 0-3.".to_string()
+                "WAV file corrupted (invalid RIFF header). Expected: 'RIFF' at bytes 0-3."
+                    .to_string(),
             ));
         }
 
@@ -196,7 +202,8 @@ impl AudioHeaderValidator {
         // Check ftyp atom at bytes 4-7
         if &data[4..8] != b"ftyp" {
             return Err(ValidationError::InvalidHeader(
-                "M4A file corrupted (invalid ftyp atom). Expected: 'ftyp' at bytes 4-7.".to_string()
+                "M4A file corrupted (invalid ftyp atom). Expected: 'ftyp' at bytes 4-7."
+                    .to_string(),
             ));
         }
 
@@ -225,7 +232,7 @@ impl AudioHeaderValidator {
         // Check OggS magic bytes
         if &data[0..4] != b"OggS" {
             return Err(ValidationError::InvalidHeader(
-                "OGG file corrupted (invalid header). Expected: 'OggS' at bytes 0-3.".to_string()
+                "OGG file corrupted (invalid header). Expected: 'OggS' at bytes 0-3.".to_string(),
             ));
         }
 
@@ -244,7 +251,7 @@ impl AudioHeaderValidator {
         // Check fLaC magic bytes
         if &data[0..4] != b"fLaC" {
             return Err(ValidationError::InvalidHeader(
-                "FLAC file corrupted (invalid header). Expected: 'fLaC' at bytes 0-3.".to_string()
+                "FLAC file corrupted (invalid header). Expected: 'fLaC' at bytes 0-3.".to_string(),
             ));
         }
 
@@ -265,7 +272,8 @@ impl AudioHeaderValidator {
         // Check FORM header
         if &data[0..4] != b"FORM" {
             return Err(ValidationError::InvalidHeader(
-                "AIFF file corrupted (invalid FORM header). Expected: 'FORM' at bytes 0-3.".to_string()
+                "AIFF file corrupted (invalid FORM header). Expected: 'FORM' at bytes 0-3."
+                    .to_string(),
             ));
         }
 
@@ -361,12 +369,8 @@ impl AudioDurationValidator {
 
         while pos + 8 <= data.len() {
             let chunk_id = &data[pos..pos + 4];
-            let chunk_size = u32::from_le_bytes([
-                data[pos + 4],
-                data[pos + 5],
-                data[pos + 6],
-                data[pos + 7],
-            ]);
+            let chunk_size =
+                u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]]);
 
             if chunk_id == b"fmt " && pos + 8 + 16 <= data.len() {
                 // Parse fmt chunk
@@ -475,12 +479,8 @@ impl CodecValidator {
 
         while pos + 8 <= data.len() {
             let chunk_id = &data[pos..pos + 4];
-            let chunk_size = u32::from_le_bytes([
-                data[pos + 4],
-                data[pos + 5],
-                data[pos + 6],
-                data[pos + 7],
-            ]);
+            let chunk_size =
+                u32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]]);
 
             if chunk_id == b"fmt " && pos + 10 <= data.len() {
                 // Parse format code (bytes 8-9 of fmt chunk)
@@ -544,8 +544,7 @@ mod tests {
     ];
     const INVALID_WAV_RIFF: &[u8] = &[
         b'X', b'I', b'F', b'F', // Invalid RIFF
-        0x00, 0x00, 0x00, 0x00,
-        b'W', b'A', b'V', b'E',
+        0x00, 0x00, 0x00, 0x00, b'W', b'A', b'V', b'E',
     ];
 
     const VALID_M4A_HEADER: &[u8] = &[
