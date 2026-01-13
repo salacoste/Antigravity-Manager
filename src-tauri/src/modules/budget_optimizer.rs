@@ -89,11 +89,12 @@ impl OptimizationMetrics {
     }
 
     /// Calculate cost savings percentage
+    #[allow(dead_code)] // Used in database and tests
     pub fn savings_percentage(&self) -> f32 {
         if self.total_requests == 0 {
             return 0.0;
         }
-        let max_possible = self.total_requests as u64 * ComplexityTier::Complex.budget() as u64;
+        let max_possible = self.total_requests * ComplexityTier::Complex.budget() as u64;
         (self.total_tokens_saved as f32 / max_possible as f32) * 100.0
     }
 }

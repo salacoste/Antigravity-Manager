@@ -1,0 +1,13 @@
+This file documents the required changes to fix token_manager.rs compilation:
+
+1. Add model_recommender field to TokenManager struct (line ~32):
+   model_recommender: Option<Arc<crate::proxy::model_selector::ModelRecommender>>,
+
+2. Initialize model_recommender in TokenManager::new() (line ~46):
+   model_recommender: None,
+
+3. Fix import paths for RequestMessage and CostStats (lines 1045, 1066):
+   - Change crate::modules::model_selector to crate::proxy::model_selector
+
+4. Fix ModelRecommender import (line 1087):
+   - Use crate::proxy::model_selector::ModelRecommender::new()

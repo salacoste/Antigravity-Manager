@@ -37,6 +37,7 @@ use tokio::sync::RwLock;
 
 /// Request complexity classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(dead_code)] // Stub for Week 2 implementation
 pub enum RequestComplexity {
     /// Simple requests suitable for base model (312)
     Simple,
@@ -46,6 +47,7 @@ pub enum RequestComplexity {
 
 /// Model recommendation with confidence and reasoning
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Stub for Week 2 implementation
 pub struct ModelRecommendation {
     /// Recommended model ID ("312" or "313")
     pub model_id: String,
@@ -61,6 +63,7 @@ pub struct ModelRecommendation {
 
 /// Cost tracking statistics
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[allow(dead_code)] // Stub for Week 2 implementation
 pub struct CostStats {
     /// Total requests processed
     pub total_requests: u64,
@@ -103,10 +106,13 @@ pub struct CostStats {
 /// - Length < 200 chars
 pub struct ComplexityAnalyzer {
     /// Keyword detector for complexity signals
+    #[allow(dead_code)] // Stub for Week 2 implementation
     keyword_detector: KeywordDetector,
     /// Code block detector
+    #[allow(dead_code)] // Stub for Week 2 implementation
     code_detector: CodeBlockDetector,
     /// Prompt structure analyzer
+    #[allow(dead_code)] // Stub for Week 2 implementation
     prompt_analyzer: PromptAnalyzer,
 }
 
@@ -128,7 +134,7 @@ impl ComplexityAnalyzer {
     /// # Returns
     ///
     /// Tuple of (complexity, confidence, reasoning)
-    pub fn classify(&self, messages: &[RequestMessage]) -> (RequestComplexity, f32, String) {
+    pub fn classify(&self, _messages: &[RequestMessage]) -> (RequestComplexity, f32, String) {
         // TODO: Week 2 implementation
         // - Extract text from messages
         // - Run all detectors
@@ -150,6 +156,7 @@ impl Default for ComplexityAnalyzer {
 // ============================================================================
 
 /// Recommends optimal model based on complexity and account availability
+#[allow(dead_code)] // Stub for Week 2 implementation
 pub struct ModelRecommender {
     /// Complexity analyzer
     analyzer: ComplexityAnalyzer,
@@ -223,6 +230,7 @@ impl Default for ModelRecommender {
 // ============================================================================
 
 /// Tracks cost savings from intelligent model routing
+#[allow(dead_code)] // Stub for Week 2 implementation
 pub struct CostTracker {
     stats: CostStats,
 }
@@ -276,8 +284,7 @@ impl CostTracker {
         }
 
         // Placeholder calculation
-        let base_ratio =
-            self.stats.base_model_count as f32 / self.stats.total_requests as f32;
+        let base_ratio = self.stats.base_model_count as f32 / self.stats.total_requests as f32;
         self.stats.cost_savings_percent = base_ratio * 50.0; // Max 50% savings
     }
 }
@@ -294,12 +301,14 @@ impl Default for CostTracker {
 
 /// Request message for complexity analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] // Stub for Week 2 implementation
 pub struct RequestMessage {
     pub role: String,
     pub content: String,
 }
 
 /// Detects complexity keywords in prompts
+#[allow(dead_code)] // Stub for Week 2 implementation
 struct KeywordDetector {
     // TODO: Week 2 - Add keyword sets
 }
@@ -311,6 +320,7 @@ impl KeywordDetector {
 }
 
 /// Detects code blocks in prompts
+#[allow(dead_code)] // Stub for Week 2 implementation
 struct CodeBlockDetector {
     // TODO: Week 2 - Add regex patterns
 }
@@ -322,6 +332,7 @@ impl CodeBlockDetector {
 }
 
 /// Analyzes prompt structure
+#[allow(dead_code)] // Stub for Week 2 implementation
 struct PromptAnalyzer {
     // TODO: Week 2 - Add analysis logic
 }

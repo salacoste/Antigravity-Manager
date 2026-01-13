@@ -29,6 +29,7 @@ pub struct TokenManager {
     rate_limit_tracker: Arc<RateLimitTracker>, // 新增: 限流跟踪器
     sticky_config: Arc<tokio::sync::RwLock<StickySessionConfig>>, // 新增：调度配置
     session_accounts: Arc<DashMap<String, String>>, // 新增：会话与账号映射 (SessionID -> AccountID)
+    model_recommender: Option<Arc<crate::modules::model_selector::ModelRecommender>>, // Epic-024: Adaptive model selection
 }
 
 impl TokenManager {
@@ -42,6 +43,7 @@ impl TokenManager {
             rate_limit_tracker: Arc::new(RateLimitTracker::new()),
             sticky_config: Arc::new(tokio::sync::RwLock::new(StickySessionConfig::default())),
             session_accounts: Arc::new(DashMap::new()),
+            model_recommender: None, // Epic-024: Initially disabled
         }
     }
 
@@ -1084,7 +1086,9 @@ impl TokenManager {
     /// Enable or disable adaptive model selection
     pub fn set_adaptive_model_selection(&mut self, enabled: bool) {
         if enabled && self.model_recommender.is_none() {
-            self.model_recommender = Some(Arc::new(ModelRecommender::new()));
+            self.model_recommender = Some(Arc::new(
+                crate::modules::model_selector::ModelRecommender::new(),
+            ));
             tracing::info!("Adaptive model selection enabled (Epic-024)");
         } else if !enabled {
             self.model_recommender = None;
