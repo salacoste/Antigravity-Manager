@@ -155,9 +155,9 @@ impl QualityScorer {
         // Optimal thinking ratio: 10-90%
         // Too little thinking (<10%): likely insufficient reasoning
         // Too much thinking (>90%): likely inefficient or truncated output
-        if thinking_ratio >= 0.1 && thinking_ratio <= 0.9 {
+        if (0.1..=0.9).contains(&thinking_ratio) {
             // Within optimal range
-            if thinking_ratio >= 0.2 && thinking_ratio <= 0.7 {
+            if (0.2..=0.7).contains(&thinking_ratio) {
                 // Sweet spot (20-70%)
                 1.0
             } else {
@@ -359,7 +359,7 @@ impl FeedbackAggregator {
             if priority == TuningPriority::Low {
                 priority = TuningPriority::Medium;
             }
-        } else if avg_util >= 0.75 && avg_util <= 0.95 {
+        } else if (0.75..=0.95).contains(&avg_util) {
             recommendations.push(format!(
                 "✅ Budget utilization optimal ({:.1}%). Classifier is well-tuned.",
                 avg_util * 100.0

@@ -403,10 +403,9 @@ impl TokenManager {
         // Try quota-aware selection first if quota manager enabled and model provided
         if !force_rotate
             && self.quota_manager.is_some()
-            && model.is_some()
             && quota_group != "image_gen"
         {
-            let model_id = model.unwrap();
+            if let Some(model_id) = model {
 
             // 1. Try session-bound account first with quota validation
             if let Some(sid) = session_id {
@@ -476,6 +475,7 @@ impl TokenManager {
                         // Fall through to existing logic
                     }
                 }
+            }
             }
         }
         // ===== End Epic-001 Integration =====

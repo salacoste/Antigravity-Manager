@@ -362,6 +362,7 @@ impl BudgetOptimizer {
     /// This method provides a synchronous interface for complexity classification
     /// by extracting the prompt text from a JSON request and delegating to the
     /// classifier. Returns BudgetAllocation which includes confidence score.
+    #[cfg(test)]
     pub fn classify_complexity(&self, request: &serde_json::Value) -> BudgetAllocation {
         // Extract prompt text from request
         let request_text = Self::extract_prompt_text(request);
@@ -375,6 +376,7 @@ impl BudgetOptimizer {
     ///
     /// This method provides backward compatibility with Epic-025 tests by wrapping
     /// the allocate_budget method with JSON request parsing.
+    #[cfg(test)]
     pub async fn optimize_budget(
         &self,
         request: &serde_json::Value,
@@ -390,6 +392,7 @@ impl BudgetOptimizer {
     }
 
     /// Helper: Extract prompt text from JSON request
+    #[cfg(test)]
     fn extract_prompt_text(request: &serde_json::Value) -> String {
         // Try to get the last message content
         if let Some(messages) = request.get("messages").and_then(|m| m.as_array()) {
@@ -405,11 +408,12 @@ impl BudgetOptimizer {
     }
 
     /// Helper: Extract messages array from JSON request
+    #[cfg(test)]
     fn extract_messages(request: &serde_json::Value) -> Vec<serde_json::Value> {
         request
             .get("messages")
             .and_then(|m| m.as_array())
-            .map(|arr| arr.clone())
+            .cloned()
             .unwrap_or_default()
     }
 }

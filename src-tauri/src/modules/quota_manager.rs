@@ -118,21 +118,11 @@ pub struct QuotaManager {
     last_sync_stats: Arc<tokio::sync::RwLock<SyncStats>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct SyncStats {
     duration_ms: u64,
     success_count: usize,
     error_count: usize,
-}
-
-impl Default for SyncStats {
-    fn default() -> Self {
-        Self {
-            duration_ms: 0,
-            success_count: 0,
-            error_count: 0,
-        }
-    }
 }
 
 impl QuotaManager {

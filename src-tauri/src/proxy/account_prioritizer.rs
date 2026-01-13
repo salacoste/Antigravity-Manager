@@ -70,8 +70,8 @@ impl SubscriptionTier {
         }
     }
 
-    /// Parse from string (case-insensitive)
-    pub fn from_str(s: &str) -> Self {
+    /// Parse tier from string (case-insensitive)
+    pub fn parse_tier(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "ULTRA" => SubscriptionTier::ULTRA,
             "PRO" => SubscriptionTier::PRO,
@@ -91,13 +91,13 @@ impl SubscriptionTier {
 
 impl From<&str> for SubscriptionTier {
     fn from(s: &str) -> Self {
-        Self::from_str(s)
+        Self::parse_tier(s)
     }
 }
 
 impl From<Option<&String>> for SubscriptionTier {
     fn from(opt: Option<&String>) -> Self {
-        opt.map(|s| Self::from_str(s))
+        opt.map(|s| Self::parse_tier(s))
             .unwrap_or(SubscriptionTier::FREE)
     }
 }
@@ -427,14 +427,14 @@ mod tests {
     }
 
     #[test]
-    fn test_subscription_tier_from_str() {
-        assert_eq!(SubscriptionTier::from_str("ULTRA"), SubscriptionTier::ULTRA);
-        assert_eq!(SubscriptionTier::from_str("PRO"), SubscriptionTier::PRO);
-        assert_eq!(SubscriptionTier::from_str("FREE"), SubscriptionTier::FREE);
-        assert_eq!(SubscriptionTier::from_str("ultra"), SubscriptionTier::ULTRA);
-        assert_eq!(SubscriptionTier::from_str("pro"), SubscriptionTier::PRO);
+    fn test_subscription_tier_parse_tier() {
+        assert_eq!(SubscriptionTier::parse_tier("ULTRA"), SubscriptionTier::ULTRA);
+        assert_eq!(SubscriptionTier::parse_tier("PRO"), SubscriptionTier::PRO);
+        assert_eq!(SubscriptionTier::parse_tier("FREE"), SubscriptionTier::FREE);
+        assert_eq!(SubscriptionTier::parse_tier("ultra"), SubscriptionTier::ULTRA);
+        assert_eq!(SubscriptionTier::parse_tier("pro"), SubscriptionTier::PRO);
         assert_eq!(
-            SubscriptionTier::from_str("unknown"),
+            SubscriptionTier::parse_tier("unknown"),
             SubscriptionTier::FREE
         );
     }

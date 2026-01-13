@@ -2,6 +2,7 @@
 // Automatically analyzes quality metrics and adjusts budget optimizer parameters
 
 #![allow(dead_code)] // WIP: Epic-025 Week 7 implementation
+#![allow(unused_imports)] // TuningPriority used only in tests
 
 use crate::modules::thinking_quality::{ThinkingQualityMonitor, TuningPriority, WeeklyFeedback};
 use chrono::{Datelike, Timelike};

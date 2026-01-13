@@ -132,11 +132,11 @@ impl Default for EscalationMetrics {
 // ========== Detector Metrics ==========
 
 #[derive(Debug, Clone)]
-struct DetectorMetrics {
-    detections: u64,
-    insufficient_detected: u64,
-    false_positives: u64,
-    avg_detection_time_ms: f64,
+pub(crate) struct DetectorMetrics {
+    pub(crate) detections: u64,
+    pub(crate) insufficient_detected: u64,
+    pub(crate) false_positives: u64,
+    pub(crate) avg_detection_time_ms: f64,
 }
 
 impl Default for DetectorMetrics {
@@ -186,7 +186,7 @@ impl EscalationManager {
 
         history
             .entry(request_id.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(event.clone());
 
         if event.success {
@@ -219,7 +219,7 @@ impl EscalationManager {
         let history = self.escalation_history.read().unwrap();
         history
             .get(request_id)
-            .map(|v| v.clone())
+            .cloned()
             .unwrap_or_default()
     }
 
