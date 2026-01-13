@@ -646,6 +646,9 @@ mod tests {
         // Abort the task
         handle.abort();
 
+        // Wait for task to actually finish after abort
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
         // Task should be aborted
         assert!(handle.is_finished());
     }
