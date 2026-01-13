@@ -1,14 +1,17 @@
 pub mod account;
+pub mod budget_optimizer;
 pub mod config;
 pub mod db;
 pub mod i18n;
 pub mod logger;
 pub mod migration;
+pub mod model_selector;
 pub mod oauth;
 pub mod oauth_server;
 pub mod process;
 pub mod proxy_db;
 pub mod quota;
+pub mod signature_cache;
 pub mod tray;
 
 use crate::models;
