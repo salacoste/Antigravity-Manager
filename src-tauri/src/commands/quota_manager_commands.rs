@@ -6,7 +6,7 @@
 
 use crate::modules::quota_cache::QuotaInfo;
 use crate::modules::quota_fetcher::SubscriptionTier;
-use crate::modules::quota_manager::{QuotaManager, MonitorStats};
+use crate::modules::quota_manager::{MonitorStats, QuotaManager};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -73,10 +73,7 @@ pub async fn get_account_quotas(
     project_id: String,
     state: State<'_, QuotaManagerState>,
 ) -> Result<QuotaStatus, String> {
-    tracing::debug!(
-        "get_account_quotas called for account: {}",
-        account_id
-    );
+    tracing::debug!("get_account_quotas called for account: {}", account_id);
 
     let quotas = state
         .quota_manager

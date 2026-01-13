@@ -47,7 +47,9 @@ pub fn run() {
         .manage({
             use crate::modules::quota_manager::QuotaManager;
             use std::sync::Arc;
-            commands::quota_manager_commands::QuotaManagerState::new(Arc::new(QuotaManager::new(300)))
+            commands::quota_manager_commands::QuotaManagerState::new(Arc::new(QuotaManager::new(
+                300,
+            )))
         })
         .setup(|app| {
             info!("Setup starting...");
