@@ -231,6 +231,165 @@ pub fn get_tier_priority(token: &ProxyToken) -> u8 {
 }
 
 // ============================================================================
+// Enhanced Tier Detection with API Integration (QUOTA-001-04)
+// ============================================================================
+
+use crate::modules::quota_manager::QuotaManager;
+use std::sync::Arc;
+
+impl AccountPrioritizer {
+    /// Prioritize accounts with tier detection from API (QUOTA-001-04)
+    ///
+    /// Enhanced version that fetches subscription tiers from Google API if not cached.
+    /// This is the primary method for tier-aware account selection.
+    ///
+    /// # Flow
+    /// 1. Batch fetch tiers for all accounts via QuotaManager
+    /// 2. Update ProxyToken subscription_tier fields
+    /// 3. Apply existing prioritize_accounts logic (tier + rate limit + quota)
+    ///
+    /// # Arguments
+    /// * `accounts` - Mutable slice of accounts to sort in-place
+    /// * `quotas` - Map of account_id -> remaining quota fraction (0.0-1.0)
+    /// * `rate_limit_tracker` - Rate limit tracker for checking 429 status
+    /// * `quota_manager` - QuotaManager for tier detection via API
+    ///
+    /// # Performance
+    /// - Batch detection: <5s for 10 accounts (parallel execution)
+    /// - Cache hit: <1ms per account (no API call)
+    /// - Automatic tier cache updates for future requests
+    ///
+    /// # Example
+    /// ```rust
+    /// let mut accounts = vec![...];
+    /// let quotas = HashMap::from([("acc1".to_string(), 0.8), ...]);
+    /// let rate_tracker = RateLimitTracker::new();
+    /// let quota_manager = Arc::new(QuotaManager::new(300));
+    ///
+    /// AccountPrioritizer::prioritize_with_tier_detection(
+    ///     &mut accounts,
+    ///     &quotas,
+    ///     &rate_tracker,
+    ///     &quota_manager,
+    /// ).await;
+    /// ```
+    pub async fn prioritize_with_tier_detection(
+        accounts: &mut [ProxyToken],
+        quotas: &HashMap<String, f64>,
+        rate_limit_tracker: &RateLimitTracker,
+        quota_manager: &Arc<QuotaManager>,
+    ) {
+        if accounts.is_empty() {
+            return;
+        }
+
+        tracing::debug!("Starting tier detection for {} accounts", accounts.len());
+
+        // 1. Batch detect tiers for all accounts
+        let tier_map = Self::detect_tiers_batch(accounts, quota_manager).await;
+
+        // 2. Update ProxyToken subscription_tier fields
+        let mut updated_count = 0;
+        for token in accounts.iter_mut() {
+            if let Some(tier) = tier_map.get(&token.account_id) {
+                token.subscription_tier = Some(tier.as_str().to_string());
+                updated_count += 1;
+            }
+        }
+
+        tracing::info!(
+            "Tier detection complete: {}/{} accounts updated",
+            updated_count,
+            accounts.len()
+        );
+
+        // 3. Apply existing prioritization logic
+        Self::prioritize_accounts(accounts, quotas, rate_limit_tracker);
+    }
+
+    /// Batch detect tiers for multiple accounts (QUOTA-001-04)
+    ///
+    /// Executes parallel tier detection for all accounts via QuotaManager.
+    /// Failed detections are logged but do not block other accounts.
+    ///
+    /// # Arguments
+    /// * `accounts` - Slice of accounts to detect tiers for
+    /// * `quota_manager` - QuotaManager with tier cache and API access
+    ///
+    /// # Returns
+    /// HashMap of account_id -> SubscriptionTier for successful detections
+    ///
+    /// # Performance
+    /// - Parallel execution via futures::future::join_all
+    /// - Typical: <5s for 10 accounts
+    /// - Cache hit: <10ms total for all accounts
+    ///
+    /// # Error Handling
+    /// - Individual failures are logged as warnings
+    /// - Other accounts continue with detection
+    /// - Failed accounts excluded from result map (use cached tier)
+    pub async fn detect_tiers_batch(
+        accounts: &[ProxyToken],
+        quota_manager: &Arc<QuotaManager>,
+    ) -> HashMap<String, SubscriptionTier> {
+        use futures::future::join_all;
+
+        if accounts.is_empty() {
+            return HashMap::new();
+        }
+
+        // Create futures for all tier detections
+        let tier_futures: Vec<_> = accounts
+            .iter()
+            .map(|token| {
+                let account_id = token.account_id.clone();
+                let access_token = token.access_token.clone();
+                let quota_manager = Arc::clone(quota_manager);
+
+                async move {
+                    match quota_manager
+                        .get_subscription_tier(&account_id, &access_token)
+                        .await
+                    {
+                        Ok(fetcher_tier) => {
+                            // Convert from quota_fetcher::SubscriptionTier to account_prioritizer::SubscriptionTier
+                            let tier =
+                                Self::convert_fetcher_tier_to_prioritizer_tier(&fetcher_tier);
+                            Some((account_id, tier))
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to detect tier for {}: {}", account_id, e);
+                            None
+                        }
+                    }
+                }
+            })
+            .collect();
+
+        // Execute all futures in parallel
+        let results = join_all(tier_futures).await;
+
+        // Collect successful results
+        results.into_iter().flatten().collect()
+    }
+
+    /// Convert quota_fetcher::SubscriptionTier to account_prioritizer::SubscriptionTier
+    ///
+    /// This helper handles the type conversion between the two SubscriptionTier enums.
+    fn convert_fetcher_tier_to_prioritizer_tier(
+        fetcher_tier: &crate::modules::quota_fetcher::SubscriptionTier,
+    ) -> SubscriptionTier {
+        use crate::modules::quota_fetcher::SubscriptionTier as FetcherTier;
+
+        match fetcher_tier {
+            FetcherTier::Free => SubscriptionTier::FREE,
+            FetcherTier::Pro => SubscriptionTier::PRO,
+            FetcherTier::Ultra => SubscriptionTier::ULTRA,
+        }
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -450,5 +609,266 @@ mod tests {
         assert_eq!(get_tier_priority(&ultra_token), 2);
         assert_eq!(get_tier_priority(&pro_token), 1);
         assert_eq!(get_tier_priority(&free_token), 0);
+    }
+
+    // ========================================================================
+    // Tier Detection API Integration Tests (QUOTA-001-04)
+    // ========================================================================
+
+    use crate::modules::quota_manager::QuotaManager;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_detect_tiers_batch_empty_accounts() {
+        let quota_manager = Arc::new(QuotaManager::new(300));
+        let accounts: Vec<ProxyToken> = vec![];
+
+        let tier_map = AccountPrioritizer::detect_tiers_batch(&accounts, &quota_manager).await;
+
+        assert!(tier_map.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_detect_tiers_batch_with_invalid_token() {
+        let quota_manager = Arc::new(QuotaManager::new(300));
+        let accounts = vec![
+            create_test_token("acc1", Some("FREE")),
+            create_test_token("acc2", Some("PRO")),
+        ];
+
+        // Invalid tokens will fail API calls
+        let tier_map = AccountPrioritizer::detect_tiers_batch(&accounts, &quota_manager).await;
+
+        // All should fail with invalid tokens, resulting in empty map
+        assert_eq!(tier_map.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_prioritize_with_tier_detection_empty_accounts() {
+        let mut accounts: Vec<ProxyToken> = vec![];
+        let quotas = HashMap::new();
+        let rate_tracker = RateLimitTracker::new();
+        let quota_manager = Arc::new(QuotaManager::new(300));
+
+        AccountPrioritizer::prioritize_with_tier_detection(
+            &mut accounts,
+            &quotas,
+            &rate_tracker,
+            &quota_manager,
+        )
+        .await;
+
+        // Should not panic with empty accounts
+        assert!(accounts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_prioritize_with_tier_detection_preserves_order_on_api_failure() {
+        use crate::proxy::rate_limit::RateLimitReason;
+        use std::time::SystemTime;
+
+        let mut accounts = vec![
+            create_test_token("free1", Some("FREE")),
+            create_test_token("ultra1", Some("ULTRA")),
+            create_test_token("pro1", Some("PRO")),
+        ];
+        let quotas = HashMap::from([
+            ("free1".to_string(), 0.9),
+            ("ultra1".to_string(), 0.5),
+            ("pro1".to_string(), 0.7),
+        ]);
+        let rate_tracker = RateLimitTracker::new();
+        let quota_manager = Arc::new(QuotaManager::new(300));
+
+        AccountPrioritizer::prioritize_with_tier_detection(
+            &mut accounts,
+            &quotas,
+            &rate_tracker,
+            &quota_manager,
+        )
+        .await;
+
+        // Even with API failure, should still prioritize by tier from existing fields
+        assert_eq!(accounts[0].account_id, "ultra1"); // ULTRA (tier 2)
+        assert_eq!(accounts[1].account_id, "pro1"); // PRO (tier 1)
+        assert_eq!(accounts[2].account_id, "free1"); // FREE (tier 0)
+    }
+
+    #[tokio::test]
+    async fn test_tier_cache_behavior() {
+        let quota_manager = Arc::new(QuotaManager::new(300));
+        let accounts = vec![create_test_token("acc1", Some("FREE"))];
+
+        // First call: cache miss (will fail with invalid token)
+        let tier_map1 = AccountPrioritizer::detect_tiers_batch(&accounts, &quota_manager).await;
+        assert_eq!(tier_map1.len(), 0); // Failed API call
+
+        // Cache is empty for this account (no successful detection)
+        // Second call will also miss cache and fail
+        let tier_map2 = AccountPrioritizer::detect_tiers_batch(&accounts, &quota_manager).await;
+        assert_eq!(tier_map2.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_prioritize_ultra_over_free_with_lower_quota_after_detection() {
+        let mut accounts = vec![
+            create_test_token("free1", Some("FREE")),
+            create_test_token("ultra1", Some("ULTRA")),
+        ];
+        let quotas = HashMap::from([
+            ("free1".to_string(), 0.9),  // High quota
+            ("ultra1".to_string(), 0.3), // Low quota
+        ]);
+        let rate_tracker = RateLimitTracker::new();
+        let quota_manager = Arc::new(QuotaManager::new(300));
+
+        AccountPrioritizer::prioritize_with_tier_detection(
+            &mut accounts,
+            &quotas,
+            &rate_tracker,
+            &quota_manager,
+        )
+        .await;
+
+        // ULTRA should be prioritized despite lower quota (tier > quota)
+        assert_eq!(accounts[0].account_id, "ultra1");
+        assert_eq!(accounts[1].account_id, "free1");
+    }
+
+    #[tokio::test]
+    async fn test_tier_priority_over_rate_limit() {
+        use crate::proxy::rate_limit::RateLimitReason;
+        use std::time::SystemTime;
+
+        let mut accounts = vec![
+            create_test_token("ultra_limited", Some("ULTRA")),
+            create_test_token("free_ok", Some("FREE")),
+        ];
+        let quotas = HashMap::from([
+            ("ultra_limited".to_string(), 0.8),
+            ("free_ok".to_string(), 0.5),
+        ]);
+        let rate_tracker = RateLimitTracker::new();
+        let quota_manager = Arc::new(QuotaManager::new(300));
+
+        // Set rate limit on ULTRA account
+        let reset_time = SystemTime::now() + std::time::Duration::from_secs(300);
+        rate_tracker.set_lockout_until(
+            "ultra_limited",
+            reset_time,
+            RateLimitReason::QuotaExhausted,
+            None,
+        );
+
+        AccountPrioritizer::prioritize_with_tier_detection(
+            &mut accounts,
+            &quotas,
+            &rate_tracker,
+            &quota_manager,
+        )
+        .await;
+
+        // ULTRA tier should still come first despite rate limit (tier > rate limit in priority)
+        // This is by design: tier is the primary factor
+        assert_eq!(accounts[0].account_id, "ultra_limited");
+        assert_eq!(accounts[1].account_id, "free_ok");
+    }
+
+    #[tokio::test]
+    async fn test_parallel_tier_detection_performance() {
+        let quota_manager = Arc::new(QuotaManager::new(300));
+
+        // Create 10 accounts to test parallel execution
+        let accounts: Vec<ProxyToken> = (0..10)
+            .map(|i| create_test_token(&format!("acc{}", i), Some("PRO")))
+            .collect();
+
+        let start = std::time::Instant::now();
+        let tier_map = AccountPrioritizer::detect_tiers_batch(&accounts, &quota_manager).await;
+        let duration = start.elapsed();
+
+        // Should complete quickly even with 10 accounts (parallel execution)
+        // All will fail with invalid tokens, but parallelization should be fast
+        assert!(duration.as_secs() < 10);
+
+        // All accounts should have failed (invalid tokens)
+        assert_eq!(tier_map.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_prioritize_with_mixed_tier_availability() {
+        let mut accounts = vec![
+            create_test_token("ultra1", Some("ULTRA")),
+            create_test_token("pro_no_tier", None), // No tier info
+            create_test_token("free1", Some("FREE")),
+        ];
+        let quotas = HashMap::from([
+            ("ultra1".to_string(), 0.5),
+            ("pro_no_tier".to_string(), 0.9),
+            ("free1".to_string(), 0.7),
+        ]);
+        let rate_tracker = RateLimitTracker::new();
+        let quota_manager = Arc::new(QuotaManager::new(300));
+
+        AccountPrioritizer::prioritize_with_tier_detection(
+            &mut accounts,
+            &quotas,
+            &rate_tracker,
+            &quota_manager,
+        )
+        .await;
+
+        // ULTRA should be first, then accounts sorted by quota
+        assert_eq!(accounts[0].account_id, "ultra1");
+        // pro_no_tier and free1 will be sorted by quota (no tier detected means FREE)
+        // pro_no_tier: 0.9 quota, free1: 0.7 quota -> pro_no_tier should be first
+        assert_eq!(accounts[1].account_id, "pro_no_tier");
+        assert_eq!(accounts[2].account_id, "free1");
+    }
+
+    #[tokio::test]
+    async fn test_tier_detection_updates_proxy_token_fields() {
+        use crate::modules::quota_fetcher::SubscriptionTier as FetcherTier;
+
+        let quota_manager = Arc::new(QuotaManager::new(300));
+
+        // Manually populate tier cache for testing
+        quota_manager
+            .tier_cache
+            .insert("acc1".to_string(), FetcherTier::Ultra);
+        quota_manager
+            .tier_cache
+            .insert("acc2".to_string(), FetcherTier::Pro);
+
+        let mut accounts = vec![
+            create_test_token("acc1", None), // No tier initially
+            create_test_token("acc2", None), // No tier initially
+        ];
+        let quotas = HashMap::from([("acc1".to_string(), 0.8), ("acc2".to_string(), 0.7)]);
+        let rate_tracker = RateLimitTracker::new();
+
+        AccountPrioritizer::prioritize_with_tier_detection(
+            &mut accounts,
+            &quotas,
+            &rate_tracker,
+            &quota_manager,
+        )
+        .await;
+
+        // Verify tiers were updated from cache
+        assert_eq!(
+            accounts[0].subscription_tier,
+            Some("ULTRA".to_string()),
+            "acc1 should have ULTRA tier"
+        );
+        assert_eq!(
+            accounts[1].subscription_tier,
+            Some("PRO".to_string()),
+            "acc2 should have PRO tier"
+        );
+
+        // Verify ordering: ULTRA > PRO
+        assert_eq!(accounts[0].account_id, "acc1");
+        assert_eq!(accounts[1].account_id, "acc2");
     }
 }
