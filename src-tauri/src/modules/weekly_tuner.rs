@@ -3,7 +3,7 @@
 
 #![allow(dead_code)] // WIP: Epic-025 Week 7 implementation
 
-use crate::modules::thinking_quality::{ThinkingQualityMonitor, WeeklyFeedback};
+use crate::modules::thinking_quality::{ThinkingQualityMonitor, TuningPriority, WeeklyFeedback};
 use chrono::{Datelike, Timelike};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -341,12 +341,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_tuning_recommendations_low_ftr() {
+        use chrono::{TimeZone, Utc};
         let monitor = Arc::new(ThinkingQualityMonitor::new());
         let tuner = WeeklyTuner::new(monitor);
 
         let feedback = WeeklyFeedback {
-            period_start: "2026-03-15".to_string(),
-            period_end: "2026-03-21".to_string(),
+            period_start: Utc.with_ymd_and_hms(2026, 3, 15, 0, 0, 0).unwrap(),
+            period_end: Utc.with_ymd_and_hms(2026, 3, 21, 0, 0, 0).unwrap(),
             total_requests: 100,
             avg_quality_score: 0.85,
             first_time_right_rate: 0.82, // Below 90%
@@ -355,7 +356,7 @@ mod tests {
             avg_completeness: 0.95,
             avg_coherence: 0.90,
             recommendations: vec![],
-            tuning_priority: "High".to_string(),
+            tuning_priority: TuningPriority::High,
         };
 
         let recs = tuner.generate_tuning_recommendations(&feedback);
@@ -368,12 +369,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_tuning_recommendations_low_utilization() {
+        use chrono::{TimeZone, Utc};
         let monitor = Arc::new(ThinkingQualityMonitor::new());
         let tuner = WeeklyTuner::new(monitor);
 
         let feedback = WeeklyFeedback {
-            period_start: "2026-03-15".to_string(),
-            period_end: "2026-03-21".to_string(),
+            period_start: Utc.with_ymd_and_hms(2026, 3, 15, 0, 0, 0).unwrap(),
+            period_end: Utc.with_ymd_and_hms(2026, 3, 21, 0, 0, 0).unwrap(),
             total_requests: 100,
             avg_quality_score: 0.90,
             first_time_right_rate: 0.92,
@@ -382,7 +384,7 @@ mod tests {
             avg_completeness: 0.98,
             avg_coherence: 0.92,
             recommendations: vec![],
-            tuning_priority: "Medium".to_string(),
+            tuning_priority: TuningPriority::Medium,
         };
 
         let recs = tuner.generate_tuning_recommendations(&feedback);

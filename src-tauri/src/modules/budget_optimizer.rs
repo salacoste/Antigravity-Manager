@@ -356,6 +356,62 @@ impl BudgetOptimizer {
         let mut metrics = self.metrics.write().await;
         *metrics = OptimizationMetrics::default();
     }
+
+    /// Classify complexity of a request (wrapper for testing compatibility)
+    ///
+    /// This method provides a synchronous interface for complexity classification
+    /// by extracting the prompt text from a JSON request and delegating to the
+    /// classifier. Returns BudgetAllocation which includes confidence score.
+    pub fn classify_complexity(&self, request: &serde_json::Value) -> BudgetAllocation {
+        // Extract prompt text from request
+        let request_text = Self::extract_prompt_text(request);
+        let messages = Self::extract_messages(request);
+
+        // Use classifier directly for synchronous classification
+        self.classifier.classify(&request_text, &messages)
+    }
+
+    /// Optimize budget for a request (async wrapper for testing compatibility)
+    ///
+    /// This method provides backward compatibility with Epic-025 tests by wrapping
+    /// the allocate_budget method with JSON request parsing.
+    pub async fn optimize_budget(
+        &self,
+        request: &serde_json::Value,
+    ) -> Result<BudgetAllocation, String> {
+        // Extract prompt text and messages from request
+        let request_text = Self::extract_prompt_text(request);
+        let messages = Self::extract_messages(request);
+
+        // Call allocate_budget (which records metrics internally)
+        let allocation = self.allocate_budget(&request_text, &messages).await;
+
+        Ok(allocation)
+    }
+
+    /// Helper: Extract prompt text from JSON request
+    fn extract_prompt_text(request: &serde_json::Value) -> String {
+        // Try to get the last message content
+        if let Some(messages) = request.get("messages").and_then(|m| m.as_array()) {
+            if let Some(last_msg) = messages.last() {
+                if let Some(content) = last_msg.get("content").and_then(|c| c.as_str()) {
+                    return content.to_string();
+                }
+            }
+        }
+
+        // Fallback: empty string
+        String::new()
+    }
+
+    /// Helper: Extract messages array from JSON request
+    fn extract_messages(request: &serde_json::Value) -> Vec<serde_json::Value> {
+        request
+            .get("messages")
+            .and_then(|m| m.as_array())
+            .map(|arr| arr.clone())
+            .unwrap_or_default()
+    }
 }
 
 impl Default for BudgetOptimizer {
