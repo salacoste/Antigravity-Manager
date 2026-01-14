@@ -409,6 +409,7 @@ mod tests {
             account_path: PathBuf::from("/tmp/test.json"),
             project_id: Some("test-project".to_string()),
             subscription_tier: tier.map(|s| s.to_string()),
+            remaining_quota: Some(100),
         }
     }
 
@@ -670,9 +671,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_prioritize_with_tier_detection_preserves_order_on_api_failure() {
-        use crate::proxy::rate_limit::RateLimitReason;
-        use std::time::SystemTime;
-
         let mut accounts = vec![
             create_test_token("free1", Some("FREE")),
             create_test_token("ultra1", Some("ULTRA")),
