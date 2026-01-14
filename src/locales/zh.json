@@ -1,12 +1,14 @@
 {
     "common": {
         "loading": "加载中...",
+        "load_more": "加载更多",
         "add": "添加",
         "action": "操作",
         "save": "保存",
         "saved": "保存成功",
         "cancel": "取消",
         "confirm": "确认",
+        "close": "关闭",
         "delete": "删除",
         "edit": "编辑",
         "refresh": "刷新",
@@ -40,8 +42,16 @@
         "theme_to_light": "切换到浅色模式",
         "switch_to_english": "切换到英文",
         "switch_to_chinese": "切换到中文",
+        "switch_to_traditional_chinese": "切换到繁体中文",
         "switch_to_english_short": "EN",
-        "switch_to_chinese_short": "中"
+        "switch_to_chinese_short": "ZH",
+        "switch_to_traditional_chinese_short": "TW",
+        "switch_to_japanese": "切换到日文",
+        "switch_to_japanese_short": "JA",
+        "switch_to_turkish": "切换到土耳其文",
+        "switch_to_turkish_short": "TR",
+        "switch_to_vietnamese": "切换到越南文",
+        "switch_to_vietnamese_short": "VI"
     },
     "dashboard": {
         "hello": "你好, 用户 👋",
@@ -110,6 +120,12 @@
         "reset_time": "重置时间",
         "switch_to": "切换到此账号",
         "actions": "操作",
+        "device_fingerprint": "设备指纹",
+        "warmup_all": "一键预热",
+        "warmup_selected": "预热 ({{count}})",
+        "warmup_this": "预热该账号",
+        "warmup_now": "立即预热",
+        "warmup_batch_triggered": "已成功为 {{count}} 个账号触发预热任务",
         "details": {
             "title": "配额详情"
         },
@@ -190,7 +206,11 @@
             "disable_proxy_title": "禁用反代",
             "disable_proxy_msg": "确定要禁用此账号的反代功能吗？账号仍可在应用中使用。",
             "enable_proxy_title": "启用反代",
-            "enable_proxy_msg": "确定要重新启用此账号的反代功能吗？"
+            "enable_proxy_msg": "确定要重新启用此账号的反代功能吗？",
+            "warmup_all_title": "全量手动预热",
+            "warmup_all_msg": "确定要立即为所有符合条件的账号触发预热任务吗？这将向 Google 服务发送极小流量以重置配额配额周期。",
+            "batch_warmup_title": "批量手动预热",
+            "batch_warmup_msg": "确定要为选中的 {{count}} 个账号立即触发预热吗？"
         }
     },
     "settings": {
@@ -212,16 +232,39 @@
             "auto_launch": "开机自动启动",
             "auto_launch_enabled": "启用",
             "auto_launch_disabled": "禁用",
-            "auto_launch_desc": "系统启动时自动运行 Antigravity Tools"
+            "auto_launch_desc": "系统启动时自动运行 Antigravity Tools",
+            "auto_check_update": "自动检查更新",
+            "auto_check_update_desc": "启动时自动检查新版本",
+            "auto_check_update_enabled": "已启用自动检查更新",
+            "auto_check_update_disabled": "已禁用自动检查更新",
+            "update_check_interval": "检查间隔(小时)",
+            "update_check_interval_desc": "设置自动检查更新的时间间隔(1-168 小时)",
+            "update_check_interval_saved": "已保存检查间隔设置"
         },
         "account": {
             "title": "账号设置",
-            "auto_refresh": "自动刷新配额",
-            "auto_refresh_desc": "定期自动刷新所有账号的配额信息",
+            "auto_refresh": "后台自动刷新",
+            "auto_refresh_desc": "后台自动刷新所有账号的配额信息，这是额度保护和智能预热的基础。",
+            "always_on": "始终开启",
             "refresh_interval": "刷新间隔（分钟）",
             "auto_sync": "自动获取当前账号",
-            "auto_sync_desc": "定期自动同步当前活跃账号信息",
+            "auto_sync_desc": "定期自动刷新当前活动账号的信息",
             "sync_interval": "同步间隔（秒）"
+        },
+        "warmup": {
+            "title": "智能预热",
+            "desc": "自动监控所有模型，当额度恢复到 100% 时立即触发预热，保持模型热状态"
+        },
+        "quota_protection": {
+            "title": "配额保护",
+            "enable": "启用配额保护",
+            "enable_desc": "当账号剩余配额低于阈值时自动禁用反代功能，配额重置后将自动恢复账号",
+            "threshold_label": "保留配额百分比",
+            "monitored_models_label": "监控模型 (触发条件)",
+            "monitored_models_desc": "至少选择一个核心模型。任一勾选模型额度低于阈值将触发保护",
+            "range": "范围",
+            "example": "示例：设置 {{percentage}}% 时，{{total}} 次配额的账号剩余 ≤ {{threshold}} 次时将被自动禁用",
+            "auto_restore_info": "配额重置后将自动重新启用账号"
         },
         "proxy": {
             "title": "代理设置"
@@ -271,7 +314,13 @@
             "latest_version": "已是最新版本",
             "new_version_available": "发现新版本 {{version}}",
             "download_update": "前往下载",
-            "update_check_failed": "检测更新失败"
+            "update_check_failed": "检测更新失败",
+            "support_btn": "支持作者",
+            "support_title": "赞助支持",
+            "support_desc": "如果您觉得本工具对您有帮助，欢迎扫码请作者喝杯咖啡！您的支持是我持续维护项目的最大动力。",
+            "support_alipay": "支付宝",
+            "support_wechat": "微信支付",
+            "support_buymeacoffee": "Buy Me a Coffee"
         }
     },
     "tray": {
@@ -422,6 +471,12 @@
                 "max_wait_tooltip": "仅在“缓存优先”模式下生效：如果账号限流重置时间小于此值，则原地等待而非切换账号。",
                 "clear_bindings": "清除会话绑定",
                 "clear_bindings_tooltip": "立即断开所有会话与账号的绑定关系，强制下一次请求重新分配账号。"
+            },
+            "experimental": {
+                "title": "实验性设置 (Experimental)",
+                "title_tooltip": "探索性功能，可能在未来版本中调整或移除。",
+                "enable_usage_scaling": "启用用量缩放",
+                "enable_usage_scaling_tooltip": "针对 Claude 兼容协议。当总输入超过 30k Token 时开启激进缩放，防止在大上下文下频繁触发客户端压缩。注意：开启后客户端显示的用量不再代表实际计费点数。"
             }
         },
         "example": {
@@ -564,9 +619,6 @@
         "page_title": "API 监控看板",
         "page_subtitle": "实时请求日志与分析",
         "open_monitor": "打开监控",
-        "compliance": "合规监控",
-        "show_compliance": "显示合规看板",
-        "hide_compliance": "隐藏合规看板",
         "logging_status": {
             "active": "正在录制",
             "paused": "已暂停"
@@ -613,108 +665,18 @@
             "clear_msg": "确定要清除所有监控记录吗？此操作无法撤销。"
         }
     },
-    "compliance": {
-        "title": "合规监控",
-        "score": "合规评分",
-        "budget_violations": "预算违规",
-        "position_violations": "位置违规",
-        "position_histogram": "位置违规分布",
-        "user_messages": "用户消息",
-        "model_messages": "模型消息",
-        "refresh": "刷新指标",
-        "reset": "重置指标",
-        "export": "导出报告",
-        "confirm_reset": "确定要重置所有违规指标吗？这将清除所有历史数据。",
-        "no_data": "暂无合规数据",
-        "alerts": {
-            "all_green": "所有阈值均为绿色 - 合规性优秀",
-            "budget_red": "预算违规率 ({{rate}}/秒) 超过红色阈值 (>0.28/秒)",
-            "budget_red_fix": "检查客户端配置，确保 maxOutputTokens > thinkingBudget + 100",
-            "budget_yellow": "预算违规率 ({{rate}}/秒) 处于黄色范围 (0.03-0.28/秒)",
-            "budget_yellow_fix": "监控客户端配置并考虑调整令牌预算",
-            "position_red": "位置违规率 ({{rate}}/秒) 超过红色阈值 (>0.28/秒)",
-            "position_red_fix": "检查客户端实现，确保思维块在文本内容之前发送",
-            "position_yellow": "位置违规率 ({{rate}}/秒) 处于黄色范围 (0.03-0.28/秒)",
-            "position_yellow_fix": "监控客户端实现中的消息顺序"
-        }
+    "update_notification": {
+        "title": "发现新版本",
+        "message": "新版本已准备就绪，包含多项优化与改进。当前版本: v{{current}}",
+        "action": "立即更新"
     },
-    "profiles": {
-        "title": "配置预设",
-        "subtitle": "Gemini 3 Pro High 优化预设配置",
-        "thinking_enabled": "思维模式",
-        "max_tokens": "最大令牌",
-        "thinking_budget": "思维预算",
-        "response_time": "响应速度",
-        "apply_profile": "应用预设",
-        "active": "当前使用",
-        "profile_applied": "预设 '{{name}}' 已成功应用",
-        "filter": {
-            "all": "全部",
-            "base": "基础",
-            "thinking": "思维"
-        },
-        "speed": {
-            "fast": "快速",
-            "medium": "中等",
-            "slow": "详细"
-        },
-        "info": {
-            "title": "预设说明",
-            "description": "预设配置针对不同使用场景优化了模型参数。思维预设启用扩展推理能力。"
-        },
-        "fast-general": {
-            "name": "快速通用",
-            "description": "通用任务的快速响应"
-        },
-        "balanced": {
-            "name": "平衡模式",
-            "description": "速度与质量的平衡"
-        },
-        "quality": {
-            "name": "高质量",
-            "description": "最高质量响应"
-        },
-        "creative": {
-            "name": "创意模式",
-            "description": "创意和多样化响应"
-        },
-        "thinking-fast": {
-            "name": "思维快速",
-            "description": "小型思维预算的快速推理"
-        },
-        "thinking-balanced": {
-            "name": "思维平衡",
-            "description": "中等预算的平衡推理"
-        },
-        "thinking-deep": {
-            "name": "思维深度",
-            "description": "大型预算的深度推理"
-        },
-        "thinking-max": {
-            "name": "思维极限",
-            "description": "最大推理能力"
-        },
-        "use_case": {
-            "chat": "聊天",
-            "general": "通用",
-            "quick": "快速",
-            "coding": "编程",
-            "analysis": "分析",
-            "balanced": "平衡",
-            "complex": "复杂",
-            "detailed": "详细",
-            "quality": "高质量",
-            "creative": "创意",
-            "brainstorming": "头脑风暴",
-            "writing": "写作",
-            "reasoning": "推理",
-            "problem-solving": "问题解决",
-            "fast": "快速",
-            "research": "研究",
-            "deep-analysis": "深度分析",
-            "expert": "专家",
-            "critical": "关键",
-            "maximum": "极限"
+    "errors": {
+        "stream": {
+            "timeout_error": "请求超时,请检查网络连接",
+            "connection_error": "无法连接到服务器,请检查网络或代理设置",
+            "decode_error": "网络连接不稳定,数据传输中断。建议: 1) 检查网络连接 2) 更换代理节点 3) 稍后重试",
+            "stream_error": "数据流传输错误,请稍后重试",
+            "unknown_error": "发生未知错误,请稍后重试"
         }
     }
 }

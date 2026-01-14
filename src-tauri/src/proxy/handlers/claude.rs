@@ -665,8 +665,10 @@ pub async fn handle_messages(
         &*state.custom_mapping.read().await,
     );
 
+    // TODO: Restore conditional fallback feature (Epic work)
+    // Requires: check_all_accounts_rate_limited_for_model() method in TokenManager
+    /*
     if initial_mapped_model == "claude-opus-4-5-thinking" {
-        // 检查所有账号是否都对该模型限流
         if token_manager.check_all_accounts_rate_limited_for_model("claude-opus-4-5-thinking") {
             let fallback_model = "gemini-3-pro-high";
             tracing::warn!(
@@ -674,13 +676,8 @@ pub async fn handle_messages(
                 initial_mapped_model,
                 fallback_model
             );
-
-            // 修改请求模型为 fallback 模型
-            // 注意：这里修改的是 Claude API 的模型名称，后续在 resolve_model_route 时会映射到实际的 Gemini 模型
             request_for_body.model = fallback_model.to_string();
 
-            // Emit UI notification event
-            // 使用与 request.rs 相同的 emit 方式
             if let Some(app) = crate::proxy::mappers::claude::request::get_app_handle() {
                 use tauri::Emitter;
                 let payload = serde_json::json!({
@@ -688,16 +685,14 @@ pub async fn handle_messages(
                     "to": fallback_model,
                     "reason": "all_accounts_rate_limited"
                 });
-                if let Err(e) = app.emit("proxy://model-fallback", payload) {
-                    tracing::debug!("[Conditional-Fallback] Failed to emit UI event: {}", e);
-                }
+                let _ = app.emit("proxy://model-fallback", payload);
             }
-        } else {
-            tracing::debug!(
-                "[Conditional-Fallback] At least one account available for Claude Opus, no fallback needed"
-            );
         }
     }
+    */
+
+    // Get experimental config for Story-027-01 (Context Usage Scaling)
+    let scaling_enabled = state.experimental.read().await.enable_usage_scaling;
 
     for attempt in 0..max_attempts {
         // 2. 模型路由解析
@@ -726,13 +721,11 @@ pub async fn handle_messages(
         let session_id = Some(session_id_str.as_str());
 
         let force_rotate_token = attempt > 0;
-        // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
             .get_token(
                 &config.request_type,
                 force_rotate_token,
                 session_id,
-                Some(&mapped_model),
             )
             .await
         {
@@ -938,7 +931,7 @@ pub async fn handle_messages(
                 let stream = response.bytes_stream();
                 let gemini_stream = Box::pin(stream);
                 let claude_stream =
-                    create_claude_sse_stream(gemini_stream, trace_id.clone(), email.clone());
+                    create_claude_sse_stream(gemini_stream, trace_id.clone(), email.clone(), Some(session_id_str.clone()), scaling_enabled);
 
                 // 转换为 Bytes stream
                 let sse_stream = claude_stream.map(|result| -> Result<Bytes, std::io::Error> {
@@ -1061,7 +1054,7 @@ pub async fn handle_messages(
                     };
 
                 // 转换
-                let claude_response = match transform_response(&gemini_response) {
+                let claude_response = match transform_response(&gemini_response, scaling_enabled) {
                     Ok(r) => r,
                     Err(e) => {
                         return (

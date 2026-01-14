@@ -59,7 +59,6 @@ function AccountQuotaCard({ account, onViewDetails }: AccountQuotaCardProps) {
       {/* Quota bars */}
       <div className="space-y-2 mb-3">
         {primaryModels.map(model => {
-          const usedPercentage = 100 - model.percentage;
           const barColor =
             model.percentage >= 50
               ? 'bg-green-500'
@@ -112,7 +111,7 @@ function AccountQuotaCard({ account, onViewDetails }: AccountQuotaCardProps) {
 export default function QuotaMonitoringWidget() {
   const { t } = useTranslation();
   const { accounts, fetchAccounts } = useAccountStore();
-  const { quotas, monitoring, checkQuotaThresholds, addSnapshot } = useQuotaStore();
+  const { monitoring, checkQuotaThresholds, addSnapshot } = useQuotaStore();
 
   // Load accounts on mount
   useEffect(() => {

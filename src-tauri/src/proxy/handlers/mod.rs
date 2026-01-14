@@ -7,4 +7,5 @@ pub mod common;
 pub mod feedback_utils;
 pub mod gemini;
 pub mod mcp;
-pub mod openai; // 音频转录处理器 (PR #311) // Epic-008 Story-012-02: Feedback extraction utilities
+pub mod openai;
+pub mod warmup; // 预热处理器 (Story-027-11)

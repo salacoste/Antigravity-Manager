@@ -79,6 +79,9 @@ pub fn run() {
                 }
             });
 
+            // 启动智能调度器 (Story-027-11: Smart Warmup System)
+            modules::scheduler::start_scheduler(app.handle().clone());
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -104,6 +107,17 @@ pub fn run() {
             commands::delete_accounts,
             commands::reorder_accounts,
             commands::switch_account,
+            // 设备指纹
+            commands::get_device_profiles,
+            commands::bind_device_profile,
+            commands::bind_device_profile_with_profile,
+            commands::preview_generate_profile,
+            commands::apply_device_profile,
+            commands::restore_original_device,
+            commands::list_device_versions,
+            commands::restore_device_version,
+            commands::delete_device_version,
+            commands::open_device_folder,
             commands::get_current_account,
             // 配额命令
             commands::fetch_account_quota,
@@ -133,6 +147,10 @@ pub fn run() {
             commands::get_antigravity_path,
             commands::get_antigravity_args,
             commands::check_for_updates,
+            commands::get_update_settings,
+            commands::save_update_settings,
+            commands::should_check_updates,
+            commands::update_last_check_time,
             commands::toggle_proxy_status,
             // 反代服务命令
             commands::proxy::start_proxy_service,
@@ -151,6 +169,8 @@ pub fn run() {
             commands::proxy::reset_analytics,       // 🆕 Story-013-06
             commands::proxy::get_audio_analytics,   // 🆕 Epic-014 Story-014-04
             commands::proxy::get_proxy_logs,
+            commands::proxy::get_proxy_logs_paginated,
+            commands::proxy::get_proxy_log_detail,
             commands::proxy::set_proxy_monitor_enabled,
             commands::proxy::clear_proxy_logs,
             commands::proxy::generate_api_key,
@@ -180,6 +200,9 @@ pub fn run() {
             commands::quality::reset_quality_metrics,
             commands::quality::get_quality_history_with_trends,
             commands::quality::get_budget_distribution,
+            // 预热命令 (Story-027-11: Smart Warmup System)
+            commands::warm_up_all_accounts,
+            commands::warm_up_account,
             // 测试命令
             commands::test_model_fallback_notification,
             commands::open_devtools,
@@ -203,5 +226,8 @@ pub fn run() {
                         .unwrap_or(());
                 }
             }
+            // Suppress unused variable warnings on non-macOS platforms
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app_handle, event);
         });
 }

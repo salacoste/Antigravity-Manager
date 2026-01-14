@@ -409,6 +409,7 @@ mod tests {
             account_path: PathBuf::from("/tmp/test.json"),
             project_id: Some("test-project".to_string()),
             subscription_tier: tier.map(|s| s.to_string()),
+            remaining_quota: Some(100),
         }
     }
 

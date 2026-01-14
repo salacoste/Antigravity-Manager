@@ -28,6 +28,8 @@ interface AccountState {
     importFromCustomDb: (path: string) => Promise<void>;
     syncAccountFromDb: () => Promise<void>;
     toggleProxyStatus: (accountId: string, enable: boolean, reason?: string) => Promise<void>;
+    warmUpAccounts: () => Promise<string>;
+    warmUpAccount: (accountId: string) => Promise<string>;
 }
 
 export const useAccountStore = create<AccountState>((set, get) => ({
@@ -263,6 +265,32 @@ export const useAccountStore = create<AccountState>((set, get) => ({
             await get().fetchAccounts();
         } catch (error) {
             console.error('[AccountStore] Toggle proxy status failed:', error);
+            throw error;
+        }
+    },
+
+    warmUpAccounts: async () => {
+        set({ loading: true, error: null });
+        try {
+            const result = await accountService.warmUpAllAccounts();
+            await get().fetchAccounts();
+            set({ loading: false });
+            return result;
+        } catch (error) {
+            set({ error: String(error), loading: false });
+            throw error;
+        }
+    },
+
+    warmUpAccount: async (accountId: string) => {
+        set({ loading: true, error: null });
+        try {
+            const result = await accountService.warmUpAccount(accountId);
+            await get().fetchAccounts();
+            set({ loading: false });
+            return result;
+        } catch (error) {
+            set({ error: String(error), loading: false });
             throw error;
         }
     },

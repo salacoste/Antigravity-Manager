@@ -142,6 +142,7 @@ pub async fn handle_generate(
     let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
 
     let mut last_error = String::new();
+    let mut last_email: Option<String> = None;
 
     for attempt in 0..max_attempts {
         // 3. 模型路由解析
@@ -177,13 +178,11 @@ pub async fn handle_generate(
         let session_id = SessionManager::extract_gemini_session_id(&body, &model_name);
 
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
-        // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
             .get_token(
                 &config.request_type,
                 attempt > 0,
                 Some(&session_id),
-                Some(&mapped_model),
             )
             .await
         {
@@ -196,6 +195,7 @@ pub async fn handle_generate(
             }
         };
 
+        last_email = Some(email.clone());
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
         // Epic-025 Story-025-01: Apply budget optimization for Flash Thinking (Model ID 313)
@@ -474,13 +474,12 @@ pub async fn handle_generate(
             || status_code == 403
             || status_code == 401
         {
-            // 记录限流信息 (全局同步) - 🆕 传递模型实现 model-level rate limiting
+            // 记录限流信息 (全局同步)
             token_manager.mark_rate_limited(
                 &email,
                 status_code,
                 retry_after.as_deref(),
                 &error_text,
-                Some(&mapped_model),
             );
 
             // 只有明确包含 "QUOTA_EXHAUSTED" 才停止 -> 【Fix PR#493】改为继续尝试下一个账号
@@ -502,18 +501,16 @@ pub async fn handle_generate(
         }
 
         // 404 等由于模型配置或路径错误的 HTTP 异常，直接报错，不进行无效轮换
-        error!(
-            "Gemini Upstream non-retryable error {}: {}",
-            status_code, error_text
-        );
-        return Err((status, error_text));
+        error!("Gemini Upstream non-retryable error {}: {}", status_code, error_text);
+        return Ok((status, [("X-Account-Email", email.as_str())], error_text).into_response());
     }
 
-    Ok((
-        StatusCode::TOO_MANY_REQUESTS,
-        format!("All accounts exhausted. Last error: {}", last_error),
-    )
-        .into_response())
+    // Return final error with last account email if available
+    if let Some(email) = last_email {
+        Ok((StatusCode::TOO_MANY_REQUESTS, [("X-Account-Email", email)], format!("All accounts exhausted. Last error: {}", last_error)).into_response())
+    } else {
+        Ok((StatusCode::TOO_MANY_REQUESTS, format!("All accounts exhausted. Last error: {}", last_error)).into_response())
+    }
 }
 
 pub async fn handle_list_models(
@@ -562,7 +559,7 @@ pub async fn handle_count_tokens(
     // 🆕 count_tokens 工具不需要 model-specific rate limiting, 传递 None
     let (_access_token, _project_id, _) = state
         .token_manager
-        .get_token(model_group, false, None, None)
+        .get_token(model_group, false, None)
         .await
         .map_err(|e| {
             (

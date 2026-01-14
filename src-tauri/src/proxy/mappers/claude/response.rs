@@ -109,7 +109,8 @@ pub struct NonStreamingProcessor {
     thinking_builder: String,
     thinking_signature: Option<String>,
     trailing_signature: Option<String>,
-    has_tool_call: bool,
+    pub has_tool_call: bool,
+    pub scaling_enabled: bool,
 }
 
 impl NonStreamingProcessor {
@@ -121,11 +122,13 @@ impl NonStreamingProcessor {
             thinking_signature: None,
             trailing_signature: None,
             has_tool_call: false,
+            scaling_enabled: false, // Default to false, set in process
         }
     }
 
     /// 处理 Gemini 响应并转换为 Claude 响应
-    pub fn process(&mut self, gemini_response: &GeminiResponse) -> ClaudeResponse {
+    pub fn process(&mut self, gemini_response: &GeminiResponse, scaling_enabled: bool) -> ClaudeResponse {
+        self.scaling_enabled = scaling_enabled;
         // 获取 parts
         let empty_parts = vec![];
         let parts = gemini_response
@@ -166,7 +169,23 @@ impl NonStreamingProcessor {
 
     /// 处理单个 part
     fn process_part(&mut self, part: &GeminiPart) {
-        let signature = part.thought_signature.clone();
+        // [FIX #545] Decode Base64 signature if present (Gemini sends Base64, Claude expects Raw)
+        let signature = part.thought_signature.as_ref().map(|sig| {
+            use base64::Engine;
+            match base64::engine::general_purpose::STANDARD.decode(sig) {
+                Ok(decoded_bytes) => {
+                    match String::from_utf8(decoded_bytes) {
+                        Ok(decoded_str) => {
+                            tracing::debug!("[Response] Decoded base64 signature (len {} -> {})", sig.len(), decoded_str.len());
+                            decoded_str
+                        },
+                        Err(_) => sig.clone() // Not valid UTF-8, keep as is
+                    }
+                },
+                Err(_) => sig.clone() // Not base64, keep as is
+            }
+        });
+
 
         // 1. FunctionCall 处理
         if let Some(fc) = &part.function_call {
@@ -368,16 +387,17 @@ impl NonStreamingProcessor {
             "end_turn"
         };
 
-        let usage = gemini_response.usage_metadata.as_ref().map_or(
-            Usage {
+        let usage = gemini_response
+            .usage_metadata
+            .as_ref()
+            .map(|u| to_claude_usage(u, self.scaling_enabled))
+            .unwrap_or(Usage {
                 input_tokens: 0,
                 output_tokens: 0,
                 cache_read_input_tokens: None,
                 cache_creation_input_tokens: None,
                 server_tool_use: None,
-            },
-            to_claude_usage,
-        );
+            });
 
         ClaudeResponse {
             id: gemini_response.response_id.clone().unwrap_or_else(|| {
@@ -401,9 +421,9 @@ impl Default for NonStreamingProcessor {
 }
 
 /// 转换 Gemini 响应为 Claude 响应 (公共接口)
-pub fn transform_response(gemini_response: &GeminiResponse) -> Result<ClaudeResponse, String> {
+pub fn transform_response(gemini_response: &GeminiResponse, scaling_enabled: bool) -> Result<ClaudeResponse, String> {
     let mut processor = NonStreamingProcessor::new();
-    Ok(processor.process(gemini_response))
+    Ok(processor.process(gemini_response, scaling_enabled))
 }
 
 #[cfg(test)]
@@ -439,7 +459,7 @@ mod tests {
             response_id: Some("resp_123".to_string()),
         };
 
-        let result = transform_response(&gemini_resp);
+        let result = transform_response(&gemini_resp, false);
         assert!(result.is_ok());
 
         let claude_resp = result.unwrap();
@@ -489,7 +509,7 @@ mod tests {
             response_id: Some("resp_456".to_string()),
         };
 
-        let result = transform_response(&gemini_resp);
+        let result = transform_response(&gemini_resp, false);
         assert!(result.is_ok());
 
         let claude_resp = result.unwrap();

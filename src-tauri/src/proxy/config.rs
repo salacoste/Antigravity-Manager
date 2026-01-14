@@ -149,6 +149,11 @@ pub struct ExperimentalConfig {
     /// Response caching configuration (Story-013-05)
     #[serde(default)]
     pub response_cache: ResponseCacheConfig,
+
+    /// 启用上下文用量缩放 (Context Usage Scaling) (Story-027-01)
+    /// 用于解决客户端因 Gemini 上下文过大而错误触发压缩的问题
+    #[serde(default = "default_true")]
+    pub enable_usage_scaling: bool,
 }
 
 impl Default for ExperimentalConfig {
@@ -158,6 +163,7 @@ impl Default for ExperimentalConfig {
             enable_tool_loop_recovery: true,
             enable_cross_model_checks: true,
             response_cache: ResponseCacheConfig::default(),
+            enable_usage_scaling: true,
         }
     }
 }

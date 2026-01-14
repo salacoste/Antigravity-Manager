@@ -7,22 +7,38 @@
 // 例如: "string" -> "STRING", "integer" -> "INTEGER"
 // 已移除未使用的 uppercase_schema_types 函数
 
-/// 从 Gemini UsageMetadata 转换为 Claude Usage
-pub fn to_claude_usage(usage_metadata: &super::models::UsageMetadata) -> super::models::Usage {
+pub fn to_claude_usage(usage_metadata: &super::models::UsageMetadata, scaling_enabled: bool) -> super::models::Usage {
     let prompt_tokens = usage_metadata.prompt_token_count.unwrap_or(0);
     let cached_tokens = usage_metadata.cached_content_token_count.unwrap_or(0);
 
+    // 【超激进总用量缩放】- 彻底防止客户端压缩 (Story-027-01)
+    // 目标：100k -> 约 32k，1M -> 约 40k
+    const SCALING_THRESHOLD: u32 = 30_000;
+    let total_raw = prompt_tokens;
+
+    let scaled_total = if scaling_enabled && total_raw > SCALING_THRESHOLD {
+        // 对超出部分进行平方根缩放，极其激进
+        let excess = (total_raw - SCALING_THRESHOLD) as f64;
+        let compressed_excess = excess.sqrt() * 25.0; // 调整系数以达到 100k -> 约 30k 的效果
+        SCALING_THRESHOLD + compressed_excess as u32
+    } else {
+        total_raw
+    };
+
+    // 按比例分配缩放后的总量到 input 和 cache_read
+    let (reported_input, reported_cache) = if total_raw > 0 {
+        let cache_ratio = (cached_tokens as f64) / (total_raw as f64);
+        let sc_cache = (scaled_total as f64 * cache_ratio) as u32;
+        (scaled_total.saturating_sub(sc_cache), Some(sc_cache))
+    } else {
+        (scaled_total, None)
+    };
+
     super::models::Usage {
-        // input_tokens 应该排除缓存的部分
-        input_tokens: prompt_tokens.saturating_sub(cached_tokens),
+        input_tokens: reported_input,
         output_tokens: usage_metadata.candidates_token_count.unwrap_or(0),
-        // 缓存统计
-        cache_read_input_tokens: if cached_tokens > 0 {
-            Some(cached_tokens)
-        } else {
-            None
-        },
-        cache_creation_input_tokens: Some(0), // Gemini 不提供此字段,设为 0
+        cache_read_input_tokens: reported_cache,
+        cache_creation_input_tokens: Some(0),
         server_tool_use: None,
     }
 }
@@ -48,7 +64,7 @@ mod tests {
             cached_content_token_count: None,
         };
 
-        let claude_usage = to_claude_usage(&usage);
+        let claude_usage = to_claude_usage(&usage, true);
         assert_eq!(claude_usage.input_tokens, 100);
         assert_eq!(claude_usage.output_tokens, 50);
     }

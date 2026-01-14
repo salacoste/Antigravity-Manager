@@ -208,6 +208,20 @@ impl ProxyMonitor {
             tracing::error!("Failed to initialize proxy DB: {}", e);
         }
 
+        // Auto cleanup old logs (keep last 30 days)
+        tokio::spawn(async {
+            match crate::modules::proxy_db::cleanup_old_logs(30) {
+                Ok(deleted) => {
+                    if deleted > 0 {
+                        tracing::info!("Auto cleanup: removed {} old logs (>30 days)", deleted);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to cleanup old logs: {}", e);
+                }
+            }
+        });
+
         Self {
             logs: RwLock::new(VecDeque::with_capacity(max_logs)),
             stats: RwLock::new(ProxyStats::default()),

@@ -1,5 +1,6 @@
 use crate::models::{Account, AppConfig, QuotaData, TokenData};
 use crate::modules;
+use tauri_plugin_opener::OpenerExt;
 use tauri::{Emitter, Manager};
 
 // 导出 proxy 命令
@@ -168,6 +169,7 @@ async fn internal_refresh_account_quota(
 #[tauri::command]
 pub async fn fetch_account_quota(
     app: tauri::AppHandle,
+    proxy_state: tauri::State<'_, crate::commands::proxy::ProxyServiceState>,
     account_id: String,
 ) -> crate::error::AppResult<QuotaData> {
     modules::logger::log_info(&format!("手动刷新配额请求: {}", account_id));
@@ -192,129 +194,133 @@ pub async fn fetch_account_quota(
 
     crate::modules::tray::update_tray_menus(&app);
 
+    // 5. 同步到运行中的反代服务（如果已启动）
+    let instance_lock = proxy_state.instance.read().await;
+    if let Some(instance) = instance_lock.as_ref() {
+        let _ = instance.token_manager.reload_account(&account_id).await;
+    }
+
+    // 6. 联动预热 (根据配置)
+    if let Ok(config) = crate::modules::config::load_app_config() {
+        if config.scheduled_warmup.enabled {
+            let account = crate::modules::load_account(&account_id).unwrap_or(account);
+            crate::modules::scheduler::trigger_warmup_for_account(&account).await;
+        }
+    }
+
     Ok(quota)
 }
 
-#[derive(serde::Serialize)]
-pub struct RefreshStats {
-    total: usize,
-    success: usize,
-    failed: usize,
-    details: Vec<String>,
-}
+pub use modules::account::RefreshStats;
 
 /// 刷新所有账号配额
 #[tauri::command]
-pub async fn refresh_all_quotas(app: tauri::AppHandle) -> Result<RefreshStats, String> {
-    use futures::future::join_all;
-    use std::sync::Arc;
-    use tokio::sync::Semaphore;
+pub async fn refresh_all_quotas(
+    proxy_state: tauri::State<'_, crate::commands::proxy::ProxyServiceState>,
+) -> Result<RefreshStats, String> {
+    let stats = modules::account::refresh_all_quotas_logic().await?;
 
-    const MAX_CONCURRENT: usize = 5;
-    let start = std::time::Instant::now();
+    // 同步到运行中的反代服务（如果已启动）
+    let instance_lock = proxy_state.instance.read().await;
+    if let Some(instance) = instance_lock.as_ref() {
+        let _ = instance.token_manager.reload_all_accounts().await;
+    }
 
-    modules::logger::log_info(&format!(
-        "开始批量刷新所有账号配额 (并发模式, 最大并发: {})",
-        MAX_CONCURRENT
-    ));
-    let accounts = modules::list_accounts()?;
-
-    // 【Fix PR#493】获取 TokenManager 引用以便在线程中清除锁
-    let token_manager =
-        if let Some(proxy_state) = app.try_state::<crate::commands::proxy::ProxyServiceState>() {
-            let instance_lock = proxy_state.instance.read().await;
-            instance_lock.as_ref().map(|i| i.token_manager.clone())
-        } else {
-            None
-        };
-
-    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT));
-
-    let tasks: Vec<_> = accounts
-        .into_iter()
-        .filter(|account| {
-            if account.disabled {
-                modules::logger::log_info(&format!("  - Skipping {} (Disabled)", account.email));
-                return false;
-            }
-            if let Some(ref q) = account.quota {
-                if q.is_forbidden {
-                    modules::logger::log_info(&format!(
-                        "  - Skipping {} (Forbidden)",
-                        account.email
-                    ));
-                    return false;
+    // 联动预热 (根据配置) - Story-027-11: Smart Warmup System
+    if let Ok(config) = crate::modules::config::load_app_config() {
+        if config.scheduled_warmup.enabled {
+            if let Ok(accounts) = crate::modules::list_accounts() {
+                for acc in accounts {
+                    crate::modules::scheduler::trigger_warmup_for_account(&acc).await;
                 }
-            }
-            true
-        })
-        .map(|mut account| {
-            let email = account.email.clone();
-            let account_id = account.id.clone();
-            let permit = semaphore.clone();
-            let token_manager = token_manager.clone();
-            async move {
-                let _guard = permit.acquire().await.unwrap();
-                modules::logger::log_info(&format!("  - Processing {}", email));
-                match modules::account::fetch_quota_with_retry(&mut account).await {
-                    Ok(quota) => {
-                        if let Err(e) = modules::update_account_quota(&account_id, quota) {
-                            let msg = format!("Account {}: Save quota failed - {}", email, e);
-                            modules::logger::log_error(&msg);
-                            Err(msg)
-                        } else {
-                            modules::logger::log_info(&format!("    ✅ {} Success", email));
-
-                            // 【Fix PR#493】清除限流锁
-                            if let Some(tm) = &token_manager {
-                                tm.clear_rate_limit(&account_id);
-                            }
-
-                            Ok(())
-                        }
-                    }
-                    Err(e) => {
-                        let msg = format!("Account {}: Fetch quota failed - {}", email, e);
-                        modules::logger::log_error(&msg);
-                        Err(msg)
-                    }
-                }
-            }
-        })
-        .collect();
-
-    let total = tasks.len();
-    let results = join_all(tasks).await;
-
-    let mut success = 0;
-    let mut failed = 0;
-    let mut details = Vec::new();
-
-    for result in results {
-        match result {
-            Ok(()) => success += 1,
-            Err(msg) => {
-                failed += 1;
-                details.push(msg);
             }
         }
     }
 
-    let elapsed = start.elapsed();
-    modules::logger::log_info(&format!(
-        "批量刷新完成: {} 成功, {} 失败, 耗时: {}ms",
-        success,
-        failed,
-        elapsed.as_millis()
-    ));
-
-    Ok(RefreshStats {
-        total,
-        success,
-        failed,
-        details,
-    })
+    Ok(stats)
 }
+/// 获取设备指纹（当前 storage.json + 账号绑定）
+#[tauri::command]
+pub async fn get_device_profiles(
+    account_id: String,
+) -> Result<modules::account::DeviceProfiles, String> {
+    modules::get_device_profiles(&account_id)
+}
+
+/// 绑定设备指纹（capture: 采集当前；generate: 生成新指纹），并写入 storage.json
+#[tauri::command]
+pub async fn bind_device_profile(
+    account_id: String,
+    mode: String,
+) -> Result<crate::models::DeviceProfile, String> {
+    modules::bind_device_profile(&account_id, &mode)
+}
+
+/// 预览生成一个指纹（不落盘）
+#[tauri::command]
+pub async fn preview_generate_profile() -> Result<crate::models::DeviceProfile, String> {
+    Ok(crate::modules::device::generate_profile())
+}
+
+/// 使用给定指纹直接绑定
+#[tauri::command]
+pub async fn bind_device_profile_with_profile(
+    account_id: String,
+    profile: crate::models::DeviceProfile,
+) -> Result<crate::models::DeviceProfile, String> {
+    modules::bind_device_profile_with_profile(&account_id, profile, Some("generated".to_string()))
+}
+
+/// 将账号已绑定的指纹应用到 storage.json
+#[tauri::command]
+pub async fn apply_device_profile(
+    account_id: String,
+) -> Result<crate::models::DeviceProfile, String> {
+    modules::apply_device_profile(&account_id)
+}
+
+/// 恢复最早的 storage.json 备份（近似“原始”状态）
+#[tauri::command]
+pub async fn restore_original_device() -> Result<String, String> {
+    modules::restore_original_device()
+}
+
+/// 列出指纹版本
+#[tauri::command]
+pub async fn list_device_versions(
+    account_id: String,
+) -> Result<modules::account::DeviceProfiles, String> {
+    modules::list_device_versions(&account_id)
+}
+
+/// 按版本恢复指纹
+#[tauri::command]
+pub async fn restore_device_version(
+    account_id: String,
+    version_id: String,
+) -> Result<crate::models::DeviceProfile, String> {
+    modules::restore_device_version(&account_id, &version_id)
+}
+
+/// 删除历史指纹（baseline 不可删）
+#[tauri::command]
+pub async fn delete_device_version(account_id: String, version_id: String) -> Result<(), String> {
+    modules::delete_device_version(&account_id, &version_id)
+}
+
+/// 打开设备存储目录
+#[tauri::command]
+pub async fn open_device_folder(app: tauri::AppHandle) -> Result<(), String> {
+    let dir = modules::device::get_storage_dir()?;
+    let dir_str = dir
+        .to_str()
+        .ok_or("无法解析存储目录路径为字符串")?
+        .to_string();
+    app.opener()
+        .open_path(dir_str, None::<&str>)
+        .map_err(|e| format!("打开目录失败: {}", e))
+}
+
 
 /// 加载配置
 #[tauri::command]
@@ -672,88 +678,42 @@ pub async fn get_antigravity_args() -> Result<Vec<String>, String> {
 }
 
 /// 检测更新响应结构
-#[derive(serde::Serialize)]
-pub struct UpdateInfo {
-    has_update: bool,
-    latest_version: String,
-    current_version: String,
-    download_url: String,
-}
+pub use crate::modules::update_checker::UpdateInfo;
 
 /// 检测 GitHub releases 更新
 #[tauri::command]
 pub async fn check_for_updates() -> Result<UpdateInfo, String> {
-    const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
-    const GITHUB_API_URL: &str =
-        "https://api.github.com/repos/lbjlaq/Antigravity-Manager/releases/latest";
-
-    modules::logger::log_info("开始检测更新...");
-
-    // 发起 HTTP 请求
-    let client = crate::utils::http::create_client(15);
-    let response = client
-        .get(GITHUB_API_URL)
-        .header("User-Agent", "Antigravity-Tools")
-        .send()
-        .await
-        .map_err(|e| format!("请求失败: {}", e))?;
-
-    if !response.status().is_success() {
-        return Err(format!("GitHub API 返回错误: {}", response.status()));
-    }
-
-    // 解析 JSON 响应
-    let json: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| format!("解析响应失败: {}", e))?;
-
-    let latest_version = json["tag_name"]
-        .as_str()
-        .ok_or("无法获取版本号")?
-        .trim_start_matches('v');
-
-    let download_url = json["html_url"]
-        .as_str()
-        .unwrap_or("https://github.com/lbjlaq/Antigravity-Manager/releases")
-        .to_string();
-
-    // 比较版本号
-    let has_update = compare_versions(latest_version, CURRENT_VERSION);
-
-    modules::logger::log_info(&format!(
-        "版本检测完成: 当前 v{}, 最新 v{}, 有更新: {}",
-        CURRENT_VERSION, latest_version, has_update
-    ));
-
-    Ok(UpdateInfo {
-        has_update,
-        latest_version: format!("v{}", latest_version),
-        current_version: format!("v{}", CURRENT_VERSION),
-        download_url,
-    })
+    modules::logger::log_info("收到前端触发的更新检查请求");
+    crate::modules::update_checker::check_for_updates().await
 }
 
-/// 简单的版本号比较 (假设格式为 x.y.z)
-fn compare_versions(latest: &str, current: &str) -> bool {
-    let parse_version =
-        |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse::<u32>().ok()).collect() };
-
-    let latest_parts = parse_version(latest);
-    let current_parts = parse_version(current);
-
-    for i in 0..3 {
-        let l = latest_parts.get(i).unwrap_or(&0);
-        let c = current_parts.get(i).unwrap_or(&0);
-        if l > c {
-            return true;
-        } else if l < c {
-            return false;
-        }
-    }
-
-    false
+#[tauri::command]
+pub async fn should_check_updates() -> Result<bool, String> {
+    let settings = crate::modules::update_checker::load_update_settings()?;
+    Ok(crate::modules::update_checker::should_check_for_updates(&settings))
 }
+
+#[tauri::command]
+pub async fn update_last_check_time() -> Result<(), String> {
+    crate::modules::update_checker::update_last_check_time()
+}
+
+
+/// 获取更新设置
+#[tauri::command]
+pub async fn get_update_settings() -> Result<crate::modules::update_checker::UpdateSettings, String> {
+    crate::modules::update_checker::load_update_settings()
+}
+
+/// 保存更新设置
+#[tauri::command]
+pub async fn save_update_settings(
+    settings: crate::modules::update_checker::UpdateSettings,
+) -> Result<(), String> {
+    crate::modules::update_checker::save_update_settings(&settings)
+}
+
+
 
 /// 切换账号的反代禁用状态
 #[tauri::command]
@@ -821,6 +781,18 @@ pub async fn toggle_proxy_status(
     crate::modules::tray::update_tray_menus(&app);
 
     Ok(())
+}
+
+/// 预热所有可用账号 (Story-027-11: Smart Warmup System)
+#[tauri::command]
+pub async fn warm_up_all_accounts() -> Result<String, String> {
+    modules::quota::warm_up_all_accounts().await
+}
+
+/// 预热指定账号 (Story-027-11: Smart Warmup System)
+#[tauri::command]
+pub async fn warm_up_account(account_id: String) -> Result<String, String> {
+    modules::quota::warm_up_account(&account_id).await
 }
 
 /// 测试 Model Fallback UI 通知

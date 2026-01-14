@@ -76,13 +76,16 @@ function Navbar() {
 
     const toggleLanguage = async () => {
         if (!config) return;
-        const newLang = config.language === 'zh' ? 'en' : 'zh';
+        const langs = ['zh', 'zh-TW', 'en', 'ja', 'tr', 'vi'] as const;
+        const currentIndex = langs.indexOf(config.language as any);
+        const nextLang = langs[(currentIndex + 1) % langs.length];
+
         await saveConfig({
             ...config,
-            language: newLang,
+            language: nextLang,
             theme: config.theme
         });
-        i18n.changeLanguage(newLang);
+        i18n.changeLanguage(nextLang);
     };
 
     return (
@@ -141,10 +144,10 @@ function Navbar() {
                         <button
                             onClick={toggleLanguage}
                             className="w-10 h-10 rounded-full bg-gray-100 dark:bg-base-200 hover:bg-gray-200 dark:hover:bg-base-100 flex items-center justify-center transition-colors"
-                            title={config?.language === 'zh' ? t('nav.switch_to_english') : t('nav.switch_to_chinese')}
+                            title={t('nav.switch_to_' + (config?.language === 'zh' ? 'traditional_chinese' : config?.language === 'zh-TW' ? 'english' : config?.language === 'en' ? 'japanese' : config?.language === 'ja' ? 'turkish' : config?.language === 'tr' ? 'vietnamese' : 'chinese'))}
                         >
                             <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                                {config?.language === 'zh' ? t('nav.switch_to_english_short') : t('nav.switch_to_chinese_short')}
+                                {t('nav.switch_to_' + (config?.language === 'zh' ? 'traditional_chinese_short' : config?.language === 'zh-TW' ? 'english_short' : config?.language === 'en' ? 'japanese_short' : config?.language === 'ja' ? 'turkish_short' : config?.language === 'tr' ? 'vietnamese_short' : 'chinese_short'))}
                             </span>
                         </button>
                     </div>

@@ -7,7 +7,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { request as invoke } from '../../utils/request';
-import { useTranslation } from 'react-i18next';
 import { Music, FileAudio, Clock, HardDrive, RefreshCw, TrendingUp } from 'lucide-react';
 
 interface DurationStats {
@@ -53,7 +52,6 @@ export const AudioAnalyticsPanel: React.FC<AudioAnalyticsPanelProps> = ({
   className = '',
   days = 30,
 }) => {
-  const { t } = useTranslation();
   const [analytics, setAnalytics] = useState<AudioAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDays, setSelectedDays] = useState(days);

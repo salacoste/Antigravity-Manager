@@ -114,6 +114,7 @@ pub async fn handle_chat_completions(
     let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
 
     let mut last_error = String::new();
+    let mut last_email: Option<String> = None;
 
     for attempt in 0..max_attempts {
         // 2. 模型路由解析
@@ -134,13 +135,11 @@ pub async fn handle_chat_completions(
 
         // 4. 获取 Token (使用准确的 request_type)
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
-        // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
             .get_token(
                 &config.request_type,
                 attempt > 0,
                 Some(&session_id),
-                Some(&mapped_model),
             )
             .await
         {
@@ -153,6 +152,7 @@ pub async fn handle_chat_completions(
             }
         };
 
+        last_email = Some(email.clone());
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
         // 4. 转换请求
@@ -367,13 +367,12 @@ pub async fn handle_chat_completions(
 
         // 429/529/503 智能处理
         if status_code == 429 || status_code == 529 || status_code == 503 || status_code == 500 {
-            // 记录限流信息 (全局同步) - 🆕 传递模型实现 model-level rate limiting
+            // 记录限流信息 (全局同步)
             token_manager.mark_rate_limited(
                 &email,
                 status_code,
                 retry_after.as_deref(),
                 &error_text,
-                Some(&mapped_model),
             );
 
             // 1. 优先尝试解析 RetryInfo (由 Google Cloud 直接下发)
@@ -400,7 +399,7 @@ pub async fn handle_chat_completions(
                     max_attempts
                 );
                 // 标记该账号受限 (已经在上面的 mark_rate_limited 完成)
-                // 继续循环以尝试下一个账号
+                // 继续循环以尝试下一个账号 (our strategy: try all accounts before giving up)
                 continue;
             }
 
@@ -432,14 +431,22 @@ pub async fn handle_chat_completions(
             "OpenAI Upstream non-retryable error {} on account {}: {}",
             status_code, email, error_text
         );
-        return Err((status, error_text));
+        return Ok((status, [("X-Account-Email", email.as_str())], error_text).into_response());
     }
 
     // 所有尝试均失败
-    Err((
-        StatusCode::TOO_MANY_REQUESTS,
-        format!("All accounts exhausted. Last error: {}", last_error),
-    ))
+    if let Some(email) = last_email {
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            [("X-Account-Email", email)],
+            format!("All accounts exhausted. Last error: {}", last_error),
+        ).into_response())
+    } else {
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            format!("All accounts exhausted. Last error: {}", last_error),
+        ).into_response())
+    }
 }
 
 /// 处理 Legacy Completions API (/v1/completions)
@@ -744,7 +751,7 @@ pub async fn handle_completions(
 
         // 🆕 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, false, None, Some(&mapped_model))
+            .get_token(&config.request_type, false, None)
             .await
         {
             Ok(t) => t,
@@ -980,7 +987,7 @@ pub async fn handle_images_generations(
                         }]
                     });
 
-                    return Ok(Json(openai_response));
+                    return Ok(Json(openai_response).into_response());
                 }
                 Ok(None) => {
                     debug!(
@@ -1027,7 +1034,7 @@ pub async fn handle_images_generations(
 
     // 🆕 传递模型参数实现 model-aware rate limiting (image generation)
     let (access_token, project_id, email) = match token_manager
-        .get_token("image_gen", false, None, Some(model))
+        .get_token("image_gen", false, None)
         .await
     {
         Ok(t) => t,
@@ -1308,7 +1315,11 @@ pub async fn handle_images_generations(
         "data": images
     });
 
-    Ok(Json(openai_response))
+    Ok((
+        StatusCode::OK,
+        [("X-Account-Email", email.as_str())],
+        Json(openai_response)
+    ).into_response())
 }
 
 pub async fn handle_images_edits(
@@ -1446,7 +1457,7 @@ pub async fn handle_images_edits(
                         "data": data_field
                     });
 
-                    return Ok(Json(openai_response));
+                    return Ok(Json(openai_response).into_response());
                 }
                 Ok(None) => {
                     debug!(
@@ -1488,7 +1499,7 @@ pub async fn handle_images_edits(
     // Fix: Proper get_token call with correct signature and unwrap (using image_gen quota)
     // 🆕 传递模型参数实现 model-aware rate limiting (image edit)
     let (access_token, project_id, email) = match token_manager
-        .get_token("image_gen", false, None, Some(&model))
+        .get_token("image_gen", false, None)
         .await
     {
         Ok(t) => t,
@@ -1802,7 +1813,11 @@ pub async fn handle_images_edits(
         "data": images
     });
 
-    Ok(Json(openai_response))
+    Ok((
+        StatusCode::OK,
+        [("X-Account-Email", email.as_str())],
+        Json(openai_response)
+    ).into_response())
 }
 
 #[cfg(test)]

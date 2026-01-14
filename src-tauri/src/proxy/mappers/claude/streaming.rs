@@ -174,6 +174,10 @@ pub struct StreamingState {
     last_valid_state: Option<BlockType>,
     // [NEW] Model tracking for signature cache
     pub model_name: Option<String>,
+    // Story-027-01: Aggressive Context Scaling
+    pub scaling_enabled: bool,
+    // Story-027-02: Session Signature Caching
+    pub session_id: Option<String>,
 }
 
 impl StreamingState {
@@ -192,6 +196,8 @@ impl StreamingState {
             parse_error_count: 0,
             last_valid_state: None,
             model_name: None,
+            scaling_enabled: false,
+            session_id: None,
         }
     }
 
@@ -214,7 +220,7 @@ impl StreamingState {
         let usage = raw_json
             .get("usageMetadata")
             .and_then(|u| serde_json::from_value::<UsageMetadata>(u.clone()).ok())
-            .map(|u| to_claude_usage(&u));
+            .map(|u| to_claude_usage(&u, self.scaling_enabled));
 
         let mut message = json!({
             "id": raw_json.get("responseId")
@@ -424,7 +430,7 @@ impl StreamingState {
                 cache_creation_input_tokens: None,
                 server_tool_use: None,
             },
-            to_claude_usage,
+            |u| to_claude_usage(u, self.scaling_enabled),
         );
 
         chunks.push(self.emit(
