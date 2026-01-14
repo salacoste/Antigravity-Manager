@@ -722,11 +722,7 @@ pub async fn handle_messages(
 
         let force_rotate_token = attempt > 0;
         let (access_token, project_id, email) = match token_manager
-            .get_token(
-                &config.request_type,
-                force_rotate_token,
-                session_id,
-            )
+            .get_token(&config.request_type, force_rotate_token, session_id)
             .await
         {
             Ok(t) => t,
@@ -930,8 +926,13 @@ pub async fn handle_messages(
             if actual_stream {
                 let stream = response.bytes_stream();
                 let gemini_stream = Box::pin(stream);
-                let claude_stream =
-                    create_claude_sse_stream(gemini_stream, trace_id.clone(), email.clone(), Some(session_id_str.clone()), scaling_enabled);
+                let claude_stream = create_claude_sse_stream(
+                    gemini_stream,
+                    trace_id.clone(),
+                    email.clone(),
+                    Some(session_id_str.clone()),
+                    scaling_enabled,
+                );
 
                 // 转换为 Bytes stream
                 let sse_stream = claude_stream.map(|result| -> Result<Bytes, std::io::Error> {

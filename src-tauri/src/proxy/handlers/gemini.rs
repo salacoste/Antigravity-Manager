@@ -179,11 +179,7 @@ pub async fn handle_generate(
 
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
         let (access_token, project_id, email) = match token_manager
-            .get_token(
-                &config.request_type,
-                attempt > 0,
-                Some(&session_id),
-            )
+            .get_token(&config.request_type, attempt > 0, Some(&session_id))
             .await
         {
             Ok(t) => t,
@@ -501,15 +497,27 @@ pub async fn handle_generate(
         }
 
         // 404 等由于模型配置或路径错误的 HTTP 异常，直接报错，不进行无效轮换
-        error!("Gemini Upstream non-retryable error {}: {}", status_code, error_text);
+        error!(
+            "Gemini Upstream non-retryable error {}: {}",
+            status_code, error_text
+        );
         return Ok((status, [("X-Account-Email", email.as_str())], error_text).into_response());
     }
 
     // Return final error with last account email if available
     if let Some(email) = last_email {
-        Ok((StatusCode::TOO_MANY_REQUESTS, [("X-Account-Email", email)], format!("All accounts exhausted. Last error: {}", last_error)).into_response())
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            [("X-Account-Email", email)],
+            format!("All accounts exhausted. Last error: {}", last_error),
+        )
+            .into_response())
     } else {
-        Ok((StatusCode::TOO_MANY_REQUESTS, format!("All accounts exhausted. Last error: {}", last_error)).into_response())
+        Ok((
+            StatusCode::TOO_MANY_REQUESTS,
+            format!("All accounts exhausted. Last error: {}", last_error),
+        )
+            .into_response())
     }
 }
 

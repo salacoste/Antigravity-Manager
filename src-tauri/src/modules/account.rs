@@ -1,10 +1,13 @@
+use serde::Serialize;
 use serde_json;
 use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
-use serde::Serialize;
 
-use crate::models::{Account, AccountIndex, AccountSummary, QuotaData, TokenData, DeviceProfile, DeviceProfileVersion};
+use crate::models::{
+    Account, AccountIndex, AccountSummary, DeviceProfile, DeviceProfileVersion, QuotaData,
+    TokenData,
+};
 use crate::modules;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -389,7 +392,7 @@ pub fn reorder_accounts(account_ids: &[String]) -> Result<(), String> {
 
 /// 切换当前账号
 pub async fn switch_account(account_id: &str) -> Result<(), String> {
-    use crate::modules::{db, oauth, process, device};
+    use crate::modules::{db, device, oauth, process};
     let index = {
         let _lock = ACCOUNT_INDEX_LOCK
             .lock()
@@ -526,7 +529,11 @@ pub fn bind_device_profile(account_id: &str, mode: &str) -> Result<DeviceProfile
 }
 
 /// 直接使用提供的 profile 进行绑定
-pub fn bind_device_profile_with_profile(account_id: &str, profile: DeviceProfile, label: Option<String>) -> Result<DeviceProfile, String> {
+pub fn bind_device_profile_with_profile(
+    account_id: &str,
+    profile: DeviceProfile,
+    label: Option<String>,
+) -> Result<DeviceProfile, String> {
     let mut account = load_account(account_id)?;
     let _ = crate::modules::device::save_global_original(&profile);
     apply_profile_to_account(&mut account, profile.clone(), label, true)?;
@@ -534,7 +541,12 @@ pub fn bind_device_profile_with_profile(account_id: &str, profile: DeviceProfile
     Ok(profile)
 }
 
-fn apply_profile_to_account(account: &mut Account, profile: DeviceProfile, label: Option<String>, add_history: bool) -> Result<(), String> {
+fn apply_profile_to_account(
+    account: &mut Account,
+    profile: DeviceProfile,
+    label: Option<String>,
+    add_history: bool,
+) -> Result<(), String> {
     account.device_profile = Some(profile.clone());
     if add_history {
         // 清除 current 标记
@@ -586,7 +598,11 @@ pub fn delete_device_version(account_id: &str, version_id: &str) -> Result<(), S
         return Err("原始指纹不可删除".to_string());
     }
     let mut account = load_account(account_id)?;
-    if account.device_history.iter().any(|v| v.id == version_id && v.is_current) {
+    if account
+        .device_history
+        .iter()
+        .any(|v| v.id == version_id && v.is_current)
+    {
         return Err("当前指纹不可删除".to_string());
     }
     let before = account.device_history.len();
@@ -629,7 +645,6 @@ pub fn restore_original_device() -> Result<String, String> {
     Err("未找到原始指纹，无法恢复".to_string())
 }
 
-
 /// 获取当前账号 ID
 pub fn get_current_account_id() -> Result<Option<String>, String> {
     let index = load_account_index()?;
@@ -663,17 +678,21 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
     // --- 配额保护逻辑开始 ---
     if let Ok(config) = crate::modules::config::load_app_config() {
         if config.quota_protection.enabled {
-            let mut min_percentage = 101; 
+            let mut min_percentage = 101;
             let mut min_model_name = String::new();
             let mut has_models = false;
-            
+
             if let Some(ref q) = account.quota {
                 for model in &q.models {
                     // 仅对用户勾选的模型进行监控
-                    if !config.quota_protection.monitored_models.contains(&model.name) {
+                    if !config
+                        .quota_protection
+                        .monitored_models
+                        .contains(&model.name)
+                    {
                         continue;
                     }
-                    
+
                     has_models = true;
                     if model.percentage < min_percentage {
                         min_percentage = model.percentage;
@@ -684,12 +703,15 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
 
             if has_models {
                 let threshold = config.quota_protection.threshold_percentage as i32;
-                
+
                 if min_percentage <= threshold {
                     // 触发保护
-                    let is_already_protected = account.proxy_disabled && 
-                        account.proxy_disabled_reason.as_ref().map_or(false, |r| r.contains("quota_protection"));
-                    
+                    let is_already_protected = account.proxy_disabled
+                        && account
+                            .proxy_disabled_reason
+                            .as_ref()
+                            .map_or(false, |r| r.contains("quota_protection"));
+
                     if !account.proxy_disabled || is_already_protected {
                         if !account.proxy_disabled {
                             crate::modules::logger::log_info(&format!(
@@ -706,9 +728,12 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
                     }
                 } else {
                     // 检查是否需要自动恢复
-                    let is_protected = account.proxy_disabled && 
-                        account.proxy_disabled_reason.as_ref().map_or(false, |r| r.contains("quota_protection"));
-                        
+                    let is_protected = account.proxy_disabled
+                        && account
+                            .proxy_disabled_reason
+                            .as_ref()
+                            .map_or(false, |r| r.contains("quota_protection"));
+
                     if is_protected {
                         crate::modules::logger::log_info(&format!(
                             "[Quota] 自动恢复: {} (监控模型最低额度已恢复至 {}%)",
@@ -950,12 +975,18 @@ pub async fn refresh_all_quotas_logic() -> Result<RefreshStats, String> {
         .into_iter()
         .filter(|account| {
             if account.disabled {
-                crate::modules::logger::log_info(&format!("  - Skipping {} (Disabled)", account.email));
+                crate::modules::logger::log_info(&format!(
+                    "  - Skipping {} (Disabled)",
+                    account.email
+                ));
                 return false;
             }
             if let Some(ref q) = account.quota {
                 if q.is_forbidden {
-                    crate::modules::logger::log_info(&format!("  - Skipping {} (Forbidden)", account.email));
+                    crate::modules::logger::log_info(&format!(
+                        "  - Skipping {} (Forbidden)",
+                        account.email
+                    ));
                     return false;
                 }
             }

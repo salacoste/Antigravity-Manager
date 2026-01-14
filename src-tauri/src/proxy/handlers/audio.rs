@@ -226,6 +226,7 @@ pub async fn handle_audio_transcription(
     Ok((
         StatusCode::OK,
         [("X-Account-Email", email.as_str())],
-        Json(response_json)
-    ).into_response())
+        Json(response_json),
+    )
+        .into_response())
 }

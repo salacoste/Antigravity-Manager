@@ -7,7 +7,10 @@
 // 例如: "string" -> "STRING", "integer" -> "INTEGER"
 // 已移除未使用的 uppercase_schema_types 函数
 
-pub fn to_claude_usage(usage_metadata: &super::models::UsageMetadata, scaling_enabled: bool) -> super::models::Usage {
+pub fn to_claude_usage(
+    usage_metadata: &super::models::UsageMetadata,
+    scaling_enabled: bool,
+) -> super::models::Usage {
     let prompt_tokens = usage_metadata.prompt_token_count.unwrap_or(0);
     let cached_tokens = usage_metadata.cached_content_token_count.unwrap_or(0);
 

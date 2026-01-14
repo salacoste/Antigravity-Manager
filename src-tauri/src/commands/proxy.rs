@@ -286,17 +286,12 @@ pub async fn get_proxy_logs_paginated(
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<Vec<ProxyRequestLog>, String> {
-    crate::modules::proxy_db::get_logs_summary(
-        limit.unwrap_or(20),
-        offset.unwrap_or(0)
-    )
+    crate::modules::proxy_db::get_logs_summary(limit.unwrap_or(20), offset.unwrap_or(0))
 }
 
 /// 获取单条日志的完整详情
 #[tauri::command]
-pub async fn get_proxy_log_detail(
-    log_id: String,
-) -> Result<ProxyRequestLog, String> {
+pub async fn get_proxy_log_detail(log_id: String) -> Result<ProxyRequestLog, String> {
     crate::modules::proxy_db::get_log_detail(&log_id)
 }
 

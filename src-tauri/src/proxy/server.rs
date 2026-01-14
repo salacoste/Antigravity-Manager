@@ -348,7 +348,10 @@ impl AxumServer {
                 "/v1beta/models/:model/countTokens",
                 post(handlers::gemini::handle_count_tokens),
             ) // Specific route priority
-            .route("/v1/models/detect", post(handlers::common::handle_detect_model))
+            .route(
+                "/v1/models/detect",
+                post(handlers::common::handle_detect_model),
+            )
             .route("/internal/warmup", post(handlers::warmup::handle_warmup)) // 内部预热端点 (Story-027-11)
             .route("/v1/api/event_logging/batch", post(silent_ok_handler))
             .route("/v1/api/event_logging", post(silent_ok_handler))

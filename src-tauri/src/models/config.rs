@@ -16,7 +16,7 @@ pub struct AppConfig {
     pub antigravity_executable: Option<String>, // [NEW] 手动指定的反重力程序路径
     pub antigravity_args: Option<Vec<String>>,  // [NEW] Antigravity 启动参数
     #[serde(default)]
-    pub auto_launch: bool,  // 开机自动启动
+    pub auto_launch: bool, // 开机自动启动
     #[serde(default)]
     pub scheduled_warmup: ScheduledWarmupConfig, // [NEW] 定时预热配置
     #[serde(default)]
@@ -63,7 +63,7 @@ impl Default for ScheduledWarmupConfig {
 pub struct QuotaProtectionConfig {
     /// 是否启用配额保护
     pub enabled: bool,
-    
+
     /// 保留配额百分比 (1-99)
     pub threshold_percentage: u32,
 

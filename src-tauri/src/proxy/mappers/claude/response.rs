@@ -127,7 +127,11 @@ impl NonStreamingProcessor {
     }
 
     /// 处理 Gemini 响应并转换为 Claude 响应
-    pub fn process(&mut self, gemini_response: &GeminiResponse, scaling_enabled: bool) -> ClaudeResponse {
+    pub fn process(
+        &mut self,
+        gemini_response: &GeminiResponse,
+        scaling_enabled: bool,
+    ) -> ClaudeResponse {
         self.scaling_enabled = scaling_enabled;
         // 获取 parts
         let empty_parts = vec![];
@@ -176,16 +180,19 @@ impl NonStreamingProcessor {
                 Ok(decoded_bytes) => {
                     match String::from_utf8(decoded_bytes) {
                         Ok(decoded_str) => {
-                            tracing::debug!("[Response] Decoded base64 signature (len {} -> {})", sig.len(), decoded_str.len());
+                            tracing::debug!(
+                                "[Response] Decoded base64 signature (len {} -> {})",
+                                sig.len(),
+                                decoded_str.len()
+                            );
                             decoded_str
-                        },
-                        Err(_) => sig.clone() // Not valid UTF-8, keep as is
+                        }
+                        Err(_) => sig.clone(), // Not valid UTF-8, keep as is
                     }
-                },
-                Err(_) => sig.clone() // Not base64, keep as is
+                }
+                Err(_) => sig.clone(), // Not base64, keep as is
             }
         });
-
 
         // 1. FunctionCall 处理
         if let Some(fc) = &part.function_call {
@@ -421,7 +428,10 @@ impl Default for NonStreamingProcessor {
 }
 
 /// 转换 Gemini 响应为 Claude 响应 (公共接口)
-pub fn transform_response(gemini_response: &GeminiResponse, scaling_enabled: bool) -> Result<ClaudeResponse, String> {
+pub fn transform_response(
+    gemini_response: &GeminiResponse,
+    scaling_enabled: bool,
+) -> Result<ClaudeResponse, String> {
     let mut processor = NonStreamingProcessor::new();
     Ok(processor.process(gemini_response, scaling_enabled))
 }

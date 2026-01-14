@@ -136,11 +136,7 @@ pub async fn handle_chat_completions(
         // 4. 获取 Token (使用准确的 request_type)
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
         let (access_token, project_id, email) = match token_manager
-            .get_token(
-                &config.request_type,
-                attempt > 0,
-                Some(&session_id),
-            )
+            .get_token(&config.request_type, attempt > 0, Some(&session_id))
             .await
         {
             Ok(t) => t,
@@ -440,12 +436,14 @@ pub async fn handle_chat_completions(
             StatusCode::TOO_MANY_REQUESTS,
             [("X-Account-Email", email)],
             format!("All accounts exhausted. Last error: {}", last_error),
-        ).into_response())
+        )
+            .into_response())
     } else {
         Ok((
             StatusCode::TOO_MANY_REQUESTS,
             format!("All accounts exhausted. Last error: {}", last_error),
-        ).into_response())
+        )
+            .into_response())
     }
 }
 
@@ -1033,18 +1031,16 @@ pub async fn handle_images_generations(
     let token_manager = state.token_manager;
 
     // 🆕 传递模型参数实现 model-aware rate limiting (image generation)
-    let (access_token, project_id, email) = match token_manager
-        .get_token("image_gen", false, None)
-        .await
-    {
-        Ok(t) => t,
-        Err(e) => {
-            return Err((
-                StatusCode::SERVICE_UNAVAILABLE,
-                format!("Token error: {}", e),
-            ))
-        }
-    };
+    let (access_token, project_id, email) =
+        match token_manager.get_token("image_gen", false, None).await {
+            Ok(t) => t,
+            Err(e) => {
+                return Err((
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("Token error: {}", e),
+                ))
+            }
+        };
 
     info!("✓ Using account: {} for image generation", email);
 
@@ -1318,8 +1314,9 @@ pub async fn handle_images_generations(
     Ok((
         StatusCode::OK,
         [("X-Account-Email", email.as_str())],
-        Json(openai_response)
-    ).into_response())
+        Json(openai_response),
+    )
+        .into_response())
 }
 
 pub async fn handle_images_edits(
@@ -1498,18 +1495,16 @@ pub async fn handle_images_edits(
     let token_manager = state.token_manager;
     // Fix: Proper get_token call with correct signature and unwrap (using image_gen quota)
     // 🆕 传递模型参数实现 model-aware rate limiting (image edit)
-    let (access_token, project_id, email) = match token_manager
-        .get_token("image_gen", false, None)
-        .await
-    {
-        Ok(t) => t,
-        Err(e) => {
-            return Err((
-                StatusCode::SERVICE_UNAVAILABLE,
-                format!("Token error: {}", e),
-            ))
-        }
-    };
+    let (access_token, project_id, email) =
+        match token_manager.get_token("image_gen", false, None).await {
+            Ok(t) => t,
+            Err(e) => {
+                return Err((
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("Token error: {}", e),
+                ))
+            }
+        };
 
     // 2. 映射配置
     let mut contents_parts = Vec::new();
@@ -1816,8 +1811,9 @@ pub async fn handle_images_edits(
     Ok((
         StatusCode::OK,
         [("X-Account-Email", email.as_str())],
-        Json(openai_response)
-    ).into_response())
+        Json(openai_response),
+    )
+        .into_response())
 }
 
 #[cfg(test)]

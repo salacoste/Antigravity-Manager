@@ -28,7 +28,7 @@ pub fn create_claude_sse_stream(
     trace_id: String,
     email: String,
     session_id: Option<String>, // [NEW v3.3.17] Session ID for signature caching
-    scaling_enabled: bool, // [NEW] Flag for context usage scaling
+    scaling_enabled: bool,      // [NEW] Flag for context usage scaling
 ) -> Pin<Box<dyn Stream<Item = Result<Bytes, String>> + Send>> {
     use async_stream::stream;
     use bytes::BytesMut;

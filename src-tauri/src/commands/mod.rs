@@ -1,7 +1,7 @@
 use crate::models::{Account, AppConfig, QuotaData, TokenData};
 use crate::modules;
-use tauri_plugin_opener::OpenerExt;
 use tauri::{Emitter, Manager};
+use tauri_plugin_opener::OpenerExt;
 
 // 导出 proxy 命令
 pub mod proxy;
@@ -320,7 +320,6 @@ pub async fn open_device_folder(app: tauri::AppHandle) -> Result<(), String> {
         .open_path(dir_str, None::<&str>)
         .map_err(|e| format!("打开目录失败: {}", e))
 }
-
 
 /// 加载配置
 #[tauri::command]
@@ -690,7 +689,9 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
 #[tauri::command]
 pub async fn should_check_updates() -> Result<bool, String> {
     let settings = crate::modules::update_checker::load_update_settings()?;
-    Ok(crate::modules::update_checker::should_check_for_updates(&settings))
+    Ok(crate::modules::update_checker::should_check_for_updates(
+        &settings,
+    ))
 }
 
 #[tauri::command]
@@ -698,10 +699,10 @@ pub async fn update_last_check_time() -> Result<(), String> {
     crate::modules::update_checker::update_last_check_time()
 }
 
-
 /// 获取更新设置
 #[tauri::command]
-pub async fn get_update_settings() -> Result<crate::modules::update_checker::UpdateSettings, String> {
+pub async fn get_update_settings() -> Result<crate::modules::update_checker::UpdateSettings, String>
+{
     crate::modules::update_checker::load_update_settings()
 }
 
@@ -712,8 +713,6 @@ pub async fn save_update_settings(
 ) -> Result<(), String> {
     crate::modules::update_checker::save_update_settings(&settings)
 }
-
-
 
 /// 切换账号的反代禁用状态
 #[tauri::command]
