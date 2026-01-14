@@ -156,7 +156,7 @@ pub fn write_profile(storage_path: &Path, profile: &DeviceProfile) -> Result<(),
         serde_json::from_str(&content).map_err(|e| format!("解析 storage.json 失败: {}", e))?;
 
     // 确保 telemetry 是对象
-    if !json.get("telemetry").map_or(false, |v| v.is_object()) {
+    if !json.get("telemetry").is_some_and(|v| v.is_object()) {
         if json.as_object_mut().is_some() {
             json["telemetry"] = serde_json::json!({});
         } else {

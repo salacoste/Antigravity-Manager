@@ -710,7 +710,7 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
                         && account
                             .proxy_disabled_reason
                             .as_ref()
-                            .map_or(false, |r| r.contains("quota_protection"));
+                            .is_some_and(|r| r.contains("quota_protection"));
 
                     if !account.proxy_disabled || is_already_protected {
                         if !account.proxy_disabled {
@@ -732,7 +732,7 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
                         && account
                             .proxy_disabled_reason
                             .as_ref()
-                            .map_or(false, |r| r.contains("quota_protection"));
+                            .is_some_and(|r| r.contains("quota_protection"));
 
                     if is_protected {
                         crate::modules::logger::log_info(&format!(

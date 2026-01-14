@@ -116,6 +116,7 @@ pub struct ComplexityAnalyzer {
     prompt_analyzer: PromptAnalyzer,
 }
 
+#[allow(dead_code)] // Week 2 implementation stub
 impl ComplexityAnalyzer {
     pub fn new() -> Self {
         Self {
@@ -164,6 +165,7 @@ pub struct ModelRecommender {
     cost_tracker: Arc<RwLock<CostTracker>>,
 }
 
+#[allow(dead_code)] // Week 2 implementation stub
 impl ModelRecommender {
     pub fn new() -> Self {
         Self {
@@ -235,6 +237,7 @@ pub struct CostTracker {
     stats: CostStats,
 }
 
+#[allow(dead_code)] // Week 2 implementation stub
 impl CostTracker {
     pub fn new() -> Self {
         Self {

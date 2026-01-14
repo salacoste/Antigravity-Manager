@@ -244,6 +244,7 @@ pub async fn fetch_quota_with_cache(
 }
 
 /// 查询账号配额逻辑
+#[allow(dead_code)] // Internal function for quota fetching
 pub async fn fetch_quota_inner(
     access_token: &str,
     email: &str,

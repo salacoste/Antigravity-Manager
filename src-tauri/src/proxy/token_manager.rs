@@ -325,10 +325,7 @@ impl TokenManager {
     /// 计算账号的最大剩余配额百分比（用于排序）
     /// 返回值: Option<i32> (max_percentage)
     fn calculate_quota_stats(&self, quota: &serde_json::Value) -> Option<i32> {
-        let models = match quota.get("models").and_then(|m| m.as_array()) {
-            Some(m) => m,
-            None => return None,
-        };
+        let models = quota.get("models").and_then(|m| m.as_array())?;
 
         let mut max_percentage = 0;
         let mut has_data = false;
@@ -557,10 +554,9 @@ impl TokenManager {
 
             // 模式 A: 粘性会话处理 (CacheFirst 或 Balance 且有 session_id)
             if !rotate
-                && session_id.is_some()
                 && scheduling.mode != SchedulingMode::PerformanceFirst
             {
-                let sid = session_id.unwrap();
+                if let Some(sid) = session_id {
 
                 // 1. 检查会话是否已绑定账号
                 if let Some(bound_id) = self.session_accounts.get(sid).map(|v| v.clone()) {
@@ -595,6 +591,7 @@ impl TokenManager {
                         );
                         self.session_accounts.remove(sid);
                     }
+                }
                 }
             }
 
@@ -809,14 +806,13 @@ impl TokenManager {
                         attempted.insert(token.account_id.clone());
 
                         // 【优化】标记需要清除锁定，避免在循环内加锁
-                        if quota_group != "image_gen" {
-                            if matches!(&last_used_account_id, Some((id, _)) if id == &token.account_id)
+                        if quota_group != "image_gen"
+                            && matches!(&last_used_account_id, Some((id, _)) if id == &token.account_id)
                             {
                                 need_update_last_used =
                                     Some((String::new(), std::time::Instant::now()));
                                 // 空字符串表示需要清除
                             }
-                        }
                         continue;
                     }
                 }
@@ -844,14 +840,13 @@ impl TokenManager {
                         attempted.insert(token.account_id.clone());
 
                         // 【优化】标记需要清除锁定，避免在循环内加锁
-                        if quota_group != "image_gen" {
-                            if matches!(&last_used_account_id, Some((id, _)) if id == &token.account_id)
+                        if quota_group != "image_gen"
+                            && matches!(&last_used_account_id, Some((id, _)) if id == &token.account_id)
                             {
                                 need_update_last_used =
                                     Some((String::new(), std::time::Instant::now()));
                                 // 空字符串表示需要清除
                             }
-                        }
                         continue;
                     }
                 }
@@ -955,6 +950,10 @@ impl TokenManager {
 
     pub fn len(&self) -> usize {
         self.tokens.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.tokens.is_empty()
     }
 
     /// 通过 email 获取指定账号的 Token（用于预热等需要指定账号的场景）
@@ -1109,13 +1108,12 @@ impl TokenManager {
                                     if let Some(reset_time) =
                                         model.get("reset_time").and_then(|r| r.as_str())
                                     {
-                                        if !reset_time.is_empty() {
-                                            if earliest_reset.is_none()
-                                                || reset_time < earliest_reset.unwrap()
+                                        if !reset_time.is_empty()
+                                            && (earliest_reset.is_none()
+                                                || reset_time < earliest_reset.unwrap())
                                             {
                                                 earliest_reset = Some(reset_time);
                                             }
-                                        }
                                     }
                                 }
                                 if let Some(reset) = earliest_reset {

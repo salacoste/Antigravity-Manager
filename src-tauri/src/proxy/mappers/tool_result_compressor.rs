@@ -22,6 +22,7 @@ const SNAPSHOT_MAX_CHARS: usize = 16_000;
 const SNAPSHOT_HEAD_RATIO: f64 = 0.7;
 
 /// 浏览器快照尾部保留比例
+#[allow(dead_code)] // Reserved for future compression strategy
 const SNAPSHOT_TAIL_RATIO: f64 = 0.3;
 
 /// 压缩工具结果文本
@@ -159,7 +160,7 @@ fn compact_browser_snapshot(text: &str, max_chars: usize) -> Option<String> {
 
     // 计算头部和尾部长度
     let head_len = (budget as f64 * SNAPSHOT_HEAD_RATIO).floor() as usize;
-    let head_len = head_len.min(10_000).max(500);
+    let head_len = head_len.clamp(500, 10_000);
     let tail_len = budget.saturating_sub(head_len).min(3_000);
 
     let head = &text[..head_len.min(text.len())];

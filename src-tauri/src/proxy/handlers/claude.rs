@@ -660,7 +660,7 @@ pub async fn handle_messages(
     // 🆕 [CONDITIONAL-FALLBACK] Claude Opus → Gemini Pro High (issue #497 智能降级)
     // 只有当所有账号都对 claude-opus-4-5-thinking 限流时才进行 fallback
     // 这样可以最大化利用可用账号，减少不必要的 fallback
-    let initial_mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
+    let _initial_mapped_model = crate::proxy::common::model_mapping::resolve_model_route(
         &request_for_body.model,
         &*state.custom_mapping.read().await,
     );
