@@ -1,6 +1,5 @@
+use super::{quota::QuotaData, token::TokenData};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use super::{token::TokenData, quota::QuotaData};
 
 /// 账号数据结构
 #[derive(Debug, Clone, Serialize, Deserialize)]

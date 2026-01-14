@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::proxy::ProxyConfig;
+use serde::{Deserialize, Serialize};
 
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -7,16 +7,16 @@ pub struct AppConfig {
     pub language: String,
     pub theme: String,
     pub auto_refresh: bool,
-    pub refresh_interval: i32,  // 分钟
+    pub refresh_interval: i32, // 分钟
     pub auto_sync: bool,
-    pub sync_interval: i32,  // 分钟
+    pub sync_interval: i32, // 分钟
     pub default_export_path: Option<String>,
     #[serde(default)]
     pub proxy: ProxyConfig,
     pub antigravity_executable: Option<String>, // [NEW] 手动指定的反重力程序路径
-    pub antigravity_args: Option<Vec<String>>, // [NEW] Antigravity 启动参数
+    pub antigravity_args: Option<Vec<String>>,  // [NEW] Antigravity 启动参数
     #[serde(default)]
-    pub auto_launch: bool,  // 开机自动启动
+    pub auto_launch: bool, // 开机自动启动
     #[serde(default)]
     pub scheduled_warmup: ScheduledWarmupConfig, // [NEW] 定时预热配置
     #[serde(default)]
@@ -63,7 +63,7 @@ impl Default for ScheduledWarmupConfig {
 pub struct QuotaProtectionConfig {
     /// 是否启用配额保护
     pub enabled: bool,
-    
+
     /// 保留配额百分比 (1-99)
     pub threshold_percentage: u32,
 

@@ -437,9 +437,9 @@ pub fn close_antigravity(#[allow(unused_variables)] timeout_secs: u64) -> Result
 
                                     if !is_helper_by_args && !is_helper_by_name {
                                         main_pid = Some(pid_u32);
-                                        crate::modules::logger::log_info(&format!(
-                                            "   => 识别为主进程 (匹配手动配置路径)"
-                                        ));
+                                        crate::modules::logger::log_info(
+                                            "   => 识别为主进程 (匹配手动配置路径)",
+                                        );
                                         break;
                                     }
                                 }
@@ -462,14 +462,12 @@ pub fn close_antigravity(#[allow(unused_variables)] timeout_secs: u64) -> Result
                     if !is_helper_by_name && !is_helper_by_args {
                         if main_pid.is_none() {
                             main_pid = Some(pid_u32);
-                            crate::modules::logger::log_info(&format!(
-                                "   => 识别为主进程 (Name/Args特征分析)"
-                            ));
+                            crate::modules::logger::log_info(
+                                "   => 识别为主进程 (Name/Args特征分析)",
+                            );
                         }
                     } else {
-                        crate::modules::logger::log_info(&format!(
-                            "   => 识别为辅助进程 (Helper/Args)"
-                        ));
+                        crate::modules::logger::log_info("   => 识别为辅助进程 (Helper/Args)");
                     }
                 }
             }
@@ -606,9 +604,9 @@ pub fn close_antigravity(#[allow(unused_variables)] timeout_secs: u64) -> Result
                                     || name.contains("sandbox");
                                 if !is_helper_by_args && !is_helper_by_name {
                                     main_pid = Some(pid_u32);
-                                    crate::modules::logger::log_info(&format!(
-                                        "   => 识别为主进程 (匹配手动配置路径)"
-                                    ));
+                                    crate::modules::logger::log_info(
+                                        "   => 识别为主进程 (匹配手动配置路径)",
+                                    );
                                     break;
                                 }
                             }
@@ -630,14 +628,10 @@ pub fn close_antigravity(#[allow(unused_variables)] timeout_secs: u64) -> Result
                     if !is_helper_by_args && !is_helper_by_name {
                         if main_pid.is_none() {
                             main_pid = Some(pid_u32);
-                            crate::modules::logger::log_info(&format!(
-                                "   => 识别为主进程 (特征分析)"
-                            ));
+                            crate::modules::logger::log_info("   => 识别为主进程 (特征分析)");
                         }
                     } else {
-                        crate::modules::logger::log_info(&format!(
-                            "   => 识别为辅助进程 (Helper/Args)"
-                        ));
+                        crate::modules::logger::log_info("   => 识别为辅助进程 (Helper/Args)");
                     }
                 }
             }
@@ -713,7 +707,9 @@ pub fn start_antigravity() -> Result<(), String> {
         .and_then(|c| c.antigravity_executable.clone());
     let args = config.and_then(|c| c.antigravity_args.clone());
 
+    #[allow(unused_mut)] // mut needed on macOS only
     if let Some(mut path_str) = manual_path {
+        #[allow(unused_mut)] // mut needed on macOS only
         let mut path = std::path::PathBuf::from(&path_str);
 
         #[cfg(target_os = "macos")]

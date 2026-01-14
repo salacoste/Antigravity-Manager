@@ -32,7 +32,8 @@ pub fn transform_openai_response(gemini_response: &Value) -> OpenAIResponse {
                     }
 
                     // 检查该 part 是否是思考内容 (thought: true)
-                    let is_thought_part = part.get("thought")
+                    let is_thought_part = part
+                        .get("thought")
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false);
 
@@ -52,13 +53,11 @@ pub fn transform_openai_response(gemini_response: &Value) -> OpenAIResponse {
                         let name = fc.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
                         let args = fc
                             .get("args")
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| "{}".to_string());
-                        let id = fc
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| format!("{}-{}", name, uuid::Uuid::new_v4()));
+                            .map_or_else(|| "{}".to_string(), |v| v.to_string());
+                        let id = fc.get("id").and_then(|v| v.as_str()).map_or_else(
+                            || format!("{}-{}", name, uuid::Uuid::new_v4()),
+                            |s| s.to_string(),
+                        );
 
                         tool_calls.push(ToolCall {
                             id,
@@ -78,7 +77,8 @@ pub fn transform_openai_response(gemini_response: &Value) -> OpenAIResponse {
                             .unwrap_or("image/png");
                         let data = img.get("data").and_then(|v| v.as_str()).unwrap_or("");
                         if !data.is_empty() {
-                            content_out.push_str(&format!("![image](data:{};base64,{})", mime_type, data));
+                            content_out
+                                .push_str(&format!("![image](data:{};base64,{})", mime_type, data));
                         }
                     }
                 }
@@ -89,7 +89,8 @@ pub fn transform_openai_response(gemini_response: &Value) -> OpenAIResponse {
                 let mut grounding_text = String::new();
 
                 // 1. 处理搜索词
-                if let Some(queries) = grounding.get("webSearchQueries").and_then(|q| q.as_array()) {
+                if let Some(queries) = grounding.get("webSearchQueries").and_then(|q| q.as_array())
+                {
                     let query_list: Vec<&str> = queries.iter().filter_map(|v| v.as_str()).collect();
                     if !query_list.is_empty() {
                         grounding_text.push_str("\n\n---\n**🔍 已为您搜索：** ");
@@ -126,14 +127,13 @@ pub fn transform_openai_response(gemini_response: &Value) -> OpenAIResponse {
             let finish_reason = candidate
                 .get("finishReason")
                 .and_then(|f| f.as_str())
-                .map(|f| match f {
+                .map_or("stop", |f| match f {
                     "STOP" => "stop",
                     "MAX_TOKENS" => "length",
                     "SAFETY" => "content_filter",
                     "RECITATION" => "content_filter",
                     _ => "stop",
-                })
-                .unwrap_or("stop");
+                });
 
             choices.push(Choice {
                 index: idx as u32,

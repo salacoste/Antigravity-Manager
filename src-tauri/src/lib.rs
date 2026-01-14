@@ -1,13 +1,17 @@
-mod models;
-mod modules;
 mod commands;
-mod utils;
-mod proxy;  // 反代服务模块
+mod db; // Epic-014 Story-014-04: Audio analytics database
 pub mod error;
+pub mod models; // Public for integration testing (Story-024-02)
+mod modules;
+pub mod proxy; // 反代服务模块 (public for testing)
+mod utils;
 
-use tauri::Manager;
+#[cfg(test)]
+mod tests;
+
 use modules::logger;
-use tracing::{info, error};
+use tauri::Manager;
+use tracing::{error, info};
 
 // 测试命令
 #[tauri::command]
@@ -19,7 +23,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     // 初始化日志
     logger::init_logger();
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -29,20 +33,29 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app.get_webview_window("main")
-                .map(|window| {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    #[cfg(target_os = "macos")]
-                    app.set_activation_policy(tauri::ActivationPolicy::Regular).unwrap_or(());
-                });
+            let _ = app.get_webview_window("main").map(|window| {
+                let _ = window.show();
+                let _ = window.set_focus();
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Regular)
+                    .unwrap_or(());
+            });
         }))
         .manage(commands::proxy::ProxyServiceState::new())
+        .manage(commands::budget::BudgetOptimizerState::new())
+        .manage(commands::quality::QualityMonitorState::new())
+        .manage({
+            use crate::modules::quota_manager::QuotaManager;
+            use std::sync::Arc;
+            commands::quota_manager_commands::QuotaManagerState::new(Arc::new(QuotaManager::new(
+                300,
+            )))
+        })
         .setup(|app| {
             info!("Setup starting...");
             modules::tray::create_tray(app.handle())?;
             info!("Tray created");
-            
+
             // 自动启动反代服务
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -55,7 +68,9 @@ pub fn run() {
                             config.proxy,
                             state,
                             handle.clone(),
-                        ).await {
+                        )
+                        .await
+                        {
                             error!("自动启动反代服务失败: {}", e);
                         } else {
                             info!("反代服务自动启动成功");
@@ -63,10 +78,10 @@ pub fn run() {
                     }
                 }
             });
-            
-            // 启动智能调度器
+
+            // 启动智能调度器 (Story-027-11: Smart Warmup System)
             modules::scheduler::start_scheduler(app.handle().clone());
-            
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -75,7 +90,10 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 {
                     use tauri::Manager;
-                    window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory).unwrap_or(());
+                    window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Accessory)
+                        .unwrap_or(());
                 }
                 api.prevent_close();
             }
@@ -104,6 +122,11 @@ pub fn run() {
             // 配额命令
             commands::fetch_account_quota,
             commands::refresh_all_quotas,
+            // Epic-001 Phase 3: QuotaManager Dashboard Commands (QUOTA-001-06)
+            commands::quota_manager_commands::get_account_quotas,
+            commands::quota_manager_commands::get_account_tier,
+            commands::quota_manager_commands::get_quota_manager_stats,
+            commands::quota_manager_commands::clear_tier_cache,
             // 配置命令
             commands::load_config,
             commands::save_config,
@@ -134,6 +157,17 @@ pub fn run() {
             commands::proxy::stop_proxy_service,
             commands::proxy::get_proxy_status,
             commands::proxy::get_proxy_stats,
+            commands::proxy::get_violation_metrics, // 🆕 Story #8
+            commands::proxy::reset_violation_metrics, // 🆕 Story #12
+            commands::proxy::get_cache_metrics,     // 🆕 Story-008-02
+            commands::proxy::get_cache_hit_rate,    // 🆕 Story-008-02
+            commands::proxy::get_top_cache_signatures, // 🆕 Story-008-02
+            commands::proxy::get_cache_cost_savings, // 🆕 Story-008-02
+            commands::proxy::clear_cache_metrics,   // 🆕 Story-008-02
+            commands::proxy::get_analytics_report,  // 🆕 Story-013-06
+            commands::proxy::get_cost_breakdown,    // 🆕 Story-013-06
+            commands::proxy::reset_analytics,       // 🆕 Story-013-06
+            commands::proxy::get_audio_analytics,   // 🆕 Epic-014 Story-014-04
             commands::proxy::get_proxy_logs,
             commands::proxy::get_proxy_logs_paginated,
             commands::proxy::get_proxy_log_detail,
@@ -149,13 +183,37 @@ pub fn run() {
             // Autostart 命令
             commands::autostart::toggle_auto_launch,
             commands::autostart::is_auto_launch_enabled,
-            // 预热命令
+            // Detection monitoring 命令 (Story-024-04 Part 2)
+            commands::detection::get_detection_statistics,
+            commands::detection::get_recent_detection_events,
+            commands::detection::clear_detection_events,
+            // Budget optimization 命令 (Epic-025 Story-025-01)
+            commands::budget::allocate_budget,
+            commands::budget::get_budget_metrics,
+            commands::budget::reset_budget_metrics,
+            commands::budget::test_budget_allocation,
+            // Epic-025 Story-025-04: Quality monitoring commands
+            commands::quality::get_quality_metrics,
+            commands::quality::get_weekly_feedback,
+            commands::quality::get_quality_history,
+            commands::quality::submit_user_rating,
+            commands::quality::reset_quality_metrics,
+            commands::quality::get_quality_history_with_trends,
+            commands::quality::get_budget_distribution,
+            // 预热命令 (Story-027-11: Smart Warmup System)
             commands::warm_up_all_accounts,
             commands::warm_up_account,
+            // 测试命令
+            commands::test_model_fallback_notification,
+            commands::open_devtools,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            // Variables used on macOS only
+            #[cfg(not(target_os = "macos"))]
+            let _ = (&app_handle, &event);
+
             // Handle macOS dock icon click to reopen window
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
@@ -163,7 +221,9 @@ pub fn run() {
                     let _ = window.show();
                     let _ = window.unminimize();
                     let _ = window.set_focus();
-                    app_handle.set_activation_policy(tauri::ActivationPolicy::Regular).unwrap_or(());
+                    app_handle
+                        .set_activation_policy(tauri::ActivationPolicy::Regular)
+                        .unwrap_or(());
                 }
             }
             // Suppress unused variable warnings on non-macOS platforms

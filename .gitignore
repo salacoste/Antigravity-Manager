@@ -45,3 +45,18 @@ __pycache__/
 # Reference projects (for development only)
 
 DOCKER_DEPLOYMENT.md
+
+# Antigravity documentation (reverse engineering artifacts)
+docs/antigravity/
+
+# Development and debug artifacts
+_bmad
+_bmad-output
+.debug
+
+# Debug and test scripts
+*-debug*.sh
+collect-debug-logs.sh
+watch-logs.sh*
+test_*.sh
+DEBUG_GUIDE.md

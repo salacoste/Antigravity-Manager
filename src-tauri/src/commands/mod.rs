@@ -1,12 +1,20 @@
 use crate::models::{Account, AppConfig, QuotaData, TokenData};
 use crate::modules;
-use tauri_plugin_opener::OpenerExt;
 use tauri::{Emitter, Manager};
+use tauri_plugin_opener::OpenerExt;
 
 // 导出 proxy 命令
 pub mod proxy;
 // 导出 autostart 命令
 pub mod autostart;
+// 导出 detection 命令 (Story-024-04 Part 2)
+pub mod detection;
+// 导出 budget 命令 (Epic-025 Story-025-01)
+pub mod budget;
+// Epic-025 Story-025-04: Quality monitoring commands
+pub mod quality;
+// Epic-001 Phase 3: QuotaManager Dashboard Commands (QUOTA-001-06)
+pub mod quota_manager_commands;
 
 /// 列出所有账号
 #[tauri::command]
@@ -96,7 +104,10 @@ pub async fn delete_accounts(
 /// 根据传入的账号ID数组顺序更新账号排列
 #[tauri::command]
 pub async fn reorder_accounts(account_ids: Vec<String>) -> Result<(), String> {
-    modules::logger::log_info(&format!("收到账号重排序请求，共 {} 个账号", account_ids.len()));
+    modules::logger::log_info(&format!(
+        "收到账号重排序请求，共 {} 个账号",
+        account_ids.len()
+    ));
     modules::account::reorder_accounts(&account_ids).map_err(|e| {
         modules::logger::log_error(&format!("账号重排序失败: {}", e));
         e
@@ -172,6 +183,15 @@ pub async fn fetch_account_quota(
     modules::update_account_quota(&account_id, quota.clone())
         .map_err(crate::error::AppError::Account)?;
 
+    // 【Fix PR#493】成功刷新后清除代理服务的限流锁
+    if let Some(proxy_state) = app.try_state::<crate::commands::proxy::ProxyServiceState>() {
+        let instance_lock = proxy_state.instance.read().await;
+        if let Some(instance) = instance_lock.as_ref() {
+            instance.token_manager.clear_rate_limit(&account_id);
+            modules::logger::log_info(&format!("已清除账号限流锁: {}", account.email));
+        }
+    }
+
     crate::modules::tray::update_tray_menus(&app);
 
     // 5. 同步到运行中的反代服务（如果已启动）
@@ -196,6 +216,17 @@ pub async fn refresh_all_quotas(
     let instance_lock = proxy_state.instance.read().await;
     if let Some(instance) = instance_lock.as_ref() {
         let _ = instance.token_manager.reload_all_accounts().await;
+    }
+
+    // 联动预热 (根据配置) - Story-027-11: Smart Warmup System
+    if let Ok(config) = crate::modules::config::load_app_config() {
+        if config.scheduled_warmup.enabled {
+            if let Ok(accounts) = crate::modules::list_accounts() {
+                for acc in accounts {
+                    crate::modules::scheduler::trigger_warmup_for_account(&acc).await;
+                }
+            }
+        }
     }
 
     Ok(stats)
@@ -281,7 +312,6 @@ pub async fn open_device_folder(app: tauri::AppHandle) -> Result<(), String> {
         .open_path(dir_str, None::<&str>)
         .map_err(|e| format!("打开目录失败: {}", e))
 }
-
 
 /// 加载配置
 #[tauri::command]
@@ -653,7 +683,9 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
 #[tauri::command]
 pub async fn should_check_updates() -> Result<bool, String> {
     let settings = crate::modules::update_checker::load_update_settings()?;
-    Ok(crate::modules::update_checker::should_check_for_updates(&settings))
+    Ok(crate::modules::update_checker::should_check_for_updates(
+        &settings,
+    ))
 }
 
 #[tauri::command]
@@ -661,10 +693,10 @@ pub async fn update_last_check_time() -> Result<(), String> {
     crate::modules::update_checker::update_last_check_time()
 }
 
-
 /// 获取更新设置
 #[tauri::command]
-pub async fn get_update_settings() -> Result<crate::modules::update_checker::UpdateSettings, String> {
+pub async fn get_update_settings() -> Result<crate::modules::update_checker::UpdateSettings, String>
+{
     crate::modules::update_checker::load_update_settings()
 }
 
@@ -675,8 +707,6 @@ pub async fn save_update_settings(
 ) -> Result<(), String> {
     crate::modules::update_checker::save_update_settings(&settings)
 }
-
-
 
 /// 切换账号的反代禁用状态
 #[tauri::command]
@@ -695,17 +725,19 @@ pub async fn toggle_proxy_status(
 
     // 1. 读取账号文件
     let data_dir = modules::account::get_data_dir()?;
-    let account_path = data_dir.join("accounts").join(format!("{}.json", account_id));
+    let account_path = data_dir
+        .join("accounts")
+        .join(format!("{}.json", account_id));
 
     if !account_path.exists() {
         return Err(format!("账号文件不存在: {}", account_id));
     }
 
-    let content = std::fs::read_to_string(&account_path)
-        .map_err(|e| format!("读取账号文件失败: {}", e))?;
+    let content =
+        std::fs::read_to_string(&account_path).map_err(|e| format!("读取账号文件失败: {}", e))?;
 
-    let mut account_json: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("解析账号文件失败: {}", e))?;
+    let mut account_json: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("解析账号文件失败: {}", e))?;
 
     // 2. 更新 proxy_disabled 字段
     if enable {
@@ -718,14 +750,16 @@ pub async fn toggle_proxy_status(
         let now = chrono::Utc::now().timestamp();
         account_json["proxy_disabled"] = serde_json::Value::Bool(true);
         account_json["proxy_disabled_at"] = serde_json::Value::Number(now.into());
-        account_json["proxy_disabled_reason"] = serde_json::Value::String(
-            reason.unwrap_or_else(|| "用户手动禁用".to_string())
-        );
+        account_json["proxy_disabled_reason"] =
+            serde_json::Value::String(reason.unwrap_or_else(|| "用户手动禁用".to_string()));
     }
 
     // 3. 保存到磁盘
-    std::fs::write(&account_path, serde_json::to_string_pretty(&account_json).unwrap())
-        .map_err(|e| format!("写入账号文件失败: {}", e))?;
+    std::fs::write(
+        &account_path,
+        serde_json::to_string_pretty(&account_json).unwrap(),
+    )
+    .map_err(|e| format!("写入账号文件失败: {}", e))?;
 
     modules::logger::log_info(&format!(
         "账号反代状态已更新: {} ({})",
@@ -742,14 +776,49 @@ pub async fn toggle_proxy_status(
     Ok(())
 }
 
-/// 预热所有可用账号
+/// 预热所有可用账号 (Story-027-11: Smart Warmup System)
 #[tauri::command]
 pub async fn warm_up_all_accounts() -> Result<String, String> {
     modules::quota::warm_up_all_accounts().await
 }
 
-/// 预热指定账号
+/// 预热指定账号 (Story-027-11: Smart Warmup System)
 #[tauri::command]
 pub async fn warm_up_account(account_id: String) -> Result<String, String> {
     modules::quota::warm_up_account(&account_id).await
+}
+
+/// 测试 Model Fallback UI 通知
+#[tauri::command]
+pub async fn test_model_fallback_notification(app: tauri::AppHandle) -> Result<(), String> {
+    let payload = serde_json::json!({
+        "original_model": "claude-opus-4-5",
+        "fallback_model": "gemini-3-pro-high",
+        "reason": "Test notification - High timeout rate (93.7%) with Claude Opus Thinking"
+    });
+
+    app.emit("proxy://model-fallback", payload)
+        .map_err(|e| format!("Failed to emit test event: {}", e))?;
+
+    modules::logger::log_info("Test model fallback notification sent to UI");
+    Ok(())
+}
+
+/// 打开 DevTools (仅在 dev 模式下工作)
+#[tauri::command]
+pub async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        #[cfg(debug_assertions)]
+        {
+            window.open_devtools();
+            modules::logger::log_info("DevTools opened");
+            Ok(())
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Err("DevTools only available in development mode".to_string())
+        }
+    } else {
+        Err("Main window not found".to_string())
+    }
 }

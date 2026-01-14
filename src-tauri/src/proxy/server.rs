@@ -6,12 +6,12 @@ use axum::{
     routing::{any, get, post},
     Router,
 };
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use tokio::sync::oneshot;
+use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
 use tracing::{debug, error};
-use tokio::sync::RwLock;
-use std::sync::atomic::AtomicUsize;
 
 /// Axum 应用状态
 #[derive(Clone)]
@@ -30,6 +30,18 @@ pub struct AppState {
     pub zai_vision_mcp: Arc<crate::proxy::zai_vision_mcp::ZaiVisionMcpState>,
     pub monitor: Arc<crate::proxy::monitor::ProxyMonitor>,
     pub experimental: Arc<RwLock<crate::proxy::config::ExperimentalConfig>>,
+    /// Story-007-02: Gemini Image Generation Safety Settings
+    pub safety_threshold: Arc<RwLock<Option<String>>>,
+    /// Story-007-04: Image generation response cache
+    pub image_cache: Option<Arc<dyn crate::proxy::cache::CacheBackend>>,
+    /// Epic-008 Story-012-02: Budget optimizer with pattern learning
+    pub budget_optimizer: Arc<crate::proxy::budget_optimizer::BudgetOptimizer>,
+    /// Story-013-05: Response caching for thinking API responses
+    pub response_cache: Option<Arc<crate::proxy::response_cache::ResponseCache>>,
+    /// Story-024-04: Detection monitoring and alerting
+    pub detection_monitor: Arc<crate::proxy::detection::DetectionMonitor>,
+    /// Epic-025 Story-025-04: Thinking quality monitoring
+    pub quality_monitor: Arc<crate::modules::thinking_quality::ThinkingQualityMonitor>,
 }
 
 /// Axum 服务器实例
@@ -43,6 +55,115 @@ pub struct AxumServer {
 }
 
 impl AxumServer {
+    /// Initialize response cache from config (Story-013-05)
+    ///
+    /// Creates LRU cache for thinking API responses based on configuration.
+    /// Returns None if caching is disabled.
+    async fn initialize_response_cache(
+        experimental_config: &Arc<RwLock<crate::proxy::config::ExperimentalConfig>>,
+    ) -> Option<Arc<crate::proxy::response_cache::ResponseCache>> {
+        let config = experimental_config.read().await;
+        let cache_config = &config.response_cache;
+
+        if !cache_config.enabled {
+            tracing::info!("[ResponseCache] Cache disabled via config");
+            return None;
+        }
+
+        let cache = Arc::new(crate::proxy::response_cache::ResponseCache::new(
+            cache_config.capacity,
+            cache_config.ttl_seconds,
+        ));
+
+        tracing::info!(
+            "[ResponseCache] ✓ Response cache enabled: capacity={}, ttl={}s",
+            cache_config.capacity,
+            cache_config.ttl_seconds
+        );
+
+        Some(cache)
+    }
+
+    /// Initialize image cache from environment variables (Story-007-04)
+    ///
+    /// Environment variables:
+    /// - CACHE_BACKEND=none|filesystem|redis (default: none)
+    /// - CACHE_TTL_SECONDS=3600 (default: 1 hour)
+    /// - CACHE_MAX_SIZE_MB=100 (default: 100MB)
+    /// - CACHE_DIR={data_dir}/image_cache/ (filesystem only)
+    fn initialize_cache() -> Option<Arc<dyn crate::proxy::cache::CacheBackend>> {
+        use crate::proxy::cache::{FilesystemCache, NoOpCache};
+
+        let backend = std::env::var("CACHE_BACKEND").unwrap_or_else(|_| "none".to_string());
+
+        match backend.as_str() {
+            "filesystem" => {
+                let cache_dir = std::env::var("CACHE_DIR")
+                    .ok()
+                    .and_then(|d| {
+                        if d.is_empty() {
+                            None
+                        } else {
+                            Some(std::path::PathBuf::from(d))
+                        }
+                    })
+                    .unwrap_or_else(|| {
+                        // Default: {data_dir}/image_cache/
+
+                        dirs::data_local_dir()
+                            .unwrap_or_else(|| std::path::PathBuf::from("."))
+                            .join("com.lbjlaq.antigravity-tools")
+                            .join("image_cache")
+                    });
+
+                let max_size_mb: u64 = std::env::var("CACHE_MAX_SIZE_MB")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(100);
+
+                let ttl_secs: u64 = std::env::var("CACHE_TTL_SECONDS")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(3600);
+
+                match FilesystemCache::new(
+                    cache_dir.clone(),
+                    max_size_mb,
+                    std::time::Duration::from_secs(ttl_secs),
+                ) {
+                    Ok(cache) => {
+                        tracing::info!(
+                            "[Cache] ✓ Filesystem cache enabled: dir={:?}, max_size={}MB, ttl={}s",
+                            cache_dir,
+                            max_size_mb,
+                            ttl_secs
+                        );
+                        Some(Arc::new(cache) as Arc<dyn crate::proxy::cache::CacheBackend>)
+                    }
+                    Err(e) => {
+                        tracing::error!("[Cache] Failed to initialize filesystem cache: {}", e);
+                        tracing::warn!("[Cache] Falling back to NoOp cache (disabled)");
+                        Some(Arc::new(NoOpCache::new())
+                            as Arc<dyn crate::proxy::cache::CacheBackend>)
+                    }
+                }
+            }
+            "redis" => {
+                // TODO: Implement RedisCache (optional, Story-007-04)
+                tracing::warn!("[Cache] Redis backend not yet implemented, falling back to NoOp");
+                Some(Arc::new(NoOpCache::new()) as Arc<dyn crate::proxy::cache::CacheBackend>)
+            }
+            "none" => {
+                tracing::debug!("[Cache] Cache disabled (backend=none)");
+                None
+            }
+            other => {
+                tracing::warn!("[Cache] Unknown backend '{}', cache disabled", other);
+                None
+            }
+        }
+    }
+
     pub async fn update_mapping(&self, config: &crate::proxy::config::ProxyConfig) {
         {
             let mut m = self.custom_mapping.write().await;
@@ -76,6 +197,7 @@ impl AxumServer {
         tracing::info!("实验性配置已热更新");
     }
     /// 启动 Axum 服务器
+    #[allow(clippy::too_many_arguments)]
     pub async fn start(
         host: String,
         port: u16,
@@ -87,21 +209,60 @@ impl AxumServer {
         zai_config: crate::proxy::ZaiConfig,
         monitor: Arc<crate::proxy::monitor::ProxyMonitor>,
         experimental_config: crate::proxy::config::ExperimentalConfig,
-
     ) -> Result<(Self, tokio::task::JoinHandle<()>), String> {
         let custom_mapping_state = Arc::new(tokio::sync::RwLock::new(custom_mapping));
-	        let proxy_state = Arc::new(tokio::sync::RwLock::new(upstream_proxy.clone()));
-	        let security_state = Arc::new(RwLock::new(security_config));
-	        let zai_state = Arc::new(RwLock::new(zai_config));
-	        let provider_rr = Arc::new(AtomicUsize::new(0));
-	        let zai_vision_mcp_state =
-	            Arc::new(crate::proxy::zai_vision_mcp::ZaiVisionMcpState::new());
-	        let experimental_state = Arc::new(RwLock::new(experimental_config));
+        let proxy_state = Arc::new(tokio::sync::RwLock::new(upstream_proxy.clone()));
+        let security_state = Arc::new(RwLock::new(security_config));
+        let zai_state = Arc::new(RwLock::new(zai_config));
+        let provider_rr = Arc::new(AtomicUsize::new(0));
+        let zai_vision_mcp_state = Arc::new(crate::proxy::zai_vision_mcp::ZaiVisionMcpState::new());
+        let experimental_state = Arc::new(RwLock::new(experimental_config));
 
-	        let state = AppState {
-	            token_manager: token_manager.clone(),
-	            custom_mapping: custom_mapping_state.clone(),
-	            request_timeout: 300, // 5分钟超时
+        // Epic-008 Story-012-02: Initialize budget optimizer with pattern loading
+        let budget_optimizer = Arc::new(crate::proxy::budget_optimizer::BudgetOptimizer::new());
+
+        // Load saved patterns from database (graceful degradation on failure)
+        match crate::modules::proxy_db::load_budget_patterns() {
+            Ok(patterns) if !patterns.is_empty() => {
+                match budget_optimizer.get_pattern_store().write() {
+                    Ok(mut store) => {
+                        store.load_from_db(patterns.clone());
+                        tracing::info!(
+                            "[Epic-008] ✓ Loaded {} budget patterns from database",
+                            patterns.len()
+                        );
+                    }
+                    Err(e) => tracing::warn!(
+                        "[Epic-008] Failed to acquire pattern store lock: {}. Using defaults.",
+                        e
+                    ),
+                }
+            }
+            Ok(_) => {
+                tracing::info!("[Epic-008] No budget patterns in database (first run or empty)")
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "[Epic-008] Failed to load budget patterns: {}. Using defaults.",
+                    e
+                );
+            }
+        }
+
+        // Story-013-05: Initialize response cache from config before moving experimental_state
+        let response_cache_opt = Self::initialize_response_cache(&experimental_state).await;
+
+        // Story-024-04: Initialize detection monitor from config
+        // TODO: Pass ProxyConfig to start() function to access detection_alerts config
+        // For now, use default thresholds (will be integrated when config is passed)
+        let detection_monitor = Arc::new(crate::proxy::detection::DetectionMonitor::new(
+            std::collections::HashMap::new(), // Will be populated from config
+        ));
+
+        let state = AppState {
+            token_manager: token_manager.clone(),
+            custom_mapping: custom_mapping_state.clone(),
+            request_timeout: 300, // 5分钟超时
             thought_signature_map: Arc::new(tokio::sync::Mutex::new(
                 std::collections::HashMap::new(),
             )),
@@ -113,9 +274,28 @@ impl AxumServer {
             provider_rr: provider_rr.clone(),
             zai_vision_mcp: zai_vision_mcp_state,
             monitor: monitor.clone(),
-            experimental: experimental_state.clone(),
+            experimental: experimental_state,
+            // Story-007-02: Initialize safety_threshold from environment variable
+            // GEMINI_IMAGE_SAFETY_THRESHOLD can be set to OFF|LOW|MEDIUM|HIGH
+            safety_threshold: Arc::new(RwLock::new(
+                std::env::var("GEMINI_IMAGE_SAFETY_THRESHOLD").ok(),
+            )),
+            // Story-007-04: Initialize image cache from environment variables
+            // CACHE_BACKEND=none|filesystem|redis (default: none)
+            // CACHE_TTL_SECONDS=3600 (default: 1 hour)
+            // CACHE_MAX_SIZE_MB=100 (default: 100MB)
+            image_cache: Self::initialize_cache(),
+            // Epic-008 Story-012-02: Budget optimizer with loaded patterns
+            budget_optimizer: budget_optimizer.clone(),
+            // Story-013-05: Response cache initialized above
+            response_cache: response_cache_opt,
+            // Story-024-04: Detection monitor initialized above
+            detection_monitor: detection_monitor.clone(),
+            // Epic-025 Story-025-04: Quality monitor for thinking requests
+            quality_monitor: Arc::new(
+                crate::modules::thinking_quality::ThinkingQualityMonitor::new(),
+            ),
         };
-
 
         // 构建路由 - 使用新架构的 handlers！
         use crate::proxy::handlers;
@@ -159,16 +339,13 @@ impl AxumServer {
                 "/mcp/web_search_prime/mcp",
                 any(handlers::mcp::handle_web_search_prime),
             )
-	            .route(
-	                "/mcp/web_reader/mcp",
-	                any(handlers::mcp::handle_web_reader),
-	            )
-	            .route(
-	                "/mcp/zai-mcp-server/mcp",
-	                any(handlers::mcp::handle_zai_mcp_server),
-	            )
-	            // Gemini Protocol (Native)
-	            .route("/v1beta/models", get(handlers::gemini::handle_list_models))
+            .route("/mcp/web_reader/mcp", any(handlers::mcp::handle_web_reader))
+            .route(
+                "/mcp/zai-mcp-server/mcp",
+                any(handlers::mcp::handle_zai_mcp_server),
+            )
+            // Gemini Protocol (Native)
+            .route("/v1beta/models", get(handlers::gemini::handle_list_models))
             // Handle both GET (get info) and POST (generateContent with colon) at the same route
             .route(
                 "/v1beta/models/:model",
@@ -178,13 +355,19 @@ impl AxumServer {
                 "/v1beta/models/:model/countTokens",
                 post(handlers::gemini::handle_count_tokens),
             ) // Specific route priority
-            .route("/v1/models/detect", post(handlers::common::handle_detect_model))
-            .route("/internal/warmup", post(handlers::warmup::handle_warmup)) // 内部预热端点
+            .route(
+                "/v1/models/detect",
+                post(handlers::common::handle_detect_model),
+            )
+            .route("/internal/warmup", post(handlers::warmup::handle_warmup)) // 内部预热端点 (Story-027-11)
             .route("/v1/api/event_logging/batch", post(silent_ok_handler))
             .route("/v1/api/event_logging", post(silent_ok_handler))
             .route("/healthz", get(health_check_handler))
             .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-            .layer(axum::middleware::from_fn_with_state(state.clone(), crate::proxy::middleware::monitor::monitor_middleware))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::proxy::middleware::monitor::monitor_middleware,
+            ))
             .layer(TraceLayer::new_for_http())
             .layer(axum::middleware::from_fn_with_state(
                 security_state.clone(),
@@ -250,7 +433,63 @@ impl AxumServer {
             }
         });
 
+        // Epic-008 Story-012-02: Start periodic pattern persistence task
+        Self::start_pattern_persistence_task(budget_optimizer);
+
         Ok((server_instance, handle))
+    }
+
+    /// Epic-008 Story-012-02: Background task for periodic pattern persistence
+    ///
+    /// Saves budget patterns to database every 5 minutes.
+    /// Runs indefinitely in background, with graceful error handling.
+    fn start_pattern_persistence_task(
+        optimizer: Arc<crate::proxy::budget_optimizer::BudgetOptimizer>,
+    ) {
+        use std::time::Duration;
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
+
+            loop {
+                interval.tick().await;
+
+                // Get all patterns from store
+                let patterns = match optimizer.get_pattern_store().read() {
+                    Ok(store) => store.get_all_patterns(),
+                    Err(e) => {
+                        tracing::error!(
+                            "[Epic-008] Failed to read pattern store: {}. Skipping persistence.",
+                            e
+                        );
+                        continue;
+                    }
+                };
+
+                if patterns.is_empty() {
+                    tracing::debug!("[Epic-008] No patterns to persist (empty store)");
+                    continue;
+                }
+
+                // Save patterns to database
+                let mut saved_count = 0;
+                for pattern in patterns {
+                    match crate::modules::proxy_db::save_budget_pattern(&pattern) {
+                        Ok(_) => saved_count += 1,
+                        Err(e) => tracing::warn!(
+                            "[Epic-008] Failed to save pattern {}: {}",
+                            &pattern.prompt_hash[..8],
+                            e
+                        ),
+                    }
+                }
+
+                tracing::info!(
+                    "[Epic-008] ✓ Persisted {} budget patterns to database",
+                    saved_count
+                );
+            }
+        });
     }
 
     /// 停止服务器

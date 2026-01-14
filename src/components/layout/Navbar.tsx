@@ -12,6 +12,7 @@ function Navbar() {
         { path: '/', label: t('nav.dashboard') },
         { path: '/accounts', label: t('nav.accounts') },
         { path: '/api-proxy', label: t('nav.proxy') },
+        { path: '/budget-optimizer', label: 'Budget' },
         { path: '/settings', label: t('nav.settings') },
     ];
 

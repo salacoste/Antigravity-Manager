@@ -1,0 +1,5 @@
+# Captured traffic files (may contain sensitive data)
+captures/
+
+# Vendor directory (external git repositories)
+vendor/

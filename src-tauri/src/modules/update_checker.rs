@@ -1,8 +1,9 @@
+use crate::modules::logger;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use crate::modules::logger;
 
-const GITHUB_API_URL: &str = "https://api.github.com/repos/lbjlaq/Antigravity-Manager/releases/latest";
+const GITHUB_API_URL: &str =
+    "https://api.github.com/repos/lbjlaq/Antigravity-Manager/releases/latest";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_CHECK_INTERVAL_HOURS: u64 = 24;
 
@@ -60,15 +61,11 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
 
     logger::log_info("正在从 GitHub 检查新版本...");
 
-    let response = client
-        .get(GITHUB_API_URL)
-        .send()
-        .await
-        .map_err(|e| {
-            let err_msg = format!("Failed to fetch release info: {}", e);
-            logger::log_error(&err_msg);
-            err_msg
-        })?;
+    let response = client.get(GITHUB_API_URL).send().await.map_err(|e| {
+        let err_msg = format!("Failed to fetch release info: {}", e);
+        logger::log_error(&err_msg);
+        err_msg
+    })?;
 
     if !response.status().is_success() {
         return Err(format!("GitHub API returned status: {}", response.status()));
@@ -86,9 +83,15 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
     let has_update = compare_versions(&latest_version, &current_version);
 
     if has_update {
-        logger::log_info(&format!("发现新版本: {} (当前版本: {})", latest_version, current_version));
+        logger::log_info(&format!(
+            "发现新版本: {} (当前版本: {})",
+            latest_version, current_version
+        ));
     } else {
-        logger::log_info(&format!("已是最新版本: {} (与远程版本 {} 一致)", current_version, latest_version));
+        logger::log_info(&format!(
+            "已是最新版本: {} (与远程版本 {} 一致)",
+            current_version, latest_version
+        ));
     }
 
     Ok(UpdateInfo {
@@ -103,11 +106,8 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
 
 /// Compare two semantic versions (e.g., "3.3.30" vs "3.3.29")
 fn compare_versions(latest: &str, current: &str) -> bool {
-    let parse_version = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|s| s.parse::<u32>().ok())
-            .collect()
-    };
+    let parse_version =
+        |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse::<u32>().ok()).collect() };
 
     let latest_parts = parse_version(latest);
     let current_parts = parse_version(current);
@@ -159,8 +159,7 @@ pub fn load_update_settings() -> Result<UpdateSettings, String> {
     let content = std::fs::read_to_string(&settings_path)
         .map_err(|e| format!("Failed to read settings file: {}", e))?;
 
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse settings: {}", e))
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse settings: {}", e))
 }
 
 /// Save update settings to config file

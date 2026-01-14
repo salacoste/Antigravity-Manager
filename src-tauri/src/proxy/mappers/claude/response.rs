@@ -53,12 +53,12 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                         tracing::debug!("[Response] Remapped Grep: query → pattern");
                     }
                 }
-                
+
                 // [CRITICAL FIX] Claude Code uses "path" (string), NOT "paths" (array)!
                 if !obj.contains_key("path") {
                     if let Some(paths) = obj.remove("paths") {
                         let path_str = if let Some(arr) = paths.as_array() {
-                            arr.get(0)
+                            arr.first()
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".")
                                 .to_string()
@@ -147,12 +147,12 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                         tracing::debug!("[Response] Remapped Glob: query → pattern");
                     }
                 }
-                
+
                 // [CRITICAL FIX] Claude Code uses "path" (string), NOT "paths" (array)!
                 if !obj.contains_key("path") {
                     if let Some(paths) = obj.remove("paths") {
                         let path_str = if let Some(arr) = paths.as_array() {
-                            arr.get(0)
+                            arr.first()
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".")
                                 .to_string()
@@ -179,14 +179,18 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                 }
             }
             "ls" => {
-                 // LS tool: ensure "path" parameter exists
-                 if !obj.contains_key("path") {
-                     obj.insert("path".to_string(), serde_json::json!("."));
-                     tracing::debug!("[Response] Remapped LS: default path → \".\"");
-                 }
+                // LS tool: ensure "path" parameter exists
+                if !obj.contains_key("path") {
+                    obj.insert("path".to_string(), serde_json::json!("."));
+                    tracing::debug!("[Response] Remapped LS: default path → \".\"");
+                }
             }
             other => {
-                 tracing::debug!("[Response] Unmapped tool call: {} (args: {:?})", other, obj.keys());
+                tracing::debug!(
+                    "[Response] Unmapped tool call: {} (args: {:?})",
+                    other,
+                    obj.keys()
+                );
             }
         }
     }
@@ -219,7 +223,11 @@ impl NonStreamingProcessor {
     }
 
     /// 处理 Gemini 响应并转换为 Claude 响应
-    pub fn process(&mut self, gemini_response: &GeminiResponse, scaling_enabled: bool, context_limit: u32) -> ClaudeResponse {
+    pub fn process(
+        &mut self,
+        gemini_response: &GeminiResponse,
+        scaling_enabled: bool,
+    ) -> ClaudeResponse {
         self.scaling_enabled = scaling_enabled;
         self.context_limit = context_limit;
         // 获取 parts
@@ -227,10 +235,9 @@ impl NonStreamingProcessor {
         let parts = gemini_response
             .candidates
             .as_ref()
-            .and_then(|c| c.get(0))
+            .and_then(|c| c.first())
             .and_then(|candidate| candidate.content.as_ref())
-            .map(|content| &content.parts)
-            .unwrap_or(&empty_parts);
+            .map_or(&empty_parts, |content| &content.parts);
 
         // 处理所有 parts
         for part in parts {
@@ -238,7 +245,7 @@ impl NonStreamingProcessor {
         }
 
         // 处理 grounding(web search) -> 转换为 server_tool_use / web_search_tool_result
-        if let Some(candidate) = gemini_response.candidates.as_ref().and_then(|c| c.get(0)) {
+        if let Some(candidate) = gemini_response.candidates.as_ref().and_then(|c| c.first()) {
             if let Some(grounding) = &candidate.grounding_metadata {
                 self.process_grounding(grounding);
             }
@@ -270,16 +277,19 @@ impl NonStreamingProcessor {
                 Ok(decoded_bytes) => {
                     match String::from_utf8(decoded_bytes) {
                         Ok(decoded_str) => {
-                            tracing::debug!("[Response] Decoded base64 signature (len {} -> {})", sig.len(), decoded_str.len());
+                            tracing::debug!(
+                                "[Response] Decoded base64 signature (len {} -> {})",
+                                sig.len(),
+                                decoded_str.len()
+                            );
                             decoded_str
-                        },
-                        Err(_) => sig.clone() // Not valid UTF-8, keep as is
+                        }
+                        Err(_) => sig.clone(), // Not valid UTF-8, keep as is
                     }
-                },
-                Err(_) => sig.clone() // Not base64, keep as is
+                }
+                Err(_) => sig.clone(), // Not base64, keep as is
             }
         });
-
 
         // 1. FunctionCall 处理
         if let Some(fc) = &part.function_call {
@@ -512,7 +522,7 @@ impl NonStreamingProcessor {
         let finish_reason = gemini_response
             .candidates
             .as_ref()
-            .and_then(|c| c.get(0))
+            .and_then(|c| c.first())
             .and_then(|candidate| candidate.finish_reason.as_deref());
 
         let stop_reason = if self.has_tool_call {
@@ -550,8 +560,17 @@ impl NonStreamingProcessor {
     }
 }
 
+impl Default for NonStreamingProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 转换 Gemini 响应为 Claude 响应 (公共接口)
-pub fn transform_response(gemini_response: &GeminiResponse, scaling_enabled: bool, context_limit: u32) -> Result<ClaudeResponse, String> {
+pub fn transform_response(
+    gemini_response: &GeminiResponse,
+    scaling_enabled: bool,
+) -> Result<ClaudeResponse, String> {
     let mut processor = NonStreamingProcessor::new();
     Ok(processor.process(gemini_response, scaling_enabled, context_limit))
 }

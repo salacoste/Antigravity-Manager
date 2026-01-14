@@ -4,23 +4,21 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ProxyAuthMode {
+    #[default]
     Off,
     Strict,
     AllExceptHealth,
     Auto,
 }
 
-impl Default for ProxyAuthMode {
-    fn default() -> Self {
-        Self::Off
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ZaiDispatchMode {
     /// Never use z.ai.
+    #[default]
     Off,
     /// Use z.ai for all Anthropic protocol requests.
     Exclusive,
@@ -28,12 +26,6 @@ pub enum ZaiDispatchMode {
     Pooled,
     /// Use z.ai only when the Google pool is unavailable.
     Fallback,
-}
-
-impl Default for ZaiDispatchMode {
-    fn default() -> Self {
-        Self::Off
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,7 +51,7 @@ impl Default for ZaiModelDefaults {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ZaiMcpConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -69,17 +61,6 @@ pub struct ZaiMcpConfig {
     pub web_reader_enabled: bool,
     #[serde(default)]
     pub vision_enabled: bool,
-}
-
-impl Default for ZaiMcpConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            web_search_enabled: false,
-            web_reader_enabled: false,
-            vision_enabled: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,22 +97,60 @@ impl Default for ZaiConfig {
     }
 }
 
+/// Response cache configuration (Story-013-05)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResponseCacheConfig {
+    /// Enable response caching
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Maximum number of cached entries (LRU eviction)
+    #[serde(default = "default_cache_capacity")]
+    pub capacity: usize,
+
+    /// Time-to-live for cached entries (seconds)
+    #[serde(default = "default_cache_ttl")]
+    pub ttl_seconds: u64,
+}
+
+impl Default for ResponseCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            capacity: default_cache_capacity(),
+            ttl_seconds: default_cache_ttl(),
+        }
+    }
+}
+
+fn default_cache_capacity() -> usize {
+    1000
+}
+
+fn default_cache_ttl() -> u64 {
+    3600 // 1 hour
+}
+
 /// 实验性功能配置 (Feature Flags)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExperimentalConfig {
     /// 启用双层签名缓存 (Signature Cache)
     #[serde(default = "default_true")]
     pub enable_signature_cache: bool,
-    
+
     /// 启用工具循环自动恢复 (Tool Loop Recovery)
     #[serde(default = "default_true")]
     pub enable_tool_loop_recovery: bool,
-    
+
     /// 启用跨模型兼容性检查 (Cross-Model Checks)
     #[serde(default = "default_true")]
     pub enable_cross_model_checks: bool,
 
-    /// 启用上下文用量缩放 (Context Usage Scaling)
+    /// Response caching configuration (Story-013-05)
+    #[serde(default)]
+    pub response_cache: ResponseCacheConfig,
+
+    /// 启用上下文用量缩放 (Context Usage Scaling) (Story-027-01)
     /// 用于解决客户端因 Gemini 上下文过大而错误触发压缩的问题
     #[serde(default = "default_true")]
     pub enable_usage_scaling: bool,
@@ -143,12 +162,161 @@ impl Default for ExperimentalConfig {
             enable_signature_cache: true,
             enable_tool_loop_recovery: true,
             enable_cross_model_checks: true,
+            response_cache: ResponseCacheConfig::default(),
             enable_usage_scaling: true,
         }
     }
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
+
+/// User-Agent rotation configuration (Story-024-03)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserAgentConfig {
+    /// Enable user-agent rotation
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Rotation strategy
+    #[serde(default)]
+    pub strategy: crate::proxy::user_agent::RotationStrategy,
+
+    /// Custom user-agents (optional)
+    #[serde(default)]
+    pub custom_agents: Vec<String>,
+}
+
+impl Default for UserAgentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            strategy: crate::proxy::user_agent::RotationStrategy::default(),
+            custom_agents: vec![],
+        }
+    }
+}
+
+/// Detection alerts configuration (Story-024-04 Part 2)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectionAlertsConfig {
+    /// Enable detection alerts
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Alert thresholds per event type
+    #[serde(default)]
+    pub thresholds: HashMap<
+        crate::proxy::detection::DetectionEventType,
+        crate::proxy::detection::AlertThreshold,
+    >,
+
+    /// Notification channels configuration
+    #[serde(default)]
+    pub notification_channels: NotificationChannels,
+}
+
+impl Default for DetectionAlertsConfig {
+    fn default() -> Self {
+        use crate::proxy::detection::{AlertThreshold, DetectionEventType, Severity};
+        let mut thresholds = HashMap::new();
+
+        // Critical: Alert immediately on first occurrence
+        thresholds.insert(
+            DetectionEventType::IdeTypeMissing,
+            AlertThreshold {
+                count: 1,
+                window_minutes: 1,
+                severity: Severity::Critical,
+            },
+        );
+
+        thresholds.insert(
+            DetectionEventType::ApiProviderMismatch,
+            AlertThreshold {
+                count: 1,
+                window_minutes: 1,
+                severity: Severity::Critical,
+            },
+        );
+
+        thresholds.insert(
+            DetectionEventType::Blocked403,
+            AlertThreshold {
+                count: 1,
+                window_minutes: 1,
+                severity: Severity::Critical,
+            },
+        );
+
+        // High: Alert after 5 occurrences in 1 hour
+        thresholds.insert(
+            DetectionEventType::RateLimit429,
+            AlertThreshold {
+                count: 5,
+                window_minutes: 60,
+                severity: Severity::High,
+            },
+        );
+
+        thresholds.insert(
+            DetectionEventType::AuthError401,
+            AlertThreshold {
+                count: 3,
+                window_minutes: 60,
+                severity: Severity::High,
+            },
+        );
+
+        // Medium: Alert after 10 occurrences in 1 hour
+        thresholds.insert(
+            DetectionEventType::UserAgentStatic,
+            AlertThreshold {
+                count: 10,
+                window_minutes: 60,
+                severity: Severity::Medium,
+            },
+        );
+
+        Self {
+            enabled: true,
+            thresholds,
+            notification_channels: NotificationChannels::default(),
+        }
+    }
+}
+
+/// Notification channels configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NotificationChannels {
+    /// Webhook configuration (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook: Option<WebhookConfig>,
+
+    /// Enable dashboard notifications (via Tauri events)
+    #[serde(default = "default_true")]
+    pub dashboard: bool,
+}
+
+/// Webhook notification configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookConfig {
+    /// Webhook URL
+    pub url: String,
+
+    /// HTTP method (default: POST)
+    #[serde(default = "default_post_method")]
+    pub method: String,
+
+    /// Custom HTTP headers
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+}
+
+fn default_post_method() -> String {
+    "POST".to_string()
+}
 
 /// 反代服务配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,13 +337,12 @@ pub struct ProxyConfig {
     /// - auto: recommended defaults (currently: allow_lan_access => all_except_health, else off)
     #[serde(default)]
     pub auth_mode: ProxyAuthMode,
-    
+
     /// 监听端口
     pub port: u16,
-    
+
     /// API 密钥
     pub api_key: String,
-    
 
     /// 是否自动启动
     pub auto_start: bool,
@@ -199,7 +366,7 @@ pub struct ProxyConfig {
     /// z.ai provider configuration (Anthropic-compatible).
     #[serde(default)]
     pub zai: ZaiConfig,
-    
+
     /// 账号调度配置 (粘性会话/限流重试)
     #[serde(default)]
     pub scheduling: crate::proxy::sticky_config::StickySessionConfig,
@@ -207,6 +374,27 @@ pub struct ProxyConfig {
     /// 实验性功能配置
     #[serde(default)]
     pub experimental: ExperimentalConfig,
+
+    /// Gemini Image Generation Safety Settings
+    /// Supported values: "OFF", "LOW", "MEDIUM", "HIGH"
+    /// Default: "OFF" (backward compatibility)
+    /// Environment variable: GEMINI_IMAGE_SAFETY_THRESHOLD
+    #[serde(default)]
+    pub safety_threshold: Option<String>,
+
+    /// User-Agent rotation configuration (Story-024-03)
+    #[serde(default)]
+    pub user_agent_rotation: UserAgentConfig,
+
+    /// Detection monitoring and alerting (Story-024-04)
+    #[serde(default)]
+    pub detection_alerts: DetectionAlertsConfig,
+
+    /// Enable adaptive thinking budget optimization (Story-015-01)
+    /// When enabled, queries are classified by complexity and assigned appropriate budgets
+    /// (SIMPLE: 4K, MODERATE: 16K, COMPLEX: 32K) to optimize cost-quality tradeoff
+    #[serde(default)]
+    pub adaptive_budget_enabled: bool,
 }
 
 /// 上游代理配置
@@ -234,12 +422,16 @@ impl Default for ProxyConfig {
             zai: ZaiConfig::default(),
             scheduling: crate::proxy::sticky_config::StickySessionConfig::default(),
             experimental: ExperimentalConfig::default(),
+            safety_threshold: None, // Default: OFF for backward compatibility
+            user_agent_rotation: UserAgentConfig::default(),
+            detection_alerts: DetectionAlertsConfig::default(),
+            adaptive_budget_enabled: false, // Story-015-01: Default to disabled for safe rollout
         }
     }
 }
 
 fn default_request_timeout() -> u64 {
-    120  // 默认 120 秒,原来 60 秒太短
+    120 // 默认 120 秒,原来 60 秒太短
 }
 
 fn default_zai_base_url() -> String {

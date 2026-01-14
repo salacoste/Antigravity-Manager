@@ -57,14 +57,14 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                         tracing::debug!("[Streaming] Remapped Grep: query → pattern");
                     }
                 }
-                
+
                 // [CRITICAL FIX] Claude Code uses "path" (string), NOT "paths" (array)!
                 if !obj.contains_key("path") {
                     // Check if Gemini sent "paths" (array) - convert to string
                     if let Some(paths) = obj.remove("paths") {
                         let path_str = if let Some(arr) = paths.as_array() {
                             // Take first element if array
-                            arr.get(0)
+                            arr.first()
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".")
                                 .to_string()
@@ -75,7 +75,10 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                             ".".to_string()
                         };
                         obj.insert("path".to_string(), serde_json::json!(path_str));
-                        tracing::debug!("[Streaming] Remapped Grep: paths → path(\"{}\")", path_str);
+                        tracing::debug!(
+                            "[Streaming] Remapped Grep: paths → path(\"{}\")",
+                            path_str
+                        );
                     } else {
                         // No path provided at all - default to current directory
                         obj.insert("path".to_string(), serde_json::json!("."));
@@ -124,12 +127,12 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                         tracing::debug!("[Streaming] Remapped Glob: query → pattern");
                     }
                 }
-                
+
                 // [CRITICAL FIX] Claude Code uses "path" (string), NOT "paths" (array)!
                 if !obj.contains_key("path") {
                     if let Some(paths) = obj.remove("paths") {
                         let path_str = if let Some(arr) = paths.as_array() {
-                            arr.get(0)
+                            arr.first()
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".")
                                 .to_string()
@@ -139,7 +142,10 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                             ".".to_string()
                         };
                         obj.insert("path".to_string(), serde_json::json!(path_str));
-                        tracing::debug!("[Streaming] Remapped Glob: paths → path(\"{}\")", path_str);
+                        tracing::debug!(
+                            "[Streaming] Remapped Glob: paths → path(\"{}\")",
+                            path_str
+                        );
                     } else {
                         obj.insert("path".to_string(), serde_json::json!("."));
                         tracing::debug!("[Streaming] Remapped Glob: default path → \".\"");
@@ -156,14 +162,18 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                 }
             }
             "ls" => {
-                 // LS tool: ensure "path" parameter exists
-                 if !obj.contains_key("path") {
-                     obj.insert("path".to_string(), json!("."));
-                     tracing::debug!("[Streaming] Remapped LS: default path → \".\"");
-                 }
+                // LS tool: ensure "path" parameter exists
+                if !obj.contains_key("path") {
+                    obj.insert("path".to_string(), json!("."));
+                    tracing::debug!("[Streaming] Remapped LS: default path → \".\"");
+                }
             }
             other => {
-                 tracing::debug!("[Streaming] Unmapped tool call: {} (args: {:?})", other, obj.keys());
+                tracing::debug!(
+                    "[Streaming] Unmapped tool call: {} (args: {:?})",
+                    other,
+                    obj.keys()
+                );
             }
         }
     }
@@ -203,6 +213,12 @@ impl SignatureManager {
     }
 }
 
+impl Default for SignatureManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 流式状态机
 pub struct StreamingState {
     block_type: BlockType,
@@ -214,22 +230,17 @@ pub struct StreamingState {
     trailing_signature: Option<String>,
     pub web_search_query: Option<String>,
     pub grounding_chunks: Option<Vec<serde_json::Value>>,
-    // [IMPROVED] Error recovery 状态追踪 (prepared for future use)
+    // [IMPROVED] Error recovery 状态追踪 (reserved for future error recovery features)
     #[allow(dead_code)]
     parse_error_count: usize,
     #[allow(dead_code)]
     last_valid_state: Option<BlockType>,
     // [NEW] Model tracking for signature cache
     pub model_name: Option<String>,
-    // [NEW v3.3.17] Session ID for session-based signature caching
-    pub session_id: Option<String>,
-    // [NEW] Flag for context usage scaling
+    // Story-027-01: Aggressive Context Scaling
     pub scaling_enabled: bool,
-    // [NEW] Context limit for smart threshold recovery (default to 1M)
-    pub context_limit: u32,
-    // [NEW] MCP XML Bridge 缓冲区
-    pub mcp_xml_buffer: String,
-    pub in_mcp_xml: bool,
+    // Story-027-02: Session Signature Caching
+    pub session_id: Option<String>,
 }
 
 impl StreamingState {
@@ -248,11 +259,8 @@ impl StreamingState {
             parse_error_count: 0,
             last_valid_state: None,
             model_name: None,
-            session_id: None,
             scaling_enabled: false,
-            context_limit: 1_048_576, // Default to 1M
-            mcp_xml_buffer: String::new(),
-            in_mcp_xml: false,
+            session_id: None,
         }
     }
 
@@ -280,7 +288,7 @@ impl StreamingState {
         let mut message = json!({
             "id": raw_json.get("responseId")
                 .and_then(|v| v.as_str())
-                .unwrap_or_else(|| "msg_unknown"),
+                .unwrap_or("msg_unknown"),
             "type": "message",
             "role": "assistant",
             "content": [],
@@ -420,7 +428,7 @@ impl StreamingState {
         // 处理 grounding(web search) -> 转换为 Markdown 文本块
         if self.web_search_query.is_some() || self.grounding_chunks.is_some() {
             let mut grounding_text = String::new();
-            
+
             // 1. 处理搜索词
             if let Some(query) = &self.web_search_query {
                 if !query.is_empty() {
@@ -434,12 +442,15 @@ impl StreamingState {
                 let mut links = Vec::new();
                 for (i, chunk) in chunks.iter().enumerate() {
                     if let Some(web) = chunk.get("web") {
-                        let title = web.get("title").and_then(|v| v.as_str()).unwrap_or("网页来源");
+                        let title = web
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("网页来源");
                         let uri = web.get("uri").and_then(|v| v.as_str()).unwrap_or("#");
                         links.push(format!("[{}] [{}]({})", i + 1, title, uri));
                     }
                 }
-                
+
                 if !links.is_empty() {
                     grounding_text.push_str("\n\n**🌐 来源引文：**\n");
                     grounding_text.push_str(&links.join("\n"));
@@ -448,13 +459,19 @@ impl StreamingState {
 
             if !grounding_text.is_empty() {
                 // 发送一个新的 text 块
-                chunks.push(self.emit("content_block_start", json!({
-                    "type": "content_block_start",
-                    "index": self.block_index,
-                    "content_block": { "type": "text", "text": "" }
-                })));
+                chunks.push(self.emit(
+                    "content_block_start",
+                    json!({
+                        "type": "content_block_start",
+                        "index": self.block_index,
+                        "content_block": { "type": "text", "text": "" }
+                    }),
+                ));
                 chunks.push(self.emit_delta("text_delta", json!({ "text": grounding_text })));
-                chunks.push(self.emit("content_block_stop", json!({ "type": "content_block_stop", "index": self.block_index })));
+                chunks.push(self.emit(
+                    "content_block_stop",
+                    json!({ "type": "content_block_stop", "index": self.block_index }),
+                ));
                 self.block_index += 1;
             }
         }
@@ -468,15 +485,16 @@ impl StreamingState {
             "end_turn"
         };
 
-        let usage = usage_metadata
-            .map(|u| to_claude_usage(u, self.scaling_enabled, self.context_limit))
-            .unwrap_or(Usage {
+        let usage = usage_metadata.map_or(
+            Usage {
                 input_tokens: 0,
                 output_tokens: 0,
                 cache_read_input_tokens: None,
                 cache_creation_input_tokens: None,
                 server_tool_use: None,
-            });
+            },
+            |u| to_claude_usage(u, self.scaling_enabled),
+        );
 
         chunks.push(self.emit(
             "message_delta",
@@ -533,7 +551,7 @@ impl StreamingState {
     /// 1. 安全关闭当前 block
     /// 2. 递增错误计数器
     /// 3. 在 debug 模式下输出错误信息
-    #[allow(dead_code)] // Prepared for future error recovery implementation
+    #[allow(dead_code)]
     pub fn handle_parse_error(&mut self, raw_data: &str) -> Vec<Bytes> {
         let mut chunks = Vec::new();
 
@@ -563,24 +581,19 @@ impl StreamingState {
         }
 
         // 错误率过高时发出警告并尝试发送错误信号
-        if self.parse_error_count > 3 {  // 降低阈值,更早通知用户
+        if self.parse_error_count > 5 {
             tracing::error!(
                 "[SSE-Parser] High error rate detected ({} errors). Stream may be corrupted.",
                 self.parse_error_count
             );
-            
+
             // [FIX] Explicitly signal error to client to prevent UI freeze
-            // Using "network_error" type to suggest network/proxy issues
+            // Using "overloaded_error" type to suggest retry
             chunks.push(self.emit("error", json!({
                 "type": "error",
                 "error": {
-                    "type": "network_error",
-                    "message": "网络连接不稳定,请检查您的网络或代理设置。",
-                    "code": "stream_decode_error",
-                    "details": {
-                        "error_count": self.parse_error_count,
-                        "suggestion": "请尝试: 1) 检查网络连接 2) 更换代理节点 3) 稍后重试"
-                    }
+                    "type": "overloaded_error",
+                    "message": "Stream connection unstable (too many parse errors). Please retry."
                 }
             })));
         }
@@ -602,6 +615,12 @@ impl StreamingState {
     }
 }
 
+impl Default for StreamingState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Part 处理器
 pub struct PartProcessor<'a> {
     state: &'a mut StreamingState,
@@ -615,23 +634,7 @@ impl<'a> PartProcessor<'a> {
     /// 处理单个 part
     pub fn process(&mut self, part: &GeminiPart) -> Vec<Bytes> {
         let mut chunks = Vec::new();
-        // [FIX #545] Decode Base64 signature if present (Gemini sends Base64, Claude expects Raw)
-        let signature = part.thought_signature.as_ref().map(|sig| {
-             // Try to decode as base64
-             use base64::Engine;
-             match base64::engine::general_purpose::STANDARD.decode(sig) {
-                 Ok(decoded_bytes) => {
-                     match String::from_utf8(decoded_bytes) {
-                         Ok(decoded_str) => {
-                             tracing::debug!("[Streaming] Decoded base64 signature (len {} -> {})", sig.len(), decoded_str.len());
-                             decoded_str
-                         },
-                         Err(_) => sig.clone() // Not valid UTF-8, keep as is
-                     }
-                 },
-                 Err(_) => sig.clone() // Not base64, keep as is
-             }
-        });
+        let signature = part.thought_signature.clone();
 
         // 1. FunctionCall 处理
         if let Some(fc) = &part.function_call {
@@ -734,19 +737,9 @@ impl<'a> PartProcessor<'a> {
         if let Some(ref sig) = signature {
             // 1. Cache family if we know the model
             if let Some(model) = &self.state.model_name {
-                 SignatureCache::global().cache_thinking_family(sig.clone(), model.clone());
+                SignatureCache::global().cache_thinking_family(sig.clone(), model.clone());
             }
-            
-            // 2. [NEW v3.3.17] Cache to session-based storage for tool loop recovery
-            if let Some(session_id) = &self.state.session_id {
-                SignatureCache::global().cache_session_signature(session_id, sig.clone());
-                tracing::debug!(
-                    "[Claude-SSE] Cached signature to session {} (length: {})",
-                    session_id,
-                    sig.len()
-                );
-            }
-            
+
             tracing::debug!(
                 "[Claude-SSE] Captured thought_signature from thinking block (length: {})",
                 sig.len()
@@ -796,7 +789,7 @@ impl<'a> PartProcessor<'a> {
         }
 
         // 非空 text 带签名 - 立即处理
-        if signature.is_some() {
+        if let Some(sig) = signature {
             // 2. 开始新 text 块并发送内容
             chunks.extend(
                 self.state
@@ -818,10 +811,10 @@ impl<'a> PartProcessor<'a> {
                 self.state
                     .emit_delta("thinking_delta", json!({ "thinking": "" })),
             );
-            chunks.push(self.state.emit_delta(
-                "signature_delta",
-                json!({ "signature": signature.unwrap() }),
-            ));
+            chunks.push(
+                self.state
+                    .emit_delta("signature_delta", json!({ "signature": sig })),
+            );
             chunks.extend(self.state.end_block());
 
             return chunks;
@@ -929,16 +922,11 @@ impl<'a> PartProcessor<'a> {
 
         if let Some(ref sig) = signature {
             tool_use["signature"] = json!(sig);
-            
+
             // 2. Cache tool signature (Layer 1 recovery)
             SignatureCache::global().cache_tool_signature(&tool_id, sig.clone());
-            
-            // 3. [NEW v3.3.17] Cache to session-based storage
-            if let Some(session_id) = &self.state.session_id {
-                SignatureCache::global().cache_session_signature(session_id, sig.clone());
-            }
-            
-             tracing::debug!(
+
+            tracing::debug!(
                 "[Claude-SSE] Captured thought_signature for function call (length: {})",
                 sig.len()
             );

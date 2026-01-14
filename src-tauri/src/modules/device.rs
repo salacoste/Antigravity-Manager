@@ -156,7 +156,7 @@ pub fn write_profile(storage_path: &Path, profile: &DeviceProfile) -> Result<(),
         serde_json::from_str(&content).map_err(|e| format!("解析 storage.json 失败: {}", e))?;
 
     // 确保 telemetry 是对象
-    if !json.get("telemetry").map_or(false, |v| v.is_object()) {
+    if !json.get("telemetry").is_some_and(|v| v.is_object()) {
         if json.as_object_mut().is_some() {
             json["telemetry"] = serde_json::json!({});
         } else {
@@ -250,8 +250,10 @@ pub fn sync_service_machine_id_from_storage(storage_path: &Path) -> Result<(), S
     if !storage_path.exists() {
         return Err("storage.json 不存在，无法同步 serviceMachineId".to_string());
     }
-    let content = fs::read_to_string(storage_path).map_err(|e| format!("读取 storage.json 失败: {}", e))?;
-    let mut json: Value = serde_json::from_str(&content).map_err(|e| format!("解析 storage.json 失败: {}", e))?;
+    let content =
+        fs::read_to_string(storage_path).map_err(|e| format!("读取 storage.json 失败: {}", e))?;
+    let mut json: Value =
+        serde_json::from_str(&content).map_err(|e| format!("解析 storage.json 失败: {}", e))?;
 
     let service_id = json
         .get("storage.serviceMachineId")
@@ -277,13 +279,17 @@ pub fn sync_service_machine_id_from_storage(storage_path: &Path) -> Result<(), S
         .is_none()
     {
         if let Some(map) = json.as_object_mut() {
-            map.insert("storage.serviceMachineId".to_string(), Value::String(service_id.clone()));
+            map.insert(
+                "storage.serviceMachineId".to_string(),
+                Value::String(service_id.clone()),
+            );
             dirty = true;
         }
     }
 
     if dirty {
-        let updated = serde_json::to_string_pretty(&json).map_err(|e| format!("序列化 storage.json 失败: {}", e))?;
+        let updated = serde_json::to_string_pretty(&json)
+            .map_err(|e| format!("序列化 storage.json 失败: {}", e))?;
         fs::write(storage_path, updated).map_err(|e| format!("写入 storage.json 失败: {}", e))?;
         logger::log_info("已补充 storage.serviceMachineId 到 storage.json");
     }

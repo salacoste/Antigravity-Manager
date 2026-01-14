@@ -31,6 +31,9 @@ import { showToast } from '../components/common/ToastContainer';
 import { cn } from '../utils/cn';
 import { useProxyModels } from '../hooks/useProxyModels';
 import GroupedSelect, { SelectOption } from '../components/common/GroupedSelect';
+import ConfigurationProfiles from '../components/proxy/ConfigurationProfiles';
+import { CacheMetricsCard } from '../components/proxy/CacheMetricsCard';
+import { TopSignaturesTable } from '../components/proxy/TopSignaturesTable';
 
 interface ProxyStatus {
     running: boolean;
@@ -1297,6 +1300,41 @@ print(response.text)`;
                         </div>
                     )
                 }
+
+                {/* Configuration Profiles Section */}
+                {appConfig && (
+                    <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 p-5">
+                        <ConfigurationProfiles
+                            currentModel={appConfig.proxy.custom_mapping?.['gemini-3-pro-high'] || 'gemini-3-pro-high'}
+                            currentThinking={{ enabled: false }}
+                            currentMaxTokens={32000}
+                            currentTemperature={0.7}
+                            onProfileSelect={(profile) => {
+                                console.log('[ConfigurationProfiles] Selected profile:', profile);
+                                showToast(t('profiles.profile_applied', { name: profile.name }), 'success');
+                            }}
+                        />
+                    </div>
+                )}
+
+                {/* Cache Performance Section */}
+                {appConfig && status.running && (
+                    <CollapsibleCard
+                        title="Cache Performance"
+                        icon={<Activity size={18} />}
+                        defaultExpanded={true}
+                    >
+                        <CacheMetricsCard />
+
+                        <div className="divider">Top Cached Signatures</div>
+
+                        <TopSignaturesTable />
+
+                        <div className="mt-4 text-sm text-gray-500">
+                            Cache metrics update every 5 seconds. Signature-based caching saves API costs by reusing responses for identical requests.
+                        </div>
+                    </CollapsibleCard>
+                )}
 
                 {/* 模型路由中心 */}
                 {
