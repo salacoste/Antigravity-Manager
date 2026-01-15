@@ -274,7 +274,7 @@ impl AxumServer {
             provider_rr: provider_rr.clone(),
             zai_vision_mcp: zai_vision_mcp_state,
             monitor: monitor.clone(),
-            experimental: experimental_state,
+            experimental: experimental_state.clone(),
             // Story-007-02: Initialize safety_threshold from environment variable
             // GEMINI_IMAGE_SAFETY_THRESHOLD can be set to OFF|LOW|MEDIUM|HIGH
             safety_threshold: Arc::new(RwLock::new(
@@ -301,6 +301,8 @@ impl AxumServer {
         use crate::proxy::handlers;
         // 构建路由
         let app = Router::new()
+            // Account Management (compatible with alternative proxy)
+            .route("/account-limits", get(handlers::accounts::handle_account_limits))
             // OpenAI Protocol
             .route("/v1/models", get(handlers::openai::handle_list_models))
             .route(
@@ -436,6 +438,9 @@ impl AxumServer {
         // Epic-008 Story-012-02: Start periodic pattern persistence task
         Self::start_pattern_persistence_task(budget_optimizer);
 
+        // 🆕 [EPIC-028] Start periodic model rate limit cleanup task
+        Self::start_model_rate_limit_cleanup_task(token_manager.clone());
+
         Ok((server_instance, handle))
     }
 
@@ -488,6 +493,47 @@ impl AxumServer {
                     "[Epic-008] ✓ Persisted {} budget patterns to database",
                     saved_count
                 );
+            }
+        });
+    }
+
+    /// 🆕 [EPIC-028] Background task for cleaning up expired model-specific rate limits
+    ///
+    /// Cleans up expired model-specific rate limits for all accounts every 5 minutes.
+    /// This prevents unbounded memory growth in the per-account DashMap.
+    fn start_model_rate_limit_cleanup_task(token_manager: Arc<TokenManager>) {
+        use std::time::Duration;
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 минут
+
+            loop {
+                interval.tick().await;
+
+                // Get all account IDs from TokenManager
+                let account_ids: Vec<String> = token_manager.get_all_account_ids();
+
+                if account_ids.is_empty() {
+                    tracing::debug!("[EPIC-028] No accounts to cleanup (empty TokenManager)");
+                    continue;
+                }
+
+                // Clean up expired model limits for each account
+                let mut total_cleaned = 0;
+                for account_id in &account_ids {
+                    let cleaned = token_manager.cleanup_expired_model_limits(account_id);
+                    total_cleaned += cleaned;
+                }
+
+                if total_cleaned > 0 {
+                    tracing::info!(
+                        "[EPIC-028] ✅ Cleaned up {} expired model-specific rate limits across {} accounts",
+                        total_cleaned,
+                        account_ids.len()
+                    );
+                } else {
+                    tracing::debug!("[EPIC-028] No expired model rate limits to clean");
+                }
             }
         });
     }

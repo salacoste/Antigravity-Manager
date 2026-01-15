@@ -122,7 +122,7 @@ fn compact_saved_output_notice(text: &str, max_chars: usize) -> Option<String> {
     ));
 
     let result = compact_lines.join("\n");
-    Some(truncate_text_safe(&result, max_chars))
+    Some(truncate_text(&result, max_chars))
 }
 
 /// 压缩浏览器快照 (头+尾保留策略)
@@ -202,6 +202,7 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
 }
 
 /// 深度清理 HTML (移除 style, script, base64 等)
+#[allow(dead_code)]
 fn deep_clean_html(html: &str) -> String {
     let mut result = html.to_string();
     
