@@ -229,7 +229,6 @@ impl NonStreamingProcessor {
         scaling_enabled: bool,
     ) -> ClaudeResponse {
         self.scaling_enabled = scaling_enabled;
-        self.context_limit = context_limit;
         // 获取 parts
         let empty_parts = vec![];
         let parts = gemini_response
@@ -536,7 +535,7 @@ impl NonStreamingProcessor {
         let usage = gemini_response
             .usage_metadata
             .as_ref()
-            .map(|u| to_claude_usage(u, self.scaling_enabled, self.context_limit))
+            .map(|u| to_claude_usage(u, self.scaling_enabled))
             .unwrap_or(Usage {
                 input_tokens: 0,
                 output_tokens: 0,
@@ -572,7 +571,7 @@ pub fn transform_response(
     scaling_enabled: bool,
 ) -> Result<ClaudeResponse, String> {
     let mut processor = NonStreamingProcessor::new();
-    Ok(processor.process(gemini_response, scaling_enabled, context_limit))
+    Ok(processor.process(gemini_response, scaling_enabled))
 }
 
 #[cfg(test)]
