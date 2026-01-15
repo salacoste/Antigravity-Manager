@@ -4,9 +4,76 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::proxy::rate_limit::RateLimitTracker;
 use crate::proxy::sticky_config::StickySessionConfig;
+
+/// 🆕 [EPIC-028] Модель-специфичная информация о rate limit
+/// Отслеживает 429 ошибки для каждой модели отдельно
+#[derive(Debug, Clone)]
+pub struct ModelRateLimit {
+    /// Заблокирован ли этот модель для данного аккаунта
+    pub is_rate_limited: bool,
+    /// Время сброса в миллисекундах (ISO timestamp)
+    pub reset_time_ms: Option<u64>,
+    /// Базовое время сброса в миллисекундах
+    pub reset_ms: u64,
+    /// Время последней 429 ошибки
+    pub last_429_at: Option<Instant>,
+}
+
+impl ModelRateLimit {
+    /// Создаёт новую информацию о rate limit
+    pub fn new(reset_ms: u64) -> Self {
+        Self {
+            is_rate_limited: false,
+            reset_time_ms: None,
+            reset_ms,
+            last_429_at: None,
+        }
+    }
+
+    /// Проверяет, истёк ли rate limit
+    pub fn is_expired(&self) -> bool {
+        if let Some(reset_time) = self.reset_time_ms {
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            now_ms >= reset_time
+        } else {
+            true
+        }
+    }
+
+    /// Возвращает время ожидания в миллисекундах
+    pub fn get_wait_ms(&self) -> u64 {
+        if let Some(reset_time) = self.reset_time_ms {
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            reset_time.saturating_sub(now_ms)
+        } else {
+            0
+        }
+    }
+
+    /// Помечает модель как rate-limited
+    pub fn mark_limited(&mut self, reset_time_ms: u64) {
+        self.is_rate_limited = true;
+        self.reset_time_ms = Some(reset_time_ms);
+        self.last_429_at = Some(Instant::now());
+    }
+
+    /// Сбрасывает rate limit (вызывается при успехе)
+    pub fn mark_success(&mut self) {
+        self.is_rate_limited = false;
+        self.reset_time_ms = None;
+        self.last_429_at = None;
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ProxyToken {
@@ -20,6 +87,9 @@ pub struct ProxyToken {
     pub project_id: Option<String>,
     pub subscription_tier: Option<String>, // "FREE" | "PRO" | "ULTRA"
     pub remaining_quota: Option<i32>,      // [FIX #563] Remaining quota for priority sorting
+    /// 🆕 [EPIC-028] Модель-специфичные rate limits (model_id -> ModelRateLimit)
+    /// Позволяет отслеживать 429 ошибки для каждой модели отдельно
+    pub model_rate_limits: Arc<DashMap<String, ModelRateLimit>>,
 }
 
 pub struct TokenManager {
@@ -228,7 +298,8 @@ impl TokenManager {
             project_id,
             subscription_tier,
             remaining_quota,
-            protected_models,
+            // 🆕 [EPIC-028] Инициализируем пустой DashMap для модель-специфичных rate limits
+            model_rate_limits: Arc::new(DashMap::new()),
         }))
     }
 
@@ -431,7 +502,7 @@ impl TokenManager {
             );
 
             let _ = self
-                .restore_quota_protection(account_id, account_path)
+                .restore_quota_protection(account_id, account_path, "all")
                 .await;
             return false; // 已恢复，可以使用
         }
@@ -444,7 +515,7 @@ impl TokenManager {
         &self,
         account_id: &str,
         account_path: &PathBuf,
-        model_name: &str,
+        _model_name: &str,
     ) -> Result<(), String> {
         let mut content: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(account_path).map_err(|e| format!("读取文件失败: {}", e))?,
@@ -469,17 +540,19 @@ impl TokenManager {
     /// 参数 `quota_group` 用于区分 "claude" vs "gemini" 组
     /// 参数 `force_rotate` 为 true 时将忽略锁定，强制切换账号
     /// 参数 `session_id` 用于跨请求维持会话粘性
+    /// 🆕 参数 `model_id` 用于模型-специфичного rate limit checking (EPIC-028)
     pub async fn get_token(
         &self,
         quota_group: &str,
         force_rotate: bool,
         session_id: Option<&str>,
+        model_id: Option<&str>, // 🆕 [EPIC-028]
     ) -> Result<(String, String, String), String> {
         // 【优化 Issue #284】添加 5 秒超时，防止死锁
         let timeout_duration = std::time::Duration::from_secs(5);
         match tokio::time::timeout(
             timeout_duration,
-            self.get_token_internal(quota_group, force_rotate, session_id),
+            self.get_token_internal(quota_group, force_rotate, session_id, model_id),
         )
         .await
         {
@@ -490,12 +563,25 @@ impl TokenManager {
         }
     }
 
+    /// 🆕 [EPIC-028] Обратно-совместимая версия get_token без model_id
+    /// Для существующих вызовов, которые не передают model_id
+    pub async fn get_token_legacy(
+        &self,
+        quota_group: &str,
+        force_rotate: bool,
+        session_id: Option<&str>,
+    ) -> Result<(String, String, String), String> {
+        self.get_token(quota_group, force_rotate, session_id, None).await
+    }
+
     /// 内部实现：获取 Token 的核心逻辑
+    /// 🆕 [EPIC-028] Добавлен параметр `model_id` для модель-специфичного rate limit checking
     async fn get_token_internal(
         &self,
         quota_group: &str,
         force_rotate: bool,
         session_id: Option<&str>,
+        model_id: Option<&str>, // 🆕 [EPIC-028]
     ) -> Result<(String, String, String), String> {
         let mut tokens_snapshot: Vec<ProxyToken> =
             self.tokens.iter().map(|e| e.value().clone()).collect();
@@ -503,6 +589,21 @@ impl TokenManager {
         if total == 0 {
             return Err("Token pool is empty".to_string());
         }
+
+        // 🆕 [EPIC-028] Helper closure для проверки rate limit с учётом модели
+        let is_account_limited = |account_id: &str| -> bool {
+            // Сначала проверяем account-level rate limit
+            if self.is_rate_limited(account_id) {
+                return true;
+            }
+            // Затем проверяем model-specific rate limit (если указан model)
+            if let Some(model) = model_id {
+                if self.is_rate_limited_for_model_on_account(account_id, model) {
+                    return true;
+                }
+            }
+            false
+        };
 
         // ===== 【优化】根据订阅等级和剩余配额排序 =====
         // [FIX #563] 优先级: ULTRA > PRO > FREE, 同tier内优先高配额账号
@@ -602,8 +703,8 @@ impl TokenManager {
                         if let Some(found) =
                             tokens_snapshot.iter().find(|t| &t.account_id == account_id)
                         {
-                            // 【修复】检查限流状态，避免复用已被锁定的账号
-                            if !self.is_rate_limited(&found.email) {
+                            // 【修复 + EPIC-028】检查限流状态（включая модель-специфичные），避免复用已被锁定的账号
+                            if !is_account_limited(&found.account_id) {
                                 tracing::debug!(
                                     "60s Window: Force reusing last account: {}",
                                     found.email
@@ -629,14 +730,8 @@ impl TokenManager {
                             continue;
                         }
 
-                        // 【新增 #621】模型级限流检查
-                        if candidate.protected_models.contains(target_model) {
-                            tracing::debug!("Account {} is quota-protected for model {}, skipping", candidate.email, target_model);
-                            continue;
-                        }
-
-                        // 【新增】主动避开限流或 5xx 锁定的账号 (来自 PR #28 的高可用思路)
-                        if self.is_rate_limited(&candidate.account_id) {
+                        // 【新增 + EPIC-028】主动避开限流或 5xx 锁定的账号 (включая модель-специфичные limits)
+                        if is_account_limited(&candidate.account_id) {
                             continue;
                         }
 
@@ -670,13 +765,8 @@ impl TokenManager {
                         continue;
                     }
 
-                    // 【新增 #621】模型级限流检查
-                    if candidate.protected_models.contains(target_model) {
-                        continue;
-                    }
-
-                    // 【新增】主动避开限流或 5xx 锁定的账号
-                    if self.is_rate_limited(&candidate.account_id) {
+                    // 【新增 + EPIC-028】主动避开限流或 5xx 锁定的账号 (включая модель-специфичные limits)
+                    if is_account_limited(&candidate.account_id) {
                         continue;
                     }
 
@@ -715,7 +805,7 @@ impl TokenManager {
                             // 重新尝试选择账号
                             let retry_token = tokens_snapshot.iter().find(|t| {
                                 !attempted.contains(&t.account_id)
-                                    && !self.is_rate_limited(&t.account_id)
+                                    && !is_account_limited(&t.account_id) // 🆕 [EPIC-028]
                             });
 
                             if let Some(t) = retry_token {
@@ -1355,6 +1445,197 @@ impl TokenManager {
     /// 清除所有会话的粘性映射
     pub fn clear_all_sessions(&self) {
         self.session_accounts.clear();
+    }
+
+    // ===== 🆕 [EPIC-028] Модель-специфичные методы rate limit =====
+
+    /// Проверяет, заблокирован ли конкретный модель для аккаунта
+    ///
+    /// # Arguments
+    /// * `account_id` - ID аккаунта
+    /// * `model` - Идентификатор модели (например, "claude-sonnet-4-5-thinking")
+    ///
+    /// # Returns
+    /// `true` если модель заблокирована из-за rate limit, иначе `false`
+    pub fn is_rate_limited_for_model_on_account(
+        &self,
+        account_id: &str,
+        model: &str,
+    ) -> bool {
+        if let Some(token) = self.tokens.get(account_id) {
+            if let Some(limit) = token.model_rate_limits.get(model) {
+                // Проверяем и обновляем статус при необходимости
+                if limit.is_expired() {
+                    return false;
+                }
+                limit.is_rate_limited
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Помечает конкретный модель как rate-limited для аккаунта
+    ///
+    /// # Arguments
+    /// * `account_id` - ID аккаунта
+    /// * `model` - Идентификатор модели
+    /// * `reset_time_ms` - Время сброса в миллисекундах (Unix timestamp)
+    pub fn mark_model_rate_limited(
+        &self,
+        account_id: &str,
+        model: &str,
+        reset_time_ms: u64,
+    ) {
+        if let Some(token) = self.tokens.get_mut(account_id) {
+            let mut limit = token.model_rate_limits
+                .entry(model.to_string())
+                .or_insert_with(|| ModelRateLimit::new(reset_time_ms));
+            limit.mark_limited(reset_time_ms);
+
+            tracing::warn!(
+                "🔴 [Model-Rate-Limit] Account {} model {} rate-limited until {}",
+                account_id,
+                model,
+                reset_time_ms
+            );
+        }
+    }
+
+    /// Помечает конкретный модель как успешный (сбрасывает rate limit)
+    ///
+    /// Вызывается когда запрос с этим моделью прошёл успешно.
+    ///
+    /// # Arguments
+    /// * `account_id` - ID аккаунта
+    /// * `model` - Идентификатор модели
+    pub fn mark_model_success(&self, account_id: &str, model: &str) {
+        if let Some(token) = self.tokens.get_mut(account_id) {
+            if let Some(mut limit) = token.model_rate_limits.get_mut(model) {
+                limit.mark_success();
+                tracing::debug!(
+                    "✅ [Model-Rate-Limit] Account {} model {} rate limit reset (success)",
+                    account_id,
+                    model
+                );
+            }
+        }
+    }
+
+    /// Очищает истёкшие модель-специфичные rate limits для аккаунта
+    ///
+    /// # Arguments
+    /// * `account_id` - ID аккаунта
+    ///
+    /// # Returns
+    /// Количество очищенных записей
+    pub fn cleanup_expired_model_limits(&self, account_id: &str) -> usize {
+        if let Some(token) = self.tokens.get(account_id) {
+            let mut count = 0;
+            token.model_rate_limits.retain(|model, limit| {
+                if limit.is_expired() {
+                    tracing::debug!(
+                        "🧹 [Model-Rate-Limit] Cleaned up expired limit for account {} model {}",
+                        account_id,
+                        model
+                    );
+                    count += 1;
+                    false
+                } else {
+                    true
+                }
+            });
+            count
+        } else {
+            0
+        }
+    }
+
+    /// 🆕 [EPIC-028] Получить список всех account IDs
+    ///
+    /// Используется cleanup задачей для перебора всех аккаунтов.
+    pub fn get_all_account_ids(&self) -> Vec<String> {
+        self.tokens
+            .iter()
+            .map(|entry| entry.key().clone())
+            .collect()
+    }
+
+    /// Get all account information (for /account-limits endpoint)
+    /// Returns a vector of account JSON data with full account information
+    ///
+    /// First tries to load from individual account files in data_dir/accounts/,
+    /// then falls back to ~/.config/antigravity-proxy/accounts.json if available.
+    pub fn get_all_accounts_info(&self) -> Result<Vec<serde_json::Value>, String> {
+        let mut accounts = Vec::new();
+
+        // Try loading from individual account files first
+        let accounts_dir = self.data_dir.join("accounts");
+
+        if accounts_dir.exists() {
+            let entries = std::fs::read_dir(&accounts_dir)
+                .map_err(|e| format!("Failed to read accounts directory: {}", e))?;
+
+            for entry in entries {
+                let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+                let path = entry.path();
+
+                if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                    continue;
+                }
+
+                // Read account file
+                let content = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("Failed to read account file {:?}: {}", path, e))?;
+
+                let account: serde_json::Value = serde_json::from_str(&content)
+                    .map_err(|e| format!("Failed to parse account file {:?}: {}", path, e))?;
+
+                accounts.push(account);
+            }
+        }
+
+        // If no accounts found, try fallback to alternative proxy format
+        if accounts.is_empty() {
+            // Try to load from ~/.config/antigravity-proxy/accounts.json
+            if let Some(home_dir) = std::env::var_os("HOME") {
+                let fallback_path = std::path::PathBuf::from(home_dir)
+                    .join(".config")
+                    .join("antigravity-proxy")
+                    .join("accounts.json");
+
+                tracing::info!("Trying fallback path: {:?}", fallback_path);
+
+                if fallback_path.exists() {
+                    tracing::info!("Fallback path exists, loading accounts");
+                    if let Ok(content) = std::fs::read_to_string(&fallback_path) {
+                        tracing::info!("Fallback content loaded, parsing JSON");
+                        if let Ok(fallback_data) = serde_json::from_str::<serde_json::Value>(&content) {
+                            tracing::info!("Fallback JSON parsed successfully");
+                            if let Some(fallback_accounts) = fallback_data.get("accounts").and_then(|a| a.as_array()) {
+                                tracing::info!("Found {} accounts in fallback", fallback_accounts.len());
+                                for (idx, account) in fallback_accounts.iter().enumerate() {
+                                    tracing::info!("Account {} has quota: {}", idx, account.get("quota").is_some());
+                                    accounts.push(account.clone());
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    tracing::info!("Fallback path does not exist: {:?}", fallback_path);
+                }
+            }
+        }
+
+        if accounts.is_empty() {
+            return Err("No accounts found".to_string());
+        }
+
+        tracing::info!("Total accounts loaded: {}", accounts.len());
+
+        Ok(accounts)
     }
 }
 
