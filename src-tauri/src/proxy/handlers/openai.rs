@@ -135,8 +135,9 @@ pub async fn handle_chat_completions(
 
         // 4. 获取 Token (使用准确的 request_type)
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
+        // 🆕 [EPIC-028] Передаём model_id для модель-специфичного rate limit checking
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, attempt > 0, Some(&session_id), &config.final_model)
+            .get_token(&config.request_type, attempt > 0, Some(&session_id), Some(&mapped_model))
             .await
         {
             Ok(t) => t,
@@ -226,6 +227,9 @@ pub async fn handle_chat_completions(
 
                 // 判断客户端期望的格式
                 if client_wants_stream {
+                    // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
+                    token_manager.mark_model_success(&email, &mapped_model);
+
                     // 客户端本就要 Stream，直接返回 SSE
                     let body = Body::from_stream(openai_stream);
                     return Ok(Response::builder()
@@ -253,6 +257,10 @@ pub async fn handle_chat_completions(
                     match collect_openai_stream_to_json(sse_stream).await {
                         Ok(full_response) => {
                             info!("[OpenAI] ✓ Stream collected and converted to JSON");
+
+                            // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
+                            token_manager.mark_model_success(&email, &mapped_model);
+
                             return Ok((
                                 StatusCode::OK,
                                 [
@@ -330,6 +338,9 @@ pub async fn handle_chat_completions(
                 }
             }
 
+            // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
+            token_manager.mark_model_success(&email, &mapped_model);
+
             return Ok((
                 StatusCode::OK,
                 [
@@ -369,6 +380,31 @@ pub async fn handle_chat_completions(
                 status_code,
                 retry_after.as_deref(),
                 &error_text,
+            );
+
+            // 🆕 [EPIC-028] Помечаем модель как rate-limited для per-account отслеживания
+            let reset_ms = if let Some(ra) = retry_after.as_ref() {
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                if let Ok(secs) = ra.parse::<u64>() {
+                    now_ms + (secs * 1000)
+                } else {
+                    now_ms + 60000
+                }
+            } else {
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                now_ms + 60000
+            };
+
+            token_manager.mark_model_rate_limited(
+                &email,
+                &mapped_model,
+                reset_ms,
             );
 
             // 1. 优先尝试解析 RetryInfo (由 Google Cloud 直接下发)
@@ -747,9 +783,9 @@ pub async fn handle_completions(
             &tools_val,
         );
 
-        // 🆕 传递模型参数实现 model-aware rate limiting
+        // 🆕 [EPIC-028] 传递模型参数实现 model-aware rate limiting
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, false, None)
+            .get_token(&config.request_type, false, None, Some(&mapped_model))
             .await
         {
             Ok(t) => t,
@@ -1032,7 +1068,7 @@ pub async fn handle_images_generations(
 
     // 🆕 传递模型参数实现 model-aware rate limiting (image generation)
     let (access_token, project_id, email) =
-        match token_manager.get_token("image_gen", false, None).await {
+        match token_manager.get_token("image_gen", false, None, None).await {
             Ok(t) => t,
             Err(e) => {
                 return Err((
@@ -1496,7 +1532,7 @@ pub async fn handle_images_edits(
     // Fix: Proper get_token call with correct signature and unwrap (using image_gen quota)
     // 🆕 传递模型参数实现 model-aware rate limiting (image edit)
     let (access_token, project_id, email) =
-        match token_manager.get_token("image_gen", false, None).await {
+        match token_manager.get_token("image_gen", false, None, None).await {
             Ok(t) => t,
             Err(e) => {
                 return Err((
