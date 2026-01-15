@@ -721,8 +721,9 @@ pub async fn handle_messages(
         let session_id = Some(session_id_str.as_str());
 
         let force_rotate_token = attempt > 0;
+        // 🆕 [EPIC-028] Передаём model_id для модель-специфичного rate limit checking
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, force_rotate_token, session_id)
+            .get_token(&config.request_type, force_rotate_token, session_id, Some(&mapped_model))
             .await
         {
             Ok(t) => t,
@@ -944,6 +945,9 @@ pub async fn handle_messages(
 
                 // 判断客户端期望的格式
                 if client_wants_stream {
+                    // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
+                    token_manager.mark_model_success(&email, &request_with_mapped.model);
+
                     // 客户端本就要 Stream，直接返回 SSE
                     return Response::builder()
                         .status(StatusCode::OK)
@@ -994,6 +998,9 @@ pub async fn handle_messages(
                                     cache.put(cache_key, response_val);
                                 }
                             }
+
+                            // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
+                            token_manager.mark_model_success(&email, &request_with_mapped.model);
 
                             return Response::builder()
                                 .status(StatusCode::OK)
@@ -1055,7 +1062,7 @@ pub async fn handle_messages(
                     };
 
                 // 转换
-                let claude_response = match transform_response(&gemini_response, scaling_enabled, context_limit) {
+                let claude_response = match transform_response(&gemini_response, scaling_enabled) {
                     Ok(r) => r,
                     Err(e) => {
                         return (
@@ -1143,6 +1150,9 @@ pub async fn handle_messages(
                     }
                 }
 
+                // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
+                token_manager.mark_model_success(&email, &request_with_mapped.model);
+
                 return (
                     StatusCode::OK,
                     [
@@ -1192,6 +1202,33 @@ pub async fn handle_messages(
                     Some(&request_with_mapped.model),
                 )
                 .await;
+
+            // 🆕 [EPIC-028] Помечаем модель как rate-limited для per-account отслеживания
+            let reset_ms = if let Some(ra) = retry_after.as_ref() {
+                // Используем Retry-After header
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                if let Ok(secs) = ra.parse::<u64>() {
+                    now_ms + (secs * 1000)
+                } else {
+                    now_ms + 60000 // По умолчанию 60 секунд
+                }
+            } else {
+                // Пытаемся извлечь из error body или используем дефолт
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                now_ms + 60000 // По умолчанию 60 секунд
+            };
+
+            token_manager.mark_model_rate_limited(
+                &email,
+                &request_with_mapped.model,
+                reset_ms,
+            );
         }
 
         // 4. 处理 400 错误 (Thinking 签名失效)
