@@ -880,6 +880,8 @@ fn build_contents(
 ) -> Result<Value, String> {
     let mut contents = Vec::new();
     let mut last_thought_signature: Option<String> = None;
+    let mut previous_was_tool_result = false;
+    let mut last_user_task_text_normalized: Option<String> = None;
 
     let _msg_count = messages.len();
     for msg in messages.iter() {
@@ -1130,29 +1132,25 @@ fn build_contents(
                                 }
                             }
 
-                                parts.push(json!({
-                                    "functionResponse": {
-                                        "name": func_name,
-                                        "response": {"result": merged_content},
-                                        "id": tool_use_id
-                                    }
-                                }));
-                                
-                                // [FIX] Tool Result 也需要回填签名（如果上下文中有）
-                                if let Some(sig) = last_thought_signature.as_ref() {
-                                    // [FIX #545] Encode raw signature to Base64 for Gemini
-                                    use base64::Engine;
-                                    let encoded_sig = base64::engine::general_purpose::STANDARD.encode(sig);
-                                    if let Some(last_part) = parts.last_mut() {
-                                        last_part["thoughtSignature"] = json!(encoded_sig);
-                                    }
+                            parts.push(json!({
+                                "functionResponse": {
+                                    "name": func_name,
+                                    "response": {"result": merged_content},
+                                    "id": tool_use_id
                                 }
-                            });
+                            }));
 
-                            // [修复] Tool Result 也需要回填签名（如果上下文中有）
+                            // [FIX] Tool Result 也需要回填签名（如果上下文中有）
                             if let Some(sig) = last_thought_signature.as_ref() {
-                                part["thoughtSignature"] = json!(sig);
+                                // [FIX #545] Encode raw signature to Base64 for Gemini
+                                use base64::Engine;
+                                let encoded_sig = base64::engine::general_purpose::STANDARD.encode(sig);
+                                if let Some(last_part) = parts.last_mut() {
+                                    last_part["thoughtSignature"] = json!(encoded_sig);
+                                }
                             }
+                            previous_was_tool_result = true;
+                        }
                         // ContentBlock::RedactedThinking handled above at line 583
                         ContentBlock::ServerToolUse { .. }
                         | ContentBlock::WebSearchToolResult { .. } => {

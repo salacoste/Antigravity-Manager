@@ -38,7 +38,6 @@ pub fn create_claude_sse_stream(
         let mut state = StreamingState::new();
         state.session_id = session_id; // Set session ID for signature caching
         state.scaling_enabled = scaling_enabled; // Set scaling enabled flag
-        state.context_limit = context_limit;
         let mut buffer = BytesMut::new();
 
         loop {
