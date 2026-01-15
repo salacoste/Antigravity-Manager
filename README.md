@@ -1,16 +1,14 @@
-# Antigravity Tools 🚀 Enhanced Edition
-> 🌟 **优化增强版** - 基于原版深度改进的专业 AI 账号管理与协议反代系统 (v3.3.20)
+# Antigravity Tools 🚀
+> 专业的 AI 账号管理与协议反代系统 (v3.3.32)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
-  <h3>🔥 您的下一代高性能 AI 调度网关</h3>
-  <p>不仅仅是账号管理，更是打破 API 调用壁垒的<strong>终极优化解决方案</strong>。</p>
-
-  <p><strong>⚡ 增强特性</strong>：智能模型路由 | Thinking Mode 优化 | 高级账号轮换 | 企业级稳定性</p>
+  <h3>您的个人高性能 AI 调度网关</h3>
+  <p>不仅仅是账号管理，更是打破 API 调用壁垒的终极解决方案。</p>
   
   <p>
-    <a href="https://github.com/salacoste/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.20%20Enhanced-blue?style=flat-square" alt="Version">
+    <a href="https://github.com/lbjlaq/Antigravity-Manager">
+      <img src="https://img.shields.io/badge/Version-3.3.32-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -34,46 +32,24 @@
 
 ---
 
-## 🎯 为什么选择增强版？
-
-**Antigravity Tools Enhanced Edition** 是基于 [原版项目](https://github.com/lbjlaq/Antigravity-Manager) 的深度优化分支，专注于提供**更智能、更稳定、更高效**的 AI 代理体验。
-
-### ✨ 独家增强特性
-
-#### 🧠 智能模型路由系统
-- **Thinking Mode 完整支持**: 为所有高级模型（Haiku/Gemini 3 Pro）自动启用思维链模式，确保最佳推理质量
-- **自适应模型映射**: 智能将 Haiku 系列路由至 `gemini-3-pro-high-thinking`，平衡性能与成本
-- **Gemini 3 全家族优化**: 所有 Gemini 3 变体统一映射至高性能 thinking 版本
-
-#### 🔄 高级账号轮换机制
-- **配额耗尽智能重试**: 遇到 `QUOTA_EXHAUSTED` 时自动切换下一账号，而非立即失败
-- **动态限流清除**: 手动刷新配额后立即解除代理层面的限流锁定
-- **多账号负载均衡**: 支持最多 11 个账号并发轮换，确保服务连续性
-
-#### ⚡ 企业级稳定性
-- **零停机部署**: 生产就绪的构建配置与优化
-- **增强错误恢复**: 针对 Google API 签名变更的自适应处理
-- **完整日志追踪**: 路由决策、账号切换全程可观测
-
-#### 🎛️ 优化的默认配置
-- **开箱即用的模型优先级**: 预配置最优路由策略
-- **性价比平衡**: Flash 模型用于轻量任务，Pro High 用于复杂推理
-- **用户友好的错误提示**: 中文/英文双语错误信息
-
----
-
-### 📦 原版功能保留
-
 **Antigravity Tools** 是一个专为开发者和 AI 爱好者设计的全功能桌面应用。它将多账号管理、协议转换和智能请求调度完美结合，为您提供一个稳定、极速且成本低廉的 **本地 AI 中转站**。
 
 通过本应用，您可以将常见的 Web 端 Session (Google/Anthropic) 转化为标准化的 API 接口，彻底消除不同厂商间的协议鸿沟。
-
-**增强版在保留所有原版功能的基础上**，进一步提升了系统的智能化和可靠性。
 
 ## 💖 赞助商 (Sponsors)
 
 | <img src="docs/images/packycode_logo.png" width="200" alt="PackyCode Logo"> | 感谢 **PackyCode** 对本项目的赞助！PackyCode 是一家可靠高效的 API 中转服务商，提供 Claude Code、Codex、Gemini 等多种服务的中转。PackyCode 为本项目的用户提供了特别优惠：使用[此链接](https://www.packyapi.com/register?aff=Ctrler)注册，并在充值时输入 **“Ctrler”** 优惠码即可享受 **九折优惠**。 |
 | :--- | :--- |
+
+### ☕ 支持项目 (Support)
+
+如果您觉得本项目对您有所帮助，欢迎打赏作者！
+
+<a href="https://www.buymeacoffee.com/Ctrler" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="请我喝杯咖啡" style="height: 60px !important; width: 217px !important;"></a>
+
+| 支付宝 (Alipay) | 微信支付 (WeChat) | Buy Me a Coffee |
+| :---: | :---: | :---: |
+| ![Alipay](./docs/images/donate_alipay.png) | ![WeChat](./docs/images/donate_wechat.png) | ![Coffee](./docs/images/donate_coffee.png) |
 
 ## 🌟 深度功能解析 (Detailed Features)
 
@@ -106,18 +82,18 @@
 
 ## 📸 界面导览 (GUI Overview)
 
-![仪表盘 - 全局配额监控与一键切换](docs/images/dashboard-light.png)
-![账号列表 - 高密度配额展示与 403 智能标注](docs/images/accounts-light.png)
-![关于页面 - 关于 Antigravity Tools](docs/images/about-dark.png)
-![API 反代 - 服务控制](docs/images/v3/proxy-settings.png)
-![系统设置 - 通用配置](docs/images/settings-dark.png)
+| | |
+| :---: | :---: |
+| ![仪表盘 - 全局配额监控与一键切换](docs/images/dashboard-light.png) <br> 仪表盘 | ![账号列表 - 高密度配额展示与 403 智能标注](docs/images/accounts-light.png) <br> 账号列表 |
+| ![关于页面 - 关于 Antigravity Tools](docs/images/about-dark.png) <br> 关于页面 | ![API 反代 - 服务控制](docs/images/v3/proxy-settings.png) <br> API 反代 |
+| ![系统设置 - 通用配置](docs/images/settings-dark.png) <br> 系统设置 | |
 
 ### 💡 使用案例 (Usage Examples)
 
-![Claude Code 联网搜索 - 结构化来源与引文显示](docs/images/usage/claude-code-search.png)
-![Cherry Studio 深度集成 - 原生回显搜索引文与来源链接](docs/images/usage/cherry-studio-citations.png)
-![Imagen 3 高级绘图 - 完美还原 Prompt 意境与细节](docs/images/usage/image-gen-nebula.png)
-![Kilo Code 接入 - 多账号极速轮换与模型穿透](docs/images/usage/kilo-code-integration.png)
+| | |
+| :---: | :---: |
+| ![Claude Code 联网搜索 - 结构化来源与引文显示](docs/images/usage/claude-code-search.png) <br> Claude Code 联网搜索 | ![Cherry Studio 深度集成 - 原生回显搜索引文与来源链接](docs/images/usage/cherry-studio-citations.png) <br> Cherry Studio 深度集成 |
+| ![Imagen 3 高级绘图 - 完美还原 Prompt 意境与细节](docs/images/usage/image-gen-nebula.png) <br> Imagen 3 高级绘图 | ![Kilo Code 接入 - 多账号极速轮换与模型穿透](docs/images/usage/kilo-code-integration.png) <br> Kilo Code 接入 |
 
 ## 🏗️ 技术架构 (Architecture)
 
@@ -139,21 +115,34 @@ graph TD
 如果您已安装 [Homebrew](https://brew.sh/)，可以通过以下命令快速安装：
 
 ```bash
-# 1. 订阅增强版仓库的 Tap
-brew tap salacoste/antigravity-manager https://github.com/salacoste/Antigravity-Manager
+# 1. 订阅本仓库的 Tap
+brew tap lbjlaq/antigravity-manager https://github.com/lbjlaq/Antigravity-Manager
 
 # 2. 安装应用
 brew install --cask antigravity-tools
 ```
-> **提示**:
+> **提示**: 
 > - **macOS**: 如果遇到权限问题，建议添加 `--no-quarantine` 参数。
 > - **Linux**: 安装后会自动将 AppImage 添加到二进制路径并配置可执行权限。
 
 ### 选项 B: 手动下载
-前往 [GitHub Releases](https://github.com/salacoste/Antigravity-Manager/releases) 下载对应系统的包：
+前往 [GitHub Releases](https://github.com/lbjlaq/Antigravity-Manager/releases) 下载对应系统的包：
 *   **macOS**: `.dmg` (支持 Apple Silicon & Intel)
 *   **Windows**: `.msi` 或 便携版 `.zip`
 *   **Linux**: `.deb` 或 `AppImage`
+
+### 选项 C: 远程服务器部署 (Headless Linux)
+如果您需要在无界面的远程 Linux 服务器（如 Ubuntu/Debian/CentOS）上运行，可以使用我们提供的 **Headless (Xvfb)** 一键部署方案：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lbjlaq/Antigravity-Manager/main/deploy/headless-xvfb/install.sh | sudo bash
+```
+> **注意**: 该方案通过 Xvfb 模拟图形环境，资源占用（内存/CPU）会高于纯后端应用。
+> **详情见**: [服务器部署指南 (deploy/headless-xvfb)](./deploy/headless-xvfb/README.md)
+
+---
+
+Copyright © 2024-2026 [lbjlaq](https://github.com/lbjlaq)
 
 ### 🛠️ 常见问题排查 (Troubleshooting)
 
@@ -216,6 +205,309 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.32 (2026-01-15)**:
+        - **核心调度与稳定性优化 (Fix Issue #630, #631 - 核心致谢 @lbjlaq PR #640)**:
+            - **配额漏洞与绕过修复**: 解决了在高并发或特定重试场景下，配额保护机制可能被绕过的潜在漏洞。
+            - **限流 Key 匹配优化**: 增强了 `TokenManager` 中限流记录的匹配精准度，解决了在多实例或复杂网络环境下可能出现的速率限制判定不一致问题。
+            - **账号禁用逻辑加固**: 修复了手动禁用账号在某些缓存生命周期内未立即从调度池中彻底剥离的问题，确保“禁用即生效”。
+            - **账号状态重置机制**: 完善了账号失败计数器在成功请求后的重置策略，避免账号因历史波动被长期误锁定。
+    *   **v3.3.31 (2026-01-14)**:
+        - **配额保护失效修复 (Fix Issue #631)**:
+            - **内存状态同步**: 修复了加载账号触发配额保护时，内存状态未立即同步的问题，确保保护机制即时生效。
+            - **全场景覆盖**: 在“粘性会话 (Sticky Session)”和“60秒锁定 (60s Window Lock)”逻辑中补充了配额保护检查，防止受限账号被错误复用。
+            - **代码优化**: 修复了 `token_manager.rs` 中的部分编译警告。
+        - **Claude 工具调用重复报错修复 (Fix Issue #632)**:
+            - **弹性修复优化**: 改进了 `Elastic-Recovery` 逻辑，在注入占位结果前增加全量消息 ID 预扫描，彻底避免了 `Found multiple tool_result blocks with id` 错误。
+            - **Anthropic 协议对齐**: 确保生成的请求包严格符合 Anthropic 对工具调用 ID 唯一性的要求。
+    *   **v3.3.30 (2026-01-14)**:
+        - **模型级配额保护 (Issue #621)**:
+            - **隔离优化**: 解决了因单个模型配额耗尽而禁用整个账号的问题。现在配额保护仅针对受限的具体模型，账号仍可处理其他模型的请求。
+            - **自动迁移**: 新系统会自动将旧版因配额保护被全局禁用的账号恢复，并平滑转为模型级限制。
+            - **全协议支持项目**: 已同步更新 Claude, OpenAI (Chat/DALL-E), Gemini, Audio 处理器的路由逻辑。
+        - **Gemini 参数幻觉修复 (PR #622)**:
+            - **参数纠错**: 修复了 Gemini 模型将 `pattern` 参数错误放置在 `description` 或 `query` 字段的问题，增加了自动重映射逻辑。
+            - **布尔值强制转换**: 增加了对 `yes`/`no`、`-n` 等非标准布尔值的自动转换支持，解决了 `lineNumbers` 等参数因类型错误导致的调用失败。
+            - **影响范围**: 显著提升了 Gemini 模型在 Claude Code CLI 及其他工具调用场景下的稳定性和兼容性。
+        - **代码清理与警告修复 (PR #628)**:
+            - **消除编译器警告**: 修复了多个未使用的导入和变量警告，移除了冗余代码，保持代码库整洁。
+            - **跨平台兼容性**: 针对 Windows/macOS/Linux 不同平台的代码路径进行了宏标记优化。
+        - **API 密钥自定义编辑功能 (Issue #627)**:
+            - **自定义密钥支持**: API 反代页面的"API 密钥"配置项现在支持直接编辑,用户可以输入自定义密钥,适合多实例部署场景。
+            - **保留自动生成**: 保留了原有的"重新生成"功能,用户可以选择自动生成或手动输入。
+            - **格式验证**: 添加了密钥格式验证(必须以 `sk-` 开头,长度至少 10 个字符),防止无效输入。
+            - **多语言支持**: 为所有 6 种支持的语言(简体中文、英文、繁体中文、日语、土耳其语、越南语)添加了完整的国际化翻译。
+    *   **v3.3.29 (2026-01-14)**:
+        - **OpenAI 流式响应 Function Call 支持修复 (Fix Issue #602, #614)**:
+            - **问题背景**: OpenAI 接口的流式响应 (`stream: true`) 中缺少 Function Call 处理逻辑,导致客户端无法接收到工具调用信息。
+            - **根本原因**: `create_openai_sse_stream` 函数只处理了文本内容、思考内容和图片,完全缺少对 `functionCall` 的处理。
+            - **修复内容**:
+                - 添加工具调用状态追踪变量 (`emitted_tool_calls`),防止重复发送
+                - 在 parts 循环中添加 `functionCall` 检测和转换逻辑
+                - 构建符合 OpenAI 规范的 `delta.tool_calls` 数组
+                - 使用哈希算法生成稳定的 `call_id`
+                - 包含完整的工具调用信息 (`index`, `id`, `type`, `function.name`, `function.arguments`)
+            - **影响范围**: 此修复确保了流式请求能够正确返回工具调用信息,与非流式响应和 Codex 流式响应的行为保持一致。所有使用 `stream: true` + `tools` 参数的客户端现在可以正常接收 Function Call 数据。
+        - **智能阈值回归 (Smart Threshold Recovery) - 解决 Issue #613**:
+            - **核心逻辑**: 实现了一种感知上下文负载的动态 Token 报告机制。
+            - **修复内容**:
+                - **三阶段缩放**: 在低负载(0-70%)保持高效压缩;在中负载(70-95%)平滑降低压缩率;在接近 100% 极限时真实上报(回归至 195k 左右)。
+                - **模型感应**: 处理器自动识别 1M (Flash) 和 2M (Pro) 的物理上下文界限。
+                - **400 错误拦截**: 即使触发物理溢出，代理层也会拦截 `Prompt is too long` 错误，并返回友好的中文/英文修复指引，引导用户执行 `/compact`。
+            - **影响范围**: 彻底解决了 Claude Code 在长对话场景下因不知道真实 Token 用量而拒绝压缩，最终导致 Gemini 服务端报错的问题。
+        - **Playwright MCP 连通性与稳定性增强 (参考 [Antigravity2Api](https://github.com/znlsl/Antigravity2Api)) - 解决 Issue #616**:
+            - **SSE 心跳保活**: 引入 15 秒定时心跳 (`: ping`)，解决长耗时工具调用导致的连接超时断开问题。
+            - **MCP XML Bridge**: 实现双向协议转换逻辑（指令注入 + 标签拦截），显著提升 MCP 工具（如 Playwright）在不稳定链路下的连通性。
+            - **上下文激进瘦身**: 
+                - **指令过滤**: 自动识别并移除 Claude Code 注入的冗余系统说明（~1-2k tokens）。
+                - **任务去重**: 剔除 tool_result 后重复的任务回显文本，物理减少 Context 占用。
+            - **智能 HTML 清理与截断**: 
+                - **深度剥离**: 针对浏览器快照自动移除 `<style>`、`<script>` 及内联 Base64 资源。
+                - **结构化截断**: 优化截断算法，确保不在 HTML 标签或 JSON 中间切断，避免产生破坏性的 400 结构错误。
+        - **账号索引加载容错修复 (Fix Issue #619)**:
+            - **修复内容**: 在加载 `accounts.json` 时增加了对空文件的检测及自动重置逻辑。
+            - **影响范围**: 彻底解决了因索引文件损坏/为空导致的软件启动报错 `expected value at line 1 column 1`。
+    *   **v3.3.28 (2026-01-14)**:
+        - **OpenAI Thinking Content 修复 (PR #604)**:
+            - **修复 Gemini 3 Pro thinking 内容丢失**: 在流式响应收集器中添加 `reasoning_content` 累积逻辑,解决了 Gemini 3 Pro (high/low) 非流式响应中思考内容丢失的问题。
+            - **支持 Claude *-thinking 模型**: 扩展 thinking 模型检测逻辑,支持所有以 `-thinking` 结尾的模型(如 `claude-opus-4-5-thinking`、`claude-sonnet-4-5-thinking`),自动注入 `thinkingConfig` 确保思考内容正常输出。
+            - **统一 thinking 配置**: 为所有 thinking 模型(Gemini 3 Pro 和 Claude thinking 系列)注入统一的 `thinkingBudget: 16000` 配置,符合 Cloud Code API 规范。
+            - **影响范围**: 此修复确保了 Gemini 3 Pro 和 Claude Thinking 模型在 OpenAI 协议下的 `reasoning_content` 字段正常工作,不影响 Anthropic 和 Gemini 原生协议。
+        - **Experimental 配置热更新 (PR #605)**:
+            - **新增热更新支持**: 为 `ExperimentalConfig` 添加热更新机制,与其他配置项(mapping、proxy、security、zai、scheduling)保持一致。
+            - **实时生效**: 用户修改实验性功能开关后无需重启应用即可生效,提升配置调整的便捷性。
+            - **架构完善**: 在 `AxumServer` 中添加 `experimental` 字段存储和 `update_experimental()` 更新方法,在 `save_config` 中自动触发热更新。
+        - **智能预热策略优化 (PR #606 - 性能提升 2.9x-5x)**:
+            - **分离刷新和预热**: 移除配额刷新时的自动预热触发,预热仅通过定时调度器(每10分钟)或手动按钮触发,避免用户刷新配额时意外消耗预热额度。
+            - **延长冷却期**: 冷却期从30分钟延长至4小时(14400秒),匹配 Pro 账号5小时重置周期,彻底解决同一周期内重复预热问题。
+            - **持久化历史记录**: 预热历史保存至 `~/.antigravity_tools/warmup_history.json`,程序重启后冷却期仍然有效,解决状态丢失问题。
+            - **并发执行优化**: 
+                - 筛选阶段: 每批5个账号并发获取配额,10个账号从~15秒降至~3秒 (5倍提升)
+                - 预热阶段: 每批3个任务并发执行,批次间隔2秒,40个任务从~80秒降至~28秒 (2.9倍提升)
+            - **白名单过滤**: 仅记录和预热4个核心模型组(`gemini-3-flash`、`claude-sonnet-4-5`、`gemini-3-pro-high`、`gemini-3-pro-image`),避免历史记录臃肿。
+            - **成功后记录**: 预热失败不记录历史,允许下次重试,提高容错性。
+            - **手动预热保护**: 手动预热也遵守4小时冷却期,过滤已预热模型并显示跳过数量,防止用户反复点击浪费配额。
+            - **完善日志**: 添加调度器扫描、预热启动/完成、冷却期跳过等详细日志,便于监控和调试。
+            - **影响范围**: 此优化大幅提升了智能预热的性能和可靠性,解决了重复预热、速度慢、状态丢失等多个问题,并发级别不会触发 RateLimit。
+        - **繁体中文本地化优化 (PR #607)**:
+            - **术语优化**: 优化100处繁体中文翻译,使其更符合台湾地区用户的语言习惯和表达方式。
+            - **用户体验提升**: 提升繁体中文界面的专业性和可读性,纯文本变更无代码逻辑影响。
+        - **API 监控性能优化 (修复长时间运行白屏问题)**:
+            - **问题背景**: 修复后台长时间运行后停留在 API 监控页面导致窗口卡成白屏的问题,程序仍在运行但 UI 无响应。
+            - **内存优化**:
+                - 减少内存日志限制从 1000 条降至 100 条,大幅降低内存占用
+                - 移除实时事件中的完整 request/response body 存储,仅保留摘要信息
+                - 后端事件发送优化,仅传输日志摘要而非完整数据,减少 IPC 传输量
+            - **渲染性能提升**:
+                - 集成 `@tanstack/react-virtual` 虚拟滚动库,仅渲染可见行(约 20-30 行)
+                - DOM 节点数量从 1000+ 降至 20-30,减少 97%
+                - 滚动帧率从 20-30fps 提升至 60fps
+            - **防抖机制**:
+                - 添加 500ms 防抖机制,批量处理日志更新,避免频繁状态更新
+                - 减少 React re-render 次数,提升 UI 响应性
+            - **性能提升**:
+                - 内存占用: ~500MB → <100MB (减少 90%)
+                - 首次渲染时间: ~2000ms → <100ms (提升 20 倍)
+                - 支持无限日志滚动,长时间运行无白屏
+            - **影响范围**: 此优化彻底解决了长时间运行和大量日志场景下的性能问题,即使停留在监控页面数小时也能保持流畅。
+    *   **v3.3.27 (2026-01-13)**:
+        - **实验性配置与用量缩放 (PR #603 增强)**:
+            - **新增实验性设置面板**: 在 API 反代配置中增加了“实验性设置”卡片，用于管理正在探索中的功能。
+            - **启用用量缩放 (Usage Scaling)**: 针对 Claude 相容协议实现了激进的输入 Token 自动缩放逻辑。当总输入超过 30k 时，自动应用平方根缩放，有效防止长上下文场景下（如 Gemini 2M 窗口）频繁触发客户端侧的强制压缩。
+            - **多语言翻译补全**: 为实验性功能同步补全了中、英、日、繁、土、越 6 种语言的翻译。
+    *   **v3.3.26 (2026-01-13)**:
+        - **配额保护与调度优化 (Fix Issue #595 - 零配额账户仍进入队列)**:
+            - **配额保护逻辑重构**: 修复了配额保护因依赖不存在的 `limit/remaining` 字段而失效的问题。现在直接使用模型数据中始终存在的 `percentage` 字段，确保任何受监控模型（如 Claude 4.5 Sonnet）配额低于阈值时，账号都能被立即禁用。
+            - **账号优先级算法升级**: 账号调度优先级不再仅依赖订阅等级。在同等级（Ultra/Pro/Free）内，系统现在会优先选择**最大模型剩余百分比**最高的账号，避免对濒临耗尽的账号进行“压榨”，显著降低 429 错误率。
+            - **保护日志增强**: 触发配额保护时的日志现在会明确指出具体是哪个模型触发了阈值（例如：`quota_protection: claude-sonnet-4-5 (0% <= 10%)`），便于排查。
+        - **MCP 工具兼容性增强 (Fix Issue #593)**:
+            - **深度 cache_control 清理**: 实现了多层次的 `cache_control` 字段清理机制,彻底解决 Chrome Dev Tools MCP 等工具在 thinking block 中包含 `cache_control` 导致的 "Extra inputs are not permitted" 错误。
+                - **增强日志追踪**: 添加 `[DEBUG-593]` 日志前缀,记录消息索引和块索引,便于问题定位和调试。
+                - **递归深度清理**: 新增 `deep_clean_cache_control()` 函数,递归遍历所有嵌套对象和数组,移除任何位置的 `cache_control` 字段。
+                - **最后一道防线**: 在构建 Gemini 请求体后、发送前再次执行深度清理,确保发送给 Antigravity 的请求中不包含任何 `cache_control`。
+            - **工具输出智能压缩**: 新增 `tool_result_compressor` 模块,处理超大工具输出,降低 prompt 超长导致的 429 错误概率。
+                - **浏览器快照压缩**: 自动检测并压缩超过 20,000 字符的浏览器快照,采用头部(70%) + 尾部(30%)保留策略,中间省略。
+                - **大文件提示压缩**: 智能识别 "exceeds maximum allowed tokens" 模式,提取关键信息(文件路径、字符数、格式说明),大幅减少冗余内容。
+                - **通用截断**: 对超过 200,000 字符的工具输出进行截断,添加清晰的截断提示。
+                - **Base64 图片移除**: 自动移除工具结果中的 base64 编码图片,避免体积过大。
+            - **完整测试覆盖**: 新增 7 个单元测试,覆盖文本截断、浏览器快照压缩、大文件提示压缩、工具结果清理等核心功能,全部通过验证。
+            - **影响范围**: 此更新显著提升了 MCP 工具(特别是 Chrome Dev Tools MCP)的稳定性,解决了 thinking block 中 `cache_control` 字段导致的 API 错误,同时通过智能压缩降低了超大工具输出导致的 429 错误概率。
+        - **API 监控账号信息记录修复**:
+            - **修复图片生成端点**: 修复了 `/v1/images/generations` 端点缺少 `X-Account-Email` 响应头的问题,现在监控面板能正确显示处理图片生成请求的账号信息。
+            - **修复图片编辑端点**: 修复了 `/v1/images/edits` 端点缺少 `X-Account-Email` 响应头的问题,确保图片编辑请求的账号信息能被正确记录。
+            - **修复音频转录端点**: 修复了 `/v1/audio/transcriptions` 端点缺少 `X-Account-Email` 响应头的问题,完善了音频转录功能的监控支持。
+            - **影响范围**: 此修复确保了所有涉及账号调用的 API 端点都能在监控面板中正确显示账号信息,不再显示为"-",提升了 API 监控系统的完整性和可用性。
+        - **无头服务器部署支持 (Headless Server Support)**:
+            - **一键部署脚本**: 新增 `deploy/headless-xvfb/` 目录,提供针对 Linux 无界面服务器的一键安装、同步、升级脚本。
+            - **Xvfb 环境适配**: 利用虚拟显示器技术,允许 GUI 版本的 Antigravity Tools 在无显卡的远程服务器上运行,并提供了详细的资源占用预警和局限性说明。
+    *   **v3.3.25 (2026-01-13)**:
+        - **会话签名缓存系统 (Session-Based Signature Caching) - 提升 Thinking 模型稳定性 (核心致谢 @Gok-tug PR #574)**:
+            - **三层签名缓存架构**: 实现了 Tool Signatures (Layer 1)、Thinking Families (Layer 2) 和 Session Signatures (Layer 3) 的完整三层缓存体系。
+            - **会话隔离机制**: 基于第一条用户消息的 SHA256 哈希生成稳定的 session_id,确保同一对话的所有轮次使用相同的会话标识。
+            - **智能签名恢复**: 在工具调用和多轮对话中自动恢复思考签名,显著减少 thinking 模型的签名相关错误。
+            - **优先级查找策略**: 实现 Session Cache → Tool Cache → Global Store 的三层查找优先级,最大化签名恢复成功率。
+        - **Session ID 生成优化**:
+            - **简洁设计**: 只哈希第一条用户消息内容,不混入模型名称或时间戳,确保会话延续性。
+            - **完美延续性**: 同一对话的所有轮次(无论多少轮)都使用相同的 session_id,无时间限制。
+            - **性能提升**: 相比之前的方案,CPU 开销降低 60%,代码行数减少 20%。
+        - **缓存管理优化**:
+            - **分层阈值**: 为不同层级设置合理的缓存清理阈值 (Tool: 500, Family: 200, Session: 1000)。
+            - **智能清理**: 添加详细的缓存清理日志,便于监控和调试。
+        - **编译错误修复**:
+            - 修复 `process.rs` 中的参数命名和可变性问题。
+            - 清理未使用的导入和变量警告。
+        - **国际化 (i18n)**:
+            - **繁体中文支持**: 新增繁体中文 (Traditional Chinese) 本地化支持 (Thank you @audichuang PR #577)。
+        - **流式响应错误处理改进 (Stream Error Handling Improvements)**:
+            - **友好错误提示**: 修复了 Issue #579 中提到的流式错误导致 200 OK 且无提示的问题。现在将技术性错误 (Timeout, Decode, Connection) 转换为用户友好的中文提示。
+            - **SSE 错误事件**: 实现了标准的 SSE 错误事件传播,前端可捕获并优雅展示错误,包含详细的解决建议(如检查网络、代理等)。
+            - **多语言错误消息 (i18n)**: 错误消息已集成 i18n 系统,支持所有 6 种语言(zh, en, zh-TW, ja, tr, vi)。非浏览器客户端自动回退到英文提示。
+        - **影响范围**: 此更新显著提升了 Claude 4.5 Opus、Gemini 3 Pro 等 thinking 模型的多轮对话稳定性,特别是在使用 MCP 工具和长会话场景下。
+    <details>
+    <summary>显示旧版本日志 (v3.3.24 及更早)</summary>
+
+    *   **v3.3.24 (2026-01-12)**:
+        - **UI 交互改进 (UI Interaction Improvements)**:
+            - **卡片式模型选择**: 设置页面的“配额保护”与“智能预热”模型选择升级为卡片式设计，支持选中状态勾选及未选中状态下显眼的边缘提示。
+            - **布局优化**: “智能预热”模型列表由单行 2 列调整为单行 4 列布局，更加节省空间。
+            - **名称修正**: 将 `claude-sonnet-4-5` 错误显示的名称由 "Claude 3.5 Sonnet" 修正为 "Claude 4.5 Sonnet"。
+        - **国际化 (i18n)**:
+            - **越南语支持**: 新增越南语 (Vietnamese) 本地化支持 (Thank you @ThanhNguyxn PR #570)。
+            - **翻译优化**: 清理了重复的翻译键值，并优化了语言自动检测逻辑。
+    *   **v3.3.23 (2026-01-12)**:
+        - **更新通知 UI 重构 (Update Notification UI Modernization)**:
+            - **视觉升级**: 采用 "Glassmorphism" 毛玻璃风格设计，配合优雅的渐变背景与微光效果，大幅提升视觉精致度。
+            - **流畅动效**: 引入了更平滑的弹窗入场与退出动画，优化了交互体验。
+            - **深色模式适配**: 完美支持深色模式 (Dark Mode)，自动跟随系统主题切换，确保在任何环境下都不刺眼。
+            - **非侵入式布局**: 优化了弹窗位置与层级，确保不会遮挡顶部导航栏等关键操作区域。
+        - **国际化支持 (Internationalization)**:
+            - **双语适配**: 更新通知现已完整支持中英双语，根据应用语言设置自动切换文案。
+        - **检查逻辑修正**: 修复了更新检查状态更新的时序问题，确保在发现新版本时能稳定弹出通知。
+        - **菜单栏图标高清化修复 (Menu Bar Icon Resolution Fix)**:
+            - **Retina 适配**: 将菜单栏托盘图标 (`tray-icon.png`) 分辨率从 22x22 提升至 44x44，彻底解决了在高分屏下显示模糊的问题 (Fix Issue #557)。
+        - **Claude Thinking 压缩优化 (核心致谢 @ThanhNguyxn PR #566)**:
+            - **修复思考块乱序**: 解决了在使用 Context Compression (Kilo) 时，思考块 (Thinking Blocks) 可能被错误地排序到文本块之后的问题。
+            - **强制首位排序**: 引入了 `sort_thinking_blocks_first` 逻辑，确保助手消息中的思考块始终位于最前，符合 Anthropic API 的 400 校验规则。
+        - **账号路由优先级增强 (核心致谢 @ThanhNguyxn PR #567)**:
+            - **高配额优先策略**: 在同等级别 (Free/Pro/Ultra) 下，系统现在会优先选择**剩余配额更多**的账号进行调度。
+            - **避免木桶效应**: 防止因随机分配导致某些长配额账号被闲置，而短配额账号过早耗尽。
+        - **非流式响应 Base64 签名修复 (核心致谢 @ThanhNguyxn PR #568)**:
+            - **全模式兼容**: 将流式响应中的 Base64 思考签名解码逻辑同步应用到非流式响应 (Non-streaming) 中。
+            - **消除签名错误**: 彻底解决了在非流式客户端 (如 Python SDK) 中使用 Antigravity 代理时因签名编码格式不一致导致的 400 错误。
+        - **国际化 (i18n)**:
+            - **日语支持**: 新增日语 (Japanese) 本地化支持 (Thank you @Koshikai PR #526)。
+            - **土耳其语支持**: 新增土耳其语 (Turkish) 本地化支持 (Thank you @hakanyalitekin PR #515)。
+    *   **v3.3.22 (2026-01-12)**:
+        - **配额保护系统升级**:
+            - 支持自定义监控模型（`gemini-3-flash`, `gemini-3-pro-high`, `claude-sonnet-4-5`），仅在选中模型额度低于阈值时触发保护
+            - 保护逻辑优化为"勾选模型最小配额"触发机制
+            - 开启保护时默认勾选 `claude-sonnet-4-5`，UI 强制至少保留一个模型
+        - **全自动配额管理联动**:
+            - 强制开启后台自动刷新，确保配额数据实时同步
+            - 自动执行"刷新 → 保护 → 恢复 → 预热"完整生命周期管理
+        - **智能预热自定义勾选**:
+            - 支持自定义预热模型（`gemini-3-flash`, `gemini-3-pro-high`, `claude-sonnet-4-5`, `gemini-3-pro-image`）
+            - 新增独立 `SmartWarmup.tsx` 组件，提供与配额保护一致的勾选体验
+            - 开启预热时默认勾选所有核心模型，UI 强制至少保留一个模型
+            - 调度器实时读取配置，修改立即生效
+        - **智能预热系统基础功能**:
+            - 额度恢复到 100% 时自动触发预热
+            - 智能去重机制：同一 100% 周期仅预热一次
+            - 调度器每 10 分钟扫描并同步最新配额到前端
+            - 覆盖所有账号类型（Ultra/Pro/Free）
+        - **国际化完善**: 修复"自动检查更新"和"设备指纹"相关翻译缺失（Issue #550）
+        - **稳定性修复**: 修复高并发调度下的变量引用和所有权冲突问题
+        - **API 监控性能优化 (修复 Issue #560)**:
+            - **问题背景**: 修复 macOS 上打开 API 监控界面时出现 5-10 秒响应延迟和应用崩溃问题
+            - **数据库优化**:
+                - 新增 `status` 字段索引，统计查询性能提升 50 倍
+                - 优化 `get_stats()` 查询，从 3 次全表扫描合并为 1 次，查询时间减少 66%
+            - **分页加载**:
+                - 列表视图不再查询大型 `request_body` 和 `response_body` 字段，数据传输量减少 90%+
+                - 新增 `get_proxy_logs_paginated` 命令，支持分页查询（每页 20 条）
+                - 前端新增"加载更多"按钮，支持按需加载历史记录
+            - **按需详情查询**:
+                - 新增 `get_proxy_log_detail` 命令，点击日志时才查询完整详情
+                - 详情加载时间 0.1-0.5 秒，避免不必要的数据传输
+            - **自动清理功能**:
+                - 应用启动时自动清理 30 天前的旧日志，防止数据库无限增长
+                - 执行 VACUUM 释放磁盘空间
+            - **UI 优化**:
+                - 新增加载状态指示器，提供清晰的视觉反馈
+                - 新增 10 秒超时控制，防止长时间无响应
+                - 详情模态框新增加载指示器
+            - **性能提升**:
+                - 初始加载时间: 10-18 秒 → **0.5-1 秒** (10-36 倍提升)
+                - 内存占用: 1GB → **5MB** (200 倍减少)
+                - 数据传输量: 1-10GB → **1-5MB** (200-2000 倍减少)
+            - **影响范围**: 此优化彻底解决了大数据量场景下的性能问题，支持 10,000+ 条监控记录的流畅查看
+        - **反代日志增强**: 修正了反代温补逻辑中账号/模型日志记录问题，补充了部分缺失的国际化翻译项。
+    *   **v3.3.21 (2026-01-11)**:
+        - **设备指纹绑定系统 (Device Fingerprint Binding) - 降低风控检测 (核心致谢 @jlcodes99 PR #523)**:
+            - **账号设备绑定**: 实现账号与设备信息的一对一绑定关系，切换账号时自动切换对应的设备指纹。
+            - **设备指纹管理**: 新增完整的设备指纹管理模块 (`device.rs`)，支持指纹生成、绑定、恢复和版本管理。
+            - **风控优化**: 通过确保每个账号使用独立的设备信息，显著降低被 Google 风控系统检测的概率。
+            - **UI 增强**: 新增设备指纹管理对话框 (`DeviceFingerprintDialog.tsx`)，提供可视化的指纹管理界面。
+            - **核心功能**:
+                - 支持采集当前设备指纹或生成随机指纹
+                - 自动备份和版本管理设备指纹历史
+                - 支持恢复到任意历史版本
+                - 提供设备存储目录快速访问
+            - **影响范围**: 此功能为多账号管理提供了更强的隐私保护，有效降低账号关联风险。
+        - **代理服务核心修复 (Proxy Service Critical Fixes) - 提升稳定性 (核心致谢 @byte-sunlight PR #532)**:
+            - **Warmup 请求拦截**: 自动识别并拦截 Claude Code 每 10 秒发送的 warmup 请求，返回模拟响应，避免消耗配额。
+                - 支持流式和非流式两种响应模式
+                - 智能检测 warmup 特征（文本内容、tool_result 错误等）
+                - 添加 `X-Warmup-Intercepted` 响应头标识
+            - **限流逻辑重构**: 修复限流检查中的关键 bug，使用 `email` 而非 `account_id` 作为限流记录的 key。
+                - 修复绑定账号限流检查失效的问题
+                - 优化 60s 时间窗口内的账号复用逻辑，避免复用已限流账号
+                - 改进会话解绑机制，限流时立即切换而非阻塞等待
+            - **字符串处理安全**: 修复 UTF-8 字符边界 panic 问题，使用 `chars().take()` 安全截取字符串。
+            - **影响范围**: 此修复显著提升了 Claude Code 等工具的使用体验，减少配额浪费并提高账号轮换的准确性。
+        - **CI/CD 测试增强 (CI Testing Enhancement) - 提升发布质量 (核心致谢 @Vucius PR #519)**:
+            - **强制测试**: 在 GitHub Actions 的 Release 流程中添加 `cargo test` 步骤，确保所有测试通过后才能构建发布版本。
+            - **测试修复**: 修正 `common_utils.rs` 中联网搜索测试的模型映射断言（`gemini-3-flash` → `gemini-2.5-flash`）。
+            - **测试清理**: 移除 `gemini/wrapper.rs` 中重复的测试模块定义，优化测试代码结构。
+            - **新增测试探针**: 添加 `common_utils_test_probe.rs` 文件，提供自定义工具检测的测试用例。
+            - **影响范围**: 此改进确保了每次发布的代码质量，减少因测试失败导致的回归问题。
+        - **监控日志容量优化 (Monitor Log Capacity Enhancement) - 支持大型图片响应 (修复 Issue #489)**:
+            - **提升响应日志限制**: 将监控中间件的响应体日志限制从 10MB 提升到 **100MB**，解决 4K 图片等大型响应被截断的问题。
+            - **问题背景**: 4K 图片经过 base64 编码后通常超过 10MB，导致监控日志显示 `[Response too large (>10MB)]` 而无法记录完整响应。
+            - **优化效果**: 现在可以完整记录包含高分辨率图片的响应内容，便于调试和监控图像生成等多模态功能。
+            - **性能影响**: 每个请求最多占用 100MB 临时内存，对现代系统（8GB+ RAM）完全可接受。
+            - **历史演进**: v3.3.16 时从 512KB 提升到 10MB（@Stranmor PR #321），本次进一步提升到 100MB。
+            - **影响范围**: 此优化确保了图像生成、大型 JSON 响应等场景的完整日志记录，提升了监控系统的实用性。
+        - **自动更新通知系统 (Automatic Update Notification System) - 提升用户体验 (修复 Issue #484)**:
+            - **后端实现**: 新增 `update_checker.rs` 模块，集成 GitHub API 自动检测最新版本。
+                - 语义化版本比较（支持 x.y.z 格式）
+                - 24 小时智能检查间隔
+                - 设置持久化（`update_settings.json`）
+                - 网络错误容错处理
+            - **前端实现**: 新增 `UpdateNotification.tsx` Toast 通知组件。
+                - 渐变 UI 设计（蓝紫色渐变）
+                - 应用启动后 2 秒自动检查
+                - 一键跳转下载页面
+                - 可关闭/忽略功能
+            - **用户控制**: 尊重用户设置，支持自动检查开关和检查间隔配置。
+            - **跨平台支持**: 完全兼容 macOS、Windows、Linux 三大平台。
+            - **影响范围**: 用户无需手动检查即可及时获知新版本，确保使用最新功能和 bug 修复。
+        - **开机自动启动兼容性修复 (Auto-Launch Compatibility Fix) - 彻底解决 Windows 切换异常 (修复 Issue #438, #539)**:
+            - **后端容错增强**: 修复了 Windows 环境下禁用自启时因找不到注册表项导致的 `os error 2` 报错。现在当用户选择禁用且启动项已不存在时，系统将视为操作成功，不再阻断后续逻辑。
+            - **状态实时同步**: 前端设置页面现在会在加载时主动查询系统的真实自启状态，而非仅仅依赖配置文件。这解决了由于系统清理软件或移动应用位置导致的状态不一致问题。
+            - **逻辑闭环**: 确保了即使在异常系统环境下，用户也能通过重新点击“启用/禁用”来强制修复并同步自启状态。
+            - **影响范围**: 彻底解决了从 v3.2.7 以来长期困扰 Windows 用户的“无法禁用/设置不生效”问题。
+        - **API 监控看板增强 (API Monitor Enhancement) - 补全失败请求记录与 Gemini 统计 (修复 Issue #504)**:
+            - **Gemini Token 统计兼容**: 增强了监控中间件对 Gemini API 方言的支持，能够自动识别 `usageMetadata` 节点并映射 `promptTokenCount` 等原生字段。
+            - **影响范围**: 显著提升了监控面板在故障排查时的准确性，确保了跨协议 Token 统计的一致性。
+        - **Claude 协议核心增强 (Claude Protocol Enhancement)**:
+            - **弹性恢复引擎 (Elastic Recovery Engine)**: 
+                - **空流重试**: 智能识别并自动重试上游返回的空数据流，彻底解决网络抖动导致的请求失败。
+                - **断点自愈**: 自动检测工具调用链的断裂状态（Missing ToolResult），并实施主动修复，防止因客户端中断导致的上下文同步错误 (400)。
+            - **智能上下文优化 (Smart Context Optimization)**:
+                - **资源瘦身**: 自动清洗历史记录中的冗余 Base64 图片数据与超长日志，在保持上下文连贯的同时大幅降低 Token 消耗。
+                - **签名兼容**: 实现了双向签名转换层，完美适配各版本 Claude 客户端的 Thinking 签名校验机制。
+            - **精细化限流 (Model-Level Rate Limiting)**:
+                - **模型隔离**: 429 限流策略升级为“账号+模型”双维度锁定。Gemini Flash 的频控不再影响 Pro/Ultra 模型的使用，显著提升账号利用率。
     *   **v3.3.20 (2026-01-09)**:
         - **请求超时配置优化 (Request Timeout Enhancement) - 支持长时间文本处理 (核心致谢 @xiaoyaocp Issue #473)**:
             - **提升超时上限**: 将服务配置中的请求超时最大值从 600 秒（10 分钟）提升到 3600 秒（1 小时）。
@@ -238,8 +530,6 @@ print(response.choices[0].message.content)
                 - **成功率**: 从 10-20% 提升到 **95%+**
                 - **429 错误**: 从频繁出现到**几乎消除**
                 - **响应时间**: 增加约 100-200ms（可接受的代价）
-            - **客户端透明**: 无需任何修改，完全向后兼容
-            - **日志标识**: `🔄 Auto-converting non-stream request to stream` / `✓ Stream collected and converted to JSON`
             - **影响范围**: 此功能显著提升了 Python SDK、Claude CLI 等非流式客户端的稳定性，彻底解决了长期困扰用户的 429 配额问题。
         - **macOS Dock 图标修复 (核心致谢 @jalen0x PR #472)**:
             - **修复窗口无法重新打开**: 解决了 macOS 上关闭窗口后点击 Dock 图标无法重新打开窗口的问题（Issue #471）。
@@ -761,6 +1051,7 @@ print(response.choices[0].message.content)
         - **提示**：目前 `antigravity` 与 Google 官方工具重名。为确保安装的是本项目，目前推荐使用上述原始文件安装。后续我们将推出官方 Tap。
         - **全局上游代理**: 统一管理内外网请求，支持 HTTP/SOCKS5 协议及热重载。
 
+    </details>
 ## 👥 核心贡献者 (Contributors)
 
 <a href="https://github.com/lbjlaq"><img src="https://github.com/lbjlaq.png" width="50px" style="border-radius: 50%;" alt="lbjlaq"/></a>
@@ -784,6 +1075,12 @@ print(response.choices[0].message.content)
 <a href="https://github.com/i-smile"><img src="https://github.com/i-smile.png" width="50px" style="border-radius: 50%;" alt="i-smile"/></a>
 <a href="https://github.com/jalen0x"><img src="https://github.com/jalen0x.png" width="50px" style="border-radius: 50%;" alt="jalen0x"/></a>
 <a href="https://linux.do/u/wendavid"><img src="https://linux.do/user_avatar/linux.do/wendavid/48/122218_2.png" width="50px" style="border-radius: 50%;" alt="wendavid"/></a>
+<a href="https://github.com/byte-sunlight"><img src="https://github.com/byte-sunlight.png" width="50px" style="border-radius: 50%;" alt="byte-sunlight"/></a>
+<a href="https://github.com/jlcodes99"><img src="https://github.com/jlcodes99.png" width="50px" style="border-radius: 50%;" alt="jlcodes99"/></a>
+<a href="https://github.com/Vucius"><img src="https://github.com/Vucius.png" width="50px" style="border-radius: 50%;" alt="Vucius"/></a>
+<a href="https://github.com/Koshikai"><img src="https://github.com/Koshikai.png" width="50px" style="border-radius: 50%;" alt="Koshikai"/></a>
+<a href="https://github.com/hakanyalitekin"><img src="https://github.com/hakanyalitekin.png" width="50px" style="border-radius: 50%;" alt="hakanyalitekin"/></a>
+<a href="https://github.com/Gok-tug"><img src="https://github.com/Gok-tug.png" width="50px" style="border-radius: 50%;" alt="Gok-tug"/></a>
 
 感谢所有为本项目付出汗水与智慧的开发者。
 *   **版权许可**: 基于 **CC BY-NC-SA 4.0** 许可，**严禁任何形式的商业行为**。
@@ -791,39 +1088,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## 🚀 关于增强版
-
-**Antigravity Tools Enhanced Edition** 是专注于生产环境稳定性和智能化的优化分支。
-
-### 🎯 与原版的主要区别
-
-| 特性 | 原版 | 增强版 |
-|------|------|--------|
-| **Thinking Mode 支持** | 部分支持 | 完整优化，所有高级模型自动启用 |
-| **配额耗尽处理** | 立即失败 | 智能轮换至下一账号 |
-| **模型路由策略** | 基础映射 | 智能自适应，性价比优化 |
-| **限流清除机制** | 手动重启 | 自动清除，即时生效 |
-| **日志追踪** | 标准日志 | 完整路由决策可观测 |
-| **默认配置** | 需要调整 | 开箱即用，最优实践 |
-
-### 💡 适用场景
-
-- ✅ **重度 AI 使用者**: 需要多账号高可用性和智能负载均衡
-- ✅ **开发者工具集成**: 完美支持 AI 编程助手的 Thinking Mode
-- ✅ **企业级部署**: 零停机、高稳定性、完整日志
-- ✅ **成本敏感用户**: 智能路由优化，最大化免费配额利用率
-
-### 🔗 相关链接
-
-- 🌟 [增强版 GitHub](https://github.com/salacoste/Antigravity-Manager) - 持续更新中
-- 📦 [原版项目](https://github.com/lbjlaq/Antigravity-Manager) - 感谢原作者的卓越工作
-- 🐛 [提交 Issue](https://github.com/salacoste/Antigravity-Manager/issues) - 增强版特定问题
-- 💬 [参与讨论](https://github.com/salacoste/Antigravity-Manager/discussions) - 分享使用经验
-
----
-
 <div align="center">
-  <p>如果您觉得增强版对您有帮助，欢迎在 GitHub 上点一个 ⭐️</p>
-  <p><strong>Copyright © 2025 Antigravity Team & Enhanced by salacoste</strong></p>
-  <p><em>基于原版项目深度优化 · 专注智能化与稳定性</em></p>
+  <p>如果您觉得这个工具有所帮助，欢迎在 GitHub 上点一个 ⭐️</p>
+  <p>Copyright © 2025 Antigravity Team.</p>
 </div>

@@ -191,11 +191,11 @@ mod tests {
 
     #[test]
     fn test_compare_versions() {
-        assert!(compare_versions("3.3.32", "3.3.31"));
-        assert!(compare_versions("3.4.0", "3.3.31"));
-        assert!(compare_versions("4.0.0", "3.3.31"));
-        assert!(!compare_versions("3.3.30", "3.3.31"));
-        assert!(!compare_versions("3.3.31", "3.3.31"));
+        assert!(compare_versions("3.3.33", "3.3.32"));
+        assert!(compare_versions("3.4.0", "3.3.32"));
+        assert!(compare_versions("4.0.0", "3.3.32"));
+        assert!(!compare_versions("3.3.31", "3.3.32"));
+        assert!(!compare_versions("3.3.32", "3.3.32"));
     }
 
     #[test]
