@@ -415,11 +415,11 @@ pub async fn warm_up_all_accounts() -> Result<String, String> {
                                     ));
                                     account_warmed_series.insert(model_to_ping);
                                 }
-                                _ => continue,
                             }
-                        } else if m.percentage >= NEAR_READY_THRESHOLD {
-                            has_near_ready_models = true;
+                            _ => {}
                         }
+                    } else if m.percentage >= NEAR_READY_THRESHOLD {
+                        has_near_ready_models = true;
                     }
                 }
             }

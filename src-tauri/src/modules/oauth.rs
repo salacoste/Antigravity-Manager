@@ -191,8 +191,9 @@ pub async fn ensure_fresh_token(
 ) -> Result<crate::models::TokenData, String> {
     let now = chrono::Local::now().timestamp();
 
-    // 如果没有过期时间，或者还有超过 5 分钟有效期，直接返回
-    if current_token.expiry_timestamp > now + 300 {
+    // [FIX] Обновляем токен если осталось < 1 минуты (для warmup scheduler)
+    // Это гарантирует что warmup всегда использует свежие токены
+    if current_token.expiry_timestamp > now + 60 {
         return Ok(current_token.clone());
     }
 

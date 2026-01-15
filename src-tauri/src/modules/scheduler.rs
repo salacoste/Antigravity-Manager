@@ -3,6 +3,7 @@ use crate::modules::{account, config, logger, quota};
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::Manager;
 use tokio::time::{self, Duration};
@@ -104,7 +105,7 @@ pub fn start_scheduler(app_handle: tauri::AppHandle) {
                 let now_ts = Utc::now().timestamp();
 
                 for model in fresh_quota.models {
-                    let history_key = format!("{}:{}:100", account.email, model.name);
+                    let _history_key = format!("{}:{}:100", account.email, model.name);
 
                     // 核心逻辑：检测 100% 额度
                     if model.percentage == 100 {
@@ -156,7 +157,6 @@ pub fn start_scheduler(app_handle: tauri::AppHandle) {
                             token.clone(),
                             pid.clone(),
                             model.percentage,
-                            history_key.clone(),
                         ));
 
                         logger::log_info(&format!(
@@ -216,20 +216,9 @@ pub fn start_scheduler(app_handle: tauri::AppHandle) {
                         if quota::warmup_model_directly(&token, &model, &pid, &email, pct).await {
                             success += 1;
                         }
-                        
-                        for handle in handles {
-                            match handle.await {
-                                Ok((true, history_key)) => {
-                                    success += 1;
-                                    record_warmup_history(&history_key, now_ts);
-                                }
-                                _ => {}
-                            }
-                        }
-                        
-                        if batch_idx < (warmup_tasks.len() + batch_size - 1) / batch_size - 1 {
-                            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                        }
+
+                        // Rate limit: sleep between requests
+                        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                     }
 
                     logger::log_info(&format!(

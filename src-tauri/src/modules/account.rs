@@ -683,8 +683,8 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
             let mut has_models = false;
 
             if let Some(ref q) = account.quota {
-                let threshold = config.quota_protection.threshold_percentage as i32;
-                let mut changed = false;
+                let _threshold = config.quota_protection.threshold_percentage as i32;
+                let _changed = false;
 
                 for model in &q.models {
                     // 仅对用户勾选的模型进行监控
@@ -702,6 +702,7 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
                         min_model_name = model.name.clone();
                     }
                 }
+            }
 
             if has_models {
                 let threshold = config.quota_protection.threshold_percentage as i32;
