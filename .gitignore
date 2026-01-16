@@ -1,64 +1,92 @@
-# Logs
-logs
-.logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-alternative_proxy_app/
-
-node_modules
-dist
-dist-ssr
-*.local
-.vite
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# Build artifacts
+src-tauri/target/
+src-tauri/src-tauri/target/
+src-tauri/gen/
+src-tauri/Cargo.lock
+*.lock
 .DS_Store
-*.suo
+*.sou
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-# Build output
-src-tauri/target/
-src-tauri/gen/
-src-tauri/.env
+# Dependencies
+node_modules/
+dist/
+dist-ssr/
 
-# Environment
+# Test artifacts
+*.test/
+tests/
+coverage/
+*.prof
+
+# Environment variables
 .env
 .env.*
+!.env.local
+!.env.production
 environment/
 
-# Python virtual environments and test files
-.venv*/
-venv/
-# *.py
+# Tauri bundler
+src-tauri/target/
+src-tauri/gen/
+src-tauri/.env*
+
+# Rust
+**/*.rs.bk
+Cargo.toml.backup
+
+# Node.js
+.cache/
+.npm/
+.yarn/
+.pnpm-debug.log*
+package-lock.json
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.venv*/
+*.egg-info/
+*.dist-info/
+dist/
 
-# Reference projects (for development only)
+# Development
+.vscode/*
+!.vscode/settings.json
+.idea
+*.sw?
+*.suo
 
-DOCKER_DEPLOYMENT.md
+# Embedded repositories (don't add these)
+.debug/
+alternative_proxy_app/
 
-# Antigravity documentation (reverse engineering artifacts)
+# Debug artifacts
+_debug/
+_bmad-output/
+debug/
+*.log
+*.log.*
+
+# Documentation artifacts (reference only, not project files)
 docs/antigravity/
 
-# Development and debug artifacts
-_bmad
-_bmad-output
-.debug
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
 
-# Debug and test scripts
-*-debug*.sh
-collect-debug-logs.sh
-watch-logs.sh*
+# Test results and debugging
+ping-test-results.json
 test_*.sh
-DEBUG_GUIDE.md
+collect-debug-logs.sh
+watch-logs.sh
+
+# Antigravity Manager specific
+src-tauri/.antigravity_tools/
