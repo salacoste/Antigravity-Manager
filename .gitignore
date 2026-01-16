@@ -16,6 +16,12 @@ node_modules/
 dist/
 dist-ssr/
 
+# Logs
+logs/
+.logs/
+*.log
+*.log.*
+
 # Test artifacts
 *.test/
 tests/
