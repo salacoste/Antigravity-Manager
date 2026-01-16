@@ -73,7 +73,11 @@ pub struct QuotaProtectionConfig {
 }
 
 fn default_monitored_models() -> Vec<String> {
-    vec!["claude-sonnet-4-5".to_string()]
+    vec![
+        "claude-sonnet-4-5".to_string(),
+        "gemini-3-pro-high".to_string(),
+        "gemini-3-flash".to_string(),
+    ]
 }
 
 impl QuotaProtectionConfig {

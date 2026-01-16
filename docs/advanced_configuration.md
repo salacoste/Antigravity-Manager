@@ -1,6 +1,6 @@
 # 高级配置与实验性功能 (Advanced Configuration)
 
-Antigravity v3.3.16 引入了 `ExperimentalConfig`，这是一组默认开启的实验性功能开关，旨在提升系统的鲁棒性与兼容性。这些配置位于 `src-tauri/src/proxy/config.rs` 中，目前暂未暴露到 UI 界面。
+Antigravity v3.3.34 引入了 `ExperimentalConfig`，这是一组默认开启的实验性功能开关，旨在提升系统的鲁棒性与兼容性。这些配置位于 `src-tauri/src/proxy/config.rs` 中，目前暂未暴露到 UI 界面。
 
 ## 功能列表
 

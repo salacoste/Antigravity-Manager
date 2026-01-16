@@ -94,6 +94,7 @@ pub async fn start_proxy_service(
     let accounts_dir = app_data_dir.clone();
 
     let token_manager = Arc::new(TokenManager::new(accounts_dir));
+    token_manager.start_auto_cleanup(); // 启动限流记录自动清理后台任务
     // 同步 UI 传递的调度配置
     token_manager
         .update_sticky_config(config.scheduling.clone())
@@ -293,6 +294,70 @@ pub async fn get_proxy_logs_paginated(
 #[tauri::command]
 pub async fn get_proxy_log_detail(log_id: String) -> Result<ProxyRequestLog, String> {
     crate::modules::proxy_db::get_log_detail(&log_id)
+}
+
+/// 获取日志总数
+#[tauri::command]
+pub async fn get_proxy_logs_count() -> Result<u64, String> {
+    crate::modules::proxy_db::get_logs_count()
+}
+
+/// 导出所有日志到指定文件
+#[tauri::command]
+pub async fn export_proxy_logs(
+    file_path: String,
+) -> Result<usize, String> {
+    let logs = crate::modules::proxy_db::get_all_logs_for_export()?;
+    let count = logs.len();
+    
+    let json = serde_json::to_string_pretty(&logs)
+        .map_err(|e| format!("Failed to serialize logs: {}", e))?;
+    
+    std::fs::write(&file_path, json)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    
+    Ok(count)
+}
+
+/// 导出指定的日志JSON到文件
+#[tauri::command]
+pub async fn export_proxy_logs_json(
+    file_path: String,
+    json_data: String,
+) -> Result<usize, String> {
+    // Parse to count items
+    let logs: Vec<serde_json::Value> = serde_json::from_str(&json_data)
+        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    let count = logs.len();
+    
+    // Pretty print
+    let pretty_json = serde_json::to_string_pretty(&logs)
+        .map_err(|e| format!("Failed to serialize: {}", e))?;
+    
+    std::fs::write(&file_path, pretty_json)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    
+    Ok(count)
+}
+
+/// 获取带搜索条件的日志数量
+#[tauri::command]
+pub async fn get_proxy_logs_count_filtered(
+    filter: String,
+    errors_only: bool,
+) -> Result<u64, String> {
+    crate::modules::proxy_db::get_logs_count_filtered(&filter, errors_only)
+}
+
+/// 获取带搜索条件的分页日志
+#[tauri::command]
+pub async fn get_proxy_logs_filtered(
+    filter: String,
+    errors_only: bool,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<crate::proxy::monitor::ProxyRequestLog>, String> {
+    crate::modules::proxy_db::get_logs_filtered(&filter, errors_only, limit, offset)
 }
 
 /// 生成 API Key

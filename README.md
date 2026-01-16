@@ -1,5 +1,5 @@
 # Antigravity Tools 🚀
-> 专业的 AI 账号管理与协议反代系统 (v3.3.32)
+> 专业的 AI 账号管理与协议反代系统 (v3.3.34)
 <div align="center">
   <img src="public/icon.png" alt="Antigravity Logo" width="120" height="120" style="border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
 
@@ -8,7 +8,7 @@
   
   <p>
     <a href="https://github.com/lbjlaq/Antigravity-Manager">
-      <img src="https://img.shields.io/badge/Version-3.3.32-blue?style=flat-square" alt="Version">
+      <img src="https://img.shields.io/badge/Version-3.3.34-blue?style=flat-square" alt="Version">
     </a>
     <img src="https://img.shields.io/badge/Tauri-v2-orange?style=flat-square" alt="Tauri">
     <img src="https://img.shields.io/badge/Backend-Rust-red?style=flat-square" alt="Rust">
@@ -205,6 +205,88 @@ print(response.choices[0].message.content)
 ## 📝 开发者与社区
 
 *   **版本演进 (Changelog)**:
+    *   **v3.3.34 (2026-01-16)**:
+        - **OpenAI Codex/Responses 协议修复 (Fix Issue #742)**:
+            - **400 Invalid Argument 彻底修复**:
+                - **问题根源**: `/v1/responses` 等专有接口在请求体中仅包含 `instructions` 或 `input` 而缺失 `messages` 字段时，转换逻辑未覆盖全场景，导致 Gemini 接收到空 Body。
+                - **修复内容**: 在 `handle_completions` 中反向移植了聊天接口的“请求标准化”逻辑。现在系统会强制检测 Codex 特有字段（`instructions`/`input`），即使 `messages` 为空或缺失，也会自动将其转化为标准的 System/User 消息对，确保上游请求合法。
+            - **429/503 高级重试与账号轮换支持**:
+                - **逻辑对齐**: 将 Claude 处理器中验证过的“智能指数退避”与“多维账号轮换”策略完整移植到了 OpenAI Completions 接口。
+                - **效果**: 现在 Codex 接口在遇到限流或服务器过载时，会自动执行毫秒级切换，不再直接抛出错误，极大提升了 VS Code 插件等工具的稳定性。
+            - **会话粘性 (Session Stickiness) 支持**:
+                - **功能扩展**: 补全了 OpenAI 协议下的 `session_id` 提取与调度逻辑。现在无论是 Chat 还是 Codex 接口，只要是同一段对话，系统都会尽量将其调度到同一个 Google 账号上。
+                - **性能红利**: 这将显著提升 Google Prompt Caching 的命中率，从而大幅加快响应速度并节省计算资源。
+        - **Claude 思考签名编码修复 (Fix Issue #726)**:
+            - **问题根源**: 修复了 v3.3.33 中引入的 Regression，该版本错误地对已经 Base64 编码的 `thoughtSignature` 进行了二次编码，导致 Google Vertex AI 无法正确校验签名而返回 `Invalid signature` 错误。
+            - **修复内容**: 移除了 `Thinking`、`ToolUse` 和 `ToolResult` 处理逻辑中多余的 Base64 编码步骤，确保签名以原始格式正确透传给上游。
+            - **影响范围**: 彻底解决了使用 Thinking 模型（如 Claude 4.5 Opus / Sonnet）在多轮对话中触发的 400 签名错误，以及由此导致的 "Error searching files" 任务卡死问题 (Issue #737)。
+        - **API 监控看板刷新修复 (Fix Issue #735)**:
+            - **问题根源**: 修复了 `ProxyMonitor` 组件中因 Closure 导致的事件监听失效问题，该问题导致新请求无法自动显示在列表中。
+            - **修复内容**: 引入 `useRef` 优化事件缓冲逻辑，并新增手动刷新按钮作为备份方案；同时在 Tauri 权限配置中显式允许了事件监听。
+        - **严格分组配额保护修复 (Strict Grouped Quota Protection Fix - Core Thanks to @Mag1cFall PR #746)**:
+            - **问题根源**: 修复了在严格匹配模式下，配额保护逻辑因大小写敏感和前端 UI 键名映射缺失而失效的问题。之前版本中 `gemini-pro` 等 UI 简写键名无法匹配到后端定义的 `gemini-3-pro-high` 严格组。
+            - **修复内容**:
+                - **即时大小写归一化**: 恢复了后端 `normalize_to_standard_id` 的大小写不敏感匹配，确保 `Gemini-3-Pro-High` 等变体能被正确识别。
+                - **UI 键名智能映射**: 在前端 `isModelProtected` 中增加了对 `gemini-pro/flash` 等 UI 列名的自动映射，确保 UI 上的锁图标能正确反映后端保护状态。
+            - **影响范围**: 彻底解决了 Gemini 3 Pro/Flash 和 Claude 4.5 Sonnet 在严格分组模式下的锁图标显示问题，确保配额耗尽时能直观提示用户。
+        - **OpenAI 协议 Usage 统计修复 (Pull Request #749, Thanks to @stillyun)**:
+            - **问题根源**: 在 OpenAI 协议转换过程中，未将 Gemini 返回的 `usageMetadata` 映射到 OpenAI 格式的 `usage` 字段，导致 Kilo 等客户端显示 Token 使用量为 0。
+            - **修复内容**:
+                - **数据模型补全**: 为 `OpenAIResponse` 增加了标准的 `usage` 字段。
+                - **全链路映射**: 实现了从流式 (SSE) 和非流式响应中提取并映射 `prompt_tokens`、`completion_tokens` 及 `total_tokens` 的逻辑。
+            - **影响范围**: 彻底解决了 Kilo Editor、Claude Code 等工具在使用 OpenAI 协议时无法统计 Token 用量的问题。
+        - **Linux 主题切换崩溃修复 (Pull Request #750, Thanks to @infinitete)**:
+            - **修复内容**: 
+                - 在 Linux 平台禁用不兼容的 `setBackgroundColor` 调用。
+                - 针对 WebKitGTK 环境禁用 View Transition API 以防止透明窗口崩溃。
+                - 启动时自动调整 GTK 窗口 alpha 通道以增强稳定性。
+            - **影响范围**: 解决了 Linux 用户在切换深色/浅色模式时可能遇到的程序卡死或硬崩溃问题。
+    *   **v3.3.33 (2026-01-15)**:
+        - **Codex 兼容性与模型映射修复 (Fix Issue #697)**:
+            - **Instructions 参数支持**: 修复了对 `instructions` 参数的处理逻辑，确保其作为系统指令（System Instructions）正确注入，提升与 Codex 等工具的兼容性。
+            - **自动 Responses 格式检测**: 在 OpenAI 处理器中新增智能检测逻辑，自动识别并转换 `instructions` 或 `input` 字段触发的 Responses 模式，无需客户端手动切换。
+            - **模型映射恢复与归一化**: 恢复了 `gemini-3-pro-low/high/pro` 统一归一化为内部别名 `gemini-3-pro-preview` 的逻辑，并确保在上游请求时正确还原为物理模型名 `high`。
+            - **Opus 映射增强**: 优化了系统默认映射，自动识别 `opus` 关键字模型并确保其默认路由至高性能 Pro 预览线路。
+        - **OpenAI 工具调用与思考内容修复 (Fix Issue #710)**:
+            - **保留工具调用 ID**: 修复了 OpenAI 格式转换过程中丢失 `tool_use.id` 的问题，确保 `functionCall` 和 `functionResponse` 均保留原始 ID，解决了调用 Claude 模型时的 `Field required` 错误。
+            - **思考内容 (Reasoning) 原生支持**: 增加了对 OpenAI 消息中 `reasoning_content` 的支持，将其正确映射为内部 `thought` 部分并注入思维链签名，显著提升了“思考型”模型的视觉回显效果。
+            - **工具响应格式优化**: 修复了 `tool` 角色消息中可能产生的冗余 Part 冲突，确保请求报文严格符合上游校验规范。
+        - **外部提供商智能兜底修复 (Fix Issue #703)**: 修复了"仅兜底"模式在 Google 账号额度耗尽时无法自动切换到外部提供商的问题。
+            - **核心问题**: 原判断逻辑只检查 Google 账号数量是否为 0,而不检查账号的实际可用性(限流状态、配额保护状态),导致账号存在但不可用时直接返回 429 错误。
+            - **解决方案**: 实现智能账号可用性检查机制,在 `TokenManager` 中新增 `has_available_account()` 方法,综合判断账号的限流状态和配额保护状态。
+            - **修改文件**:
+                - `token_manager.rs`: 新增 `has_available_account()` 方法,检查是否存在未被限流且未被配额保护的可用账号
+                - `handlers/claude.rs`: 优化 Fallback 模式判断逻辑,从简单的 `google_accounts == 0` 改为智能的可用性检查
+            - **行为改进**: 当所有 Google 账号因限流、配额保护或其他原因不可用时,系统会自动切换到外部提供商,实现真正的智能兜底。
+            - **影响范围**: 此修复确保了外部提供商(如智谱 API)的"仅兜底"模式能够正确工作,显著提升了多账号场景下的服务可用性。
+        - **配额保护模型名称归一化修复 (Fix Issue #685)**: 修复了配额保护功能因模型名称不匹配而失效的问题。
+            - **核心问题**: Quota API 返回的模型名称(如 `gemini-2.5-flash`)与用户在 UI 勾选的标准名称(如 `gemini-3-flash`)不一致,导致精确字符串匹配失败,保护机制无法触发。
+            - **解决方案**: 实现了统一的模型名称归一化引擎 `normalize_to_standard_id`,将所有物理模型名映射到 3 个标准保护 ID:
+                - `gemini-3-flash`: 所有 Flash 变体 (1.5-flash, 2.5-flash, 3-flash 等)
+                - `gemini-3-pro-high`: 所有 Pro 变体 (1.5-pro, 2.5-pro 等)
+                - `claude-sonnet-4-5`: 所有 Claude Sonnet 变体 (3-5-sonnet, sonnet-4-5 等)
+            - **修改文件**:
+                - `model_mapping.rs`: 新增归一化函数
+                - `account.rs`: 配额更新时归一化模型名并存储标准 ID
+                - `token_manager.rs`: 请求拦截时归一化 `target_model` 进行匹配
+            - **联网降级场景**: 即使请求因联网搜索被降级为 `gemini-2.5-flash`,依然能正确归一化为 `gemini-3-flash` 并触发保护。
+            - **影响范围**: 彻底解决了配额保护失效问题,确保所有 3 个监控模型的保护功能正常工作。
+        - **新增账号导入功能 (#682)**: 支持通过导出的 JSON 文件批量导入已有的账号，完善了账号迁移闭环。
+        - **新增葡萄牙语与俄语支持 (#691, #713)**: 现已支持葡萄牙语（巴西）与俄语本地化。
+        - **代理监控增强 (#676)**: 在代理监控详情页中为请求和响应载荷新增了“复制”按钮，并支持自动 JSON 格式化。
+        - **i18n 修复与界面文案优化 (#671, #713)**: 修正了日语 (ja)、土耳其语 (tr) 和俄语 (ru) 中遗漏和错位的翻译文案。
+        - **全局 HTTP API (#696)**: 新增本地 HTTP 服务端口（默认 19527），支持外部工具（如 VS Code 插件）直接通过 API 进行账号切换、配额刷新和设备绑定。
+        - **代理监控升级 (#704)**: 全面重构监控面板，引入后端分页查询（支持搜索过滤），彻底解决了大量日志导致的界面卡顿问题；开放 `GET /logs` 接口供外部调用。
+        - **预热策略优化 (#699)**: 预热请求新增唯一 `session_id`，并将 `max_tokens` 限制为 8，`temperature` 设置为 0，以降低资源消耗并避免 429 错误。
+        - **预热逻辑修复与优化**: 修复了手动触发预热未记录历史导致自动调度重复预热的问题；优化调度器自动跳过“反代禁用”状态的账号。
+        - **性能模式调度优化 (PR #706)**: 在“性能优先”调度模式下，现在会跳过默认的 60秒全局锁定机制，显著提升高并发场景下的账号轮转效率。
+        - **限流记录自动清理 (PR #701)**: 引入了每分钟执行的后台清理任务，自动移除超过 1 小时的过期失败记录，彻底解决长期运行后因历史记录累积导致的“无可用账号”误报问题。
+        - **API Monitor 锁定修复 (Fix Issue #708)**: 启用 SQLite WAL 模式并优化连接配置，彻底解决了高并发场景下因数据库锁定导致的监控数据滞后和代理服务 400/429 错误。
+        - **Claude 提示词过滤优化 (#712)**: 修复了在过滤 Claude Code 冗余默认提示词时，误删用户自定义指令 (Instructions from: ...) 的问题，确保个性化配置在长对话场景下仍能正确生效。
+        - **Claude 思维块排序策略优化 (Fix Issue #709)**: 彻底解决了开启思维模式时由于块顺序错位（Text 出现在 Thinking 前）导致的 `INVALID_ARGUMENT` 报错。
+            - **三段式强制分区**: 实现 `[Thinking, Text, ToolUse]` 严格顺序校验。
+            - **自动降级网关**: 在单条消息内，一旦出现非思维内容，后续思维块自动降级为文本，确保协议合规。
+            - **合并后二次重排**: 在 Assistant 消息合并逻辑后增加强制重排序，堵死因消息拼接导致的排序漏洞。
     *   **v3.3.32 (2026-01-15)**:
         - **核心调度与稳定性优化 (Fix Issue #630, #631 - 核心致谢 @lbjlaq PR #640)**:
             - **配额漏洞与绕过修复**: 解决了在高并发或特定重试场景下，配额保护机制可能被绕过的潜在漏洞。

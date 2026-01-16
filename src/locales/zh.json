@@ -51,7 +51,11 @@
         "switch_to_turkish": "切换到土耳其文",
         "switch_to_turkish_short": "TR",
         "switch_to_vietnamese": "切换到越南文",
-        "switch_to_vietnamese_short": "VI"
+        "switch_to_vietnamese_short": "VI",
+        "switch_to_russian": "切换到俄文",
+        "switch_to_russian_short": "RU",
+        "switch_to_portuguese": "切换到葡萄牙文",
+        "switch_to_portuguese_short": "PT"
     },
     "dashboard": {
         "hello": "你好, 用户 👋",
@@ -98,6 +102,11 @@
         "refresh_all": "刷新所有",
         "refresh_selected": "刷新 ({{count}})",
         "export_selected": "导出 ({{count}})",
+        "import_json": "导入",
+        "import_success": "成功导入 {{count}} 个账号",
+        "import_partial": "导入完成: {{success}} 个成功, {{fail}} 个失败",
+        "import_fail": "导入失败: {{error}}",
+        "import_invalid_format": "无效的 JSON 格式，请确保文件包含 email 和 refresh_token 字段",
         "delete_selected": "删除 ({{count}})",
         "current": "当前",
         "current_badge": "当前",
@@ -126,6 +135,7 @@
         "warmup_this": "预热该账号",
         "warmup_now": "立即预热",
         "warmup_batch_triggered": "已成功为 {{count}} 个账号触发预热任务",
+        "quota_protected": "受保护",
         "details": {
             "title": "配额详情"
         },
@@ -298,7 +308,17 @@
             "clear_logs": "清理日志缓存",
             "clear_logs_title": "清理日志确认",
             "clear_logs_msg": "确定要清理所有日志缓存文件吗？",
-            "logs_cleared": "日志缓存已清理"
+            "logs_cleared": "日志缓存已清理",
+            "http_api_title": "HTTP API 服务",
+            "http_api_desc": "为外部程序（如 VS Code 插件）提供本地 HTTP 接口。",
+            "http_api_enabled": "启用 HTTP API",
+            "http_api_enabled_desc": "启用后，外部程序可通过 HTTP 接口管理账号",
+            "http_api_port": "监听端口",
+            "http_api_port_desc": "修改端口后需要重启应用才能生效。如遇端口冲突，请更换为其他未被占用的端口。",
+            "http_api_port_placeholder": "默认端口 19527",
+            "http_api_port_invalid": "端口号无效（范围：1024-65535）",
+            "http_api_settings_saved": "HTTP API 设置已保存，重启应用后生效",
+            "http_api_restart_required": "⚠️ 需要重启应用后生效"
         },
         "about": {
             "title": "关于",

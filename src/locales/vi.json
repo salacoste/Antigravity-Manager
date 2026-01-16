@@ -49,7 +49,11 @@
         "switch_to_turkish": "Chuyển sang Tiếng Thổ Nhĩ Kỳ",
         "switch_to_turkish_short": "TR",
         "switch_to_vietnamese": "Chuyển sang Tiếng Việt",
-        "switch_to_vietnamese_short": "VI"
+        "switch_to_vietnamese_short": "VI",
+        "switch_to_russian": "Chuyển sang tiếng Nga",
+        "switch_to_russian_short": "RU",
+        "switch_to_portuguese": "Chuyển sang tiếng Bồ Đào Nha",
+        "switch_to_portuguese_short": "PT"
     },
     "dashboard": {
         "hello": "Xin chào, Bạn 👋",
@@ -124,6 +128,7 @@
         "warmup_this": "Làm nóng tài khoản này",
         "warmup_now": "Làm nóng Ngay",
         "warmup_batch_triggered": "Đã kích hoạt làm nóng cho {{count}} tài khoản",
+        "quota_protected": "Được bảo vệ",
         "details": {
             "title": "Chi tiết Hạn mức"
         },
@@ -296,7 +301,17 @@
             "clear_logs": "Dọn dẹp Cache Logs",
             "clear_logs_title": "Xác nhận Dọn dẹp Logs",
             "clear_logs_msg": "Bạn có chắc muốn xóa tất cả file cache logs?",
-            "logs_cleared": "Đã dọn dẹp cache logs"
+            "logs_cleared": "Đã dọn dẹp cache logs",
+            "http_api_title": "Dịch vụ HTTP API",
+            "http_api_desc": "Cung cấp giao diện HTTP cục bộ cho các chương trình bên ngoài (ví dụ: tiện ích mở rộng VS Code).",
+            "http_api_enabled": "Bật HTTP API",
+            "http_api_enabled_desc": "Khi bật, các chương trình bên ngoài có thể quản lý tài khoản qua giao diện HTTP",
+            "http_api_port": "Cổng Lắng nghe",
+            "http_api_port_desc": "Cần khởi động lại ứng dụng sau khi thay đổi cổng. Nếu xảy ra xung đột cổng, vui lòng sử dụng cổng khả dụng khác.",
+            "http_api_port_placeholder": "Cổng mặc định 19527",
+            "http_api_port_invalid": "Số cổng không hợp lệ (phạm vi: 1024-65535)",
+            "http_api_settings_saved": "Đã lưu cài đặt HTTP API, cần khởi động lại để áp dụng",
+            "http_api_restart_required": "⚠️ Cần khởi động lại ứng dụng để áp dụng"
         },
         "about": {
             "title": "Giới thiệu",
@@ -664,6 +679,20 @@
         "dialog": {
             "clear_title": "Xóa Logs Proxy",
             "clear_msg": "Bạn có chắc muốn xóa tất cả logs proxy? Hành động này không thể hoàn tác."
+        }
+    },
+    "update_notification": {
+        "title": "Có phiên bản mới",
+        "message": "Có phiên bản mới với nhiều tối ưu và cải tiến. Hiện tại: v{{current}}",
+        "action": "Cập nhật ngay"
+    },
+    "errors": {
+        "stream": {
+            "timeout_error": "Hết thời gian yêu cầu, vui lòng kiểm tra kết nối mạng",
+            "connection_error": "Kết nối thất bại, vui lòng kiểm tra mạng hoặc cài đặt proxy",
+            "decode_error": "Mạng không ổn định, truyền dữ liệu bị gián đoạn. Gợi ý: 1) Kiểm tra mạng 2) Đổi proxy 3) Thử lại",
+            "stream_error": "Lỗi truyền stream, vui lòng thử lại sau",
+            "unknown_error": "Đã xảy ra lỗi không xác định, vui lòng thử lại sau"
         }
     }
 }

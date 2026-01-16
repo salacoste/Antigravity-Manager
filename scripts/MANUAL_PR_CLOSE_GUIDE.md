@@ -4,7 +4,7 @@
 
 ## 需要关闭的 PR 列表
 
-以下 PR 已被手动集成到 v3.3.16：
+以下 PR 已被手动集成到 v3.3.34：
 
 1. **PR #395** - fix: convert enum values to strings for Gemini compatibility (@ThanhNguyxn)
 2. **PR #394** - feat: add account_email field to API monitoring logs (@ThanhNguyxn)
@@ -39,7 +39,7 @@
 ```markdown
 感谢您的贡献！🎉
 
-此 PR 的更改已被手动集成到 v3.3.16 版本中。
+此 PR 的更改已被手动集成到 v3.3.34 版本中。
 
 相关更新已包含在以下文件中：
 - README.md 的版本更新日志
@@ -51,7 +51,7 @@
 
 Thank you for your contribution! 🎉
 
-The changes from this PR have been manually integrated into v3.3.16.
+The changes from this PR have been manually integrated into v3.3.34.
 
 The updates are documented in:
 - README.md changelog

@@ -3,6 +3,9 @@ import { Sun, Moon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../stores/useConfigStore';
 
+// Detect if running on Linux platform
+const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+
 function Navbar() {
     const location = useLocation();
     const { t, i18n } = useTranslation();
@@ -28,8 +31,8 @@ function Navbar() {
 
         const newTheme = config.theme === 'light' ? 'dark' : 'light';
 
-        // 如果浏览器支持 View Transition API
-        if ('startViewTransition' in document) {
+        // Use View Transition API if supported, but skip on Linux (may cause crash)
+        if ('startViewTransition' in document && !isLinux) {
             const x = event.clientX;
             const y = event.clientY;
             const endRadius = Math.hypot(
@@ -65,7 +68,7 @@ function Navbar() {
                 );
             });
         } else {
-            // 降级方案：直接切换
+            // Fallback: direct switch (Linux or browsers without View Transition)
             await saveConfig({
                 ...config,
                 theme: newTheme,
@@ -76,7 +79,7 @@ function Navbar() {
 
     const toggleLanguage = async () => {
         if (!config) return;
-        const langs = ['zh', 'zh-TW', 'en', 'ja', 'tr', 'vi'] as const;
+        const langs = ['zh', 'zh-TW', 'en', 'ja', 'tr', 'vi', 'pt', 'ru'] as const;
         const currentIndex = langs.indexOf(config.language as any);
         const nextLang = langs[(currentIndex + 1) % langs.length];
 
@@ -144,10 +147,10 @@ function Navbar() {
                         <button
                             onClick={toggleLanguage}
                             className="w-10 h-10 rounded-full bg-gray-100 dark:bg-base-200 hover:bg-gray-200 dark:hover:bg-base-100 flex items-center justify-center transition-colors"
-                            title={t('nav.switch_to_' + (config?.language === 'zh' ? 'traditional_chinese' : config?.language === 'zh-TW' ? 'english' : config?.language === 'en' ? 'japanese' : config?.language === 'ja' ? 'turkish' : config?.language === 'tr' ? 'vietnamese' : 'chinese'))}
+                            title={t('nav.switch_to_' + (config?.language === 'zh' ? 'traditional_chinese' : config?.language === 'zh-TW' ? 'english' : config?.language === 'en' ? 'japanese' : config?.language === 'ja' ? 'turkish' : config?.language === 'tr' ? 'vietnamese' : config?.language === 'vi' ? 'portuguese' : config?.language === 'pt' ? 'russian' : 'chinese'))}
                         >
                             <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                                {t('nav.switch_to_' + (config?.language === 'zh' ? 'traditional_chinese_short' : config?.language === 'zh-TW' ? 'english_short' : config?.language === 'en' ? 'japanese_short' : config?.language === 'ja' ? 'turkish_short' : config?.language === 'tr' ? 'vietnamese_short' : 'chinese_short'))}
+                                {t('nav.switch_to_' + (config?.language === 'zh' ? 'traditional_chinese_short' : config?.language === 'zh-TW' ? 'english_short' : config?.language === 'en' ? 'japanese_short' : config?.language === 'ja' ? 'turkish_short' : config?.language === 'tr' ? 'vietnamese_short' : config?.language === 'vi' ? 'portuguese_short' : config?.language === 'pt' ? 'russian_short' : 'chinese_short'))}
                             </span>
                         </button>
                     </div>

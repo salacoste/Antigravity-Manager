@@ -3,6 +3,9 @@ import { useEffect } from 'react';
 import { useConfigStore } from '../../stores/useConfigStore';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
+// Detect if running on Linux platform
+const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+
 export default function ThemeManager() {
     const { config, loadConfig } = useConfigStore();
 
@@ -27,9 +30,12 @@ export default function ThemeManager() {
             const isDark = theme === 'dark';
 
             // Set Tauri window background color
+            // Skip on Linux due to crash with transparent windows + softbuffer
             try {
-                const bgColor = isDark ? '#1d232a' : '#FAFBFC';
-                await getCurrentWindow().setBackgroundColor(bgColor);
+                if (!isLinux) {
+                    const bgColor = isDark ? '#1d232a' : '#FAFBFC';
+                    await getCurrentWindow().setBackgroundColor(bgColor);
+                }
             } catch (e) {
                 console.error('Failed to set window background color:', e);
             }

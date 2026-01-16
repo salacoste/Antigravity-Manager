@@ -51,7 +51,11 @@
         "switch_to_turkish": "切換到土耳其文",
         "switch_to_turkish_short": "TR",
         "switch_to_vietnamese": "切換到越南文",
-        "switch_to_vietnamese_short": "VI"
+        "switch_to_vietnamese_short": "VI",
+        "switch_to_russian": "切換到俄文",
+        "switch_to_russian_short": "RU",
+        "switch_to_portuguese": "切換到葡萄牙文",
+        "switch_to_portuguese_short": "PT"
     },
     "dashboard": {
         "hello": "你好, 使用者 👋",
@@ -126,6 +130,7 @@
         "warmup_this": "預熱該帳號",
         "warmup_now": "立即預熱",
         "warmup_batch_triggered": "已成功為 {{count}} 個帳號觸發預熱任務",
+        "quota_protected": "受保護",
         "details": {
             "title": "配額詳情"
         },
@@ -298,7 +303,17 @@
             "clear_logs": "清理紀錄快取",
             "clear_logs_title": "清理紀錄確認",
             "clear_logs_msg": "確定要清理所有紀錄快取檔案嗎？",
-            "logs_cleared": "紀錄快取已清理"
+            "logs_cleared": "紀錄快取已清理",
+            "http_api_title": "HTTP API 服務",
+            "http_api_desc": "為外部程式(如 VS Code 外掛)提供本地 HTTP 介面。",
+            "http_api_enabled": "啟用 HTTP API",
+            "http_api_enabled_desc": "啟用後,外部程式可透過 HTTP 介面管理帳號",
+            "http_api_port": "監聽通訊埠",
+            "http_api_port_desc": "修改通訊埠後需要重啟應用才能生效。如遇通訊埠衝突,請更換為其他未被佔用的通訊埠。",
+            "http_api_port_placeholder": "預設通訊埠 19527",
+            "http_api_port_invalid": "通訊埠號無效(範圍:1024-65535)",
+            "http_api_settings_saved": "HTTP API 設定已儲存,重啟應用後生效",
+            "http_api_restart_required": "⚠️ 需要重啟應用後生效"
         },
         "about": {
             "title": "關於",

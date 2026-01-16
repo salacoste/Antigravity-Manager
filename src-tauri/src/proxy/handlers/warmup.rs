@@ -50,29 +50,28 @@ pub async fn handle_warmup(
     );
 
     // ===== 步骤 1: 获取 Token =====
-    let (access_token, project_id) =
-        if let (Some(at), Some(pid)) = (&req.access_token, &req.project_id) {
-            (at.clone(), pid.clone())
-        } else {
-            match state.token_manager.get_token_by_email(&req.email).await {
-                Ok((at, pid, _)) => (at, pid),
-                Err(e) => {
-                    warn!(
-                        "[Warmup-API] Step 1 FAILED: Token error for {}: {}",
-                        req.email, e
-                    );
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        Json(WarmupResponse {
-                            success: false,
-                            message: format!("Failed to get token for {}", req.email),
-                            error: Some(e),
-                        }),
-                    )
-                        .into_response();
-                }
+    let (access_token, project_id) = if let (Some(at), Some(pid)) = (&req.access_token, &req.project_id) {
+        (at.clone(), pid.clone())
+    } else {
+        match state.token_manager.get_token_by_email(&req.email).await {
+            Ok((at, pid, _)) => (at, pid),
+            Err(e) => {
+                warn!(
+                    "[Warmup-API] Step 1 FAILED: Token error for {}: {}",
+                    req.email, e
+                );
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(WarmupResponse {
+                        success: false,
+                        message: format!("Failed to get token for {}", req.email),
+                        error: Some(e),
+                    }),
+                )
+                    .into_response();
             }
-        };
+        }
+    };
 
     // ===== 步骤 2: 根据模型类型构建请求体 =====
     let is_claude = req.model.to_lowercase().contains("claude");
@@ -80,6 +79,10 @@ pub async fn handle_warmup(
 
     let body: Value = if is_claude {
         // Claude 模型：使用 transform_claude_request_in 转换
+        let session_id = format!("warmup_{}_{}", 
+            chrono::Utc::now().timestamp_millis(),
+            &uuid::Uuid::new_v4().to_string()[..8]
+        );
         let claude_request = crate::proxy::mappers::claude::models::ClaudeRequest {
             model: req.model.clone(),
             messages: vec![crate::proxy::mappers::claude::models::Message {
@@ -95,8 +98,9 @@ pub async fn handle_warmup(
             top_p: None,
             top_k: None,
             tools: None,
-            tool_choice: None,
-            metadata: None,
+            metadata: Some(crate::proxy::mappers::claude::models::Metadata {
+                user_id: Some(session_id),
+            }),
             thinking: None,
             output_config: None,
         };
@@ -105,7 +109,7 @@ pub async fn handle_warmup(
             &claude_request,
             &project_id,
         ) {
-            Ok((transformed, _violation_info)) => transformed,
+            Ok(transformed) => transformed,
             Err(e) => {
                 warn!("[Warmup-API] Step 2 FAILED: Claude transform error: {}", e);
                 return (
@@ -121,19 +125,30 @@ pub async fn handle_warmup(
         }
     } else {
         // Gemini 模型：使用 wrap_request
+        let session_id = format!("warmup_{}_{}", 
+            chrono::Utc::now().timestamp_millis(),
+            &uuid::Uuid::new_v4().to_string()[..8]
+        );
+
         let base_request = if is_image {
             json!({
                 "model": req.model,
                 "contents": [{"role": "user", "parts": [{"text": "Say hi"}]}],
                 "generationConfig": {
                     "maxOutputTokens": 10,
+                    "temperature": 0,
                     "responseModalities": ["TEXT"]
-                }
+                },
+                "session_id": session_id
             })
         } else {
             json!({
                 "model": req.model,
-                "contents": [{"role": "user", "parts": [{"text": "Say hi"}]}]
+                "contents": [{"role": "user", "parts": [{"text": "Say hi"}]}],
+                "generationConfig": {
+                    "temperature": 0
+                },
+                "session_id": session_id
             })
         };
 
@@ -164,7 +179,6 @@ pub async fn handle_warmup(
     }
 
     // ===== 步骤 4: 处理响应 =====
-    let _start_time = std::time::Instant::now();
     match result {
         Ok(response) => {
             let status = response.status();
@@ -203,7 +217,7 @@ pub async fn handle_warmup(
             if let Ok(model_val) = axum::http::HeaderValue::from_str(&req.model) {
                 response.headers_mut().insert("X-Mapped-Model", model_val);
             }
-
+            
             response
         }
         Err(e) => {
@@ -211,7 +225,7 @@ pub async fn handle_warmup(
                 "[Warmup-API] ========== ERROR: {} / {} - {} ==========",
                 req.email, req.model, e
             );
-
+            
             let mut response = (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(WarmupResponse {
@@ -219,8 +233,7 @@ pub async fn handle_warmup(
                     message: "Warmup request failed".to_string(),
                     error: Some(e),
                 }),
-            )
-                .into_response();
+            ).into_response();
 
             // 即使失败也添加响应头，以便监控
             if let Ok(email_val) = axum::http::HeaderValue::from_str(&req.email) {
@@ -229,7 +242,7 @@ pub async fn handle_warmup(
             if let Ok(model_val) = axum::http::HeaderValue::from_str(&req.model) {
                 response.headers_mut().insert("X-Mapped-Model", model_val);
             }
-
+            
             response
         }
     }
