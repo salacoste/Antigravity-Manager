@@ -106,6 +106,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
