@@ -893,8 +893,10 @@ pub async fn handle_messages(
                 trace_id
             );
 
-            // 完全移除所有 thinking 相关内容
-            request_for_body.thinking = None;
+            // [IMPROVED] 不再禁用 Thinking 模式！
+            // 既然我们已经将历史 Thinking Block 转换为 Text，那么当前请求可以视为一个新的 Thinking 会话
+            // 保持 thinking 配置开启，让模型重新生成思维，避免退化为简单的 "OK" 回复
+            // request_for_body.thinking = None;
             
             // 清理历史消息中的所有 Thinking Block，将其转换为 Text 以保留上下文
             for msg in request_for_body.messages.iter_mut() {
