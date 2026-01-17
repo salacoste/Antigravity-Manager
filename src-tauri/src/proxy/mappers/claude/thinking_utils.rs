@@ -65,12 +65,21 @@ pub fn close_tool_loop_for_thinking(messages: &mut Vec<Message>) {
         return;
     }
     
-    // Check if the last assistant message has a thinking block
-    let mut has_thinking = false;
+    // Check if the last assistant message has a valid thinking block
+    let mut has_valid_thinking = false;
     if let Some(idx) = state.last_assistant_idx {
         if let Some(msg) = messages.get(idx) {
              if let MessageContent::Array(blocks) = &msg.content {
-                 has_thinking = blocks.iter().any(|b| matches!(b, ContentBlock::Thinking { .. }));
+                 for block in blocks {
+                     if let ContentBlock::Thinking { thinking, signature, .. } = block {
+                         if !thinking.is_empty() && signature.is_some() {
+                             // Basic check: if it has content and a signature, assume it's valid for now
+                             // unless we are in a retry context (handled by caller)
+                             has_valid_thinking = true;
+                             break;
+                         }
+                     }
+                 }
              }
         }
     }
@@ -79,7 +88,7 @@ pub fn close_tool_loop_for_thinking(messages: &mut Vec<Message>) {
     // we must break the loop. 
     // Exception: If thinking is NOT enabled for this request, we don't need to do this (handled by other logic).
     // But here we assume we are called because thinking IS enabled.
-    if !has_thinking {
+    if !has_valid_thinking {
         info!("[Thinking-Recovery] Detected broken tool loop (ToolResult without preceding Thinking). Injecting synthetic messages.");
         
         // Strategy: 

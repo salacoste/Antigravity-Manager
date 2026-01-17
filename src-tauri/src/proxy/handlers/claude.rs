@@ -553,7 +553,9 @@ pub async fn handle_messages(
     let token_manager = state.token_manager;
     
     let pool_size = token_manager.len();
-    let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
+    // [FIX] Ensure max_attempts is at least 2 to allow for internal retries (e.g. stripping signatures)
+    // even if the user has only 1 account.
+    let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size.saturating_add(1)).max(2);
 
     let mut last_error = String::new();
     let mut retried_without_thinking = false;
@@ -667,7 +669,7 @@ pub async fn handle_messages(
         // 生成 Trace ID (简单用时间戳后缀)
         // let _trace_id = format!("req_{}", chrono::Utc::now().timestamp_subsec_millis());
 
-        let gemini_body = match transform_claude_request_in(&request_with_mapped, &project_id) {
+        let gemini_body = match transform_claude_request_in(&request_with_mapped, &project_id, retried_without_thinking) {
             Ok(b) => {
                 debug!("[{}] Transformed Gemini Body: {}", trace_id, serde_json::to_string_pretty(&b).unwrap_or_default());
                 b
@@ -891,6 +893,8 @@ pub async fn handle_messages(
                 || error_text.contains("INVALID_ARGUMENT")  // [New] Catch generic Google 400s
                 || error_text.contains("Corrupted thought signature") // [New] Explicit signature corruption
                 || error_text.contains("failed to deserialise") // [New] JSON structure issues
+                || error_text.contains("Invalid signature") // [New] Universal signature error
+                || error_text.contains("thinking block") // [New] Thinking block context
                 )
         {
             // Existing logic for thinking signature...
@@ -929,9 +933,13 @@ pub async fn handle_messages(
                             _ => new_blocks.push(block),
                         }
                     }
-                    *blocks = new_blocks;
                 }
             }
+            
+            // [NEW] Heal session after stripping thinking blocks to prevent "naked ToolResult" rejection
+            // This ensures that any ToolResult in history is properly "closed" with synthetic messages
+            // if its preceding Thinking block was just converted to Text.
+            crate::proxy::mappers::claude::thinking_utils::close_tool_loop_for_thinking(&mut request_for_body.messages);
             
             // 清理模型名中的 -thinking 后缀
             if request_for_body.model.contains("claude-") {
