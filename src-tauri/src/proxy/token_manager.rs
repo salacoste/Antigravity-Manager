@@ -1043,8 +1043,8 @@ impl TokenManager {
     
     /// 清除过期的限流记录
     #[allow(dead_code)]
-    pub fn clean_expired_rate_limits(&self) {
-        self.rate_limit_tracker.cleanup_expired();
+    pub fn clean_expired_rate_limits(&self) -> usize {
+        self.rate_limit_tracker.cleanup_expired()
     }
     
     /// 【替代方案】通过 email 查找对应的 account_id
@@ -1067,6 +1067,45 @@ impl TokenManager {
     /// 下次失败时从最短的锁定时间开始（智能限流）。
     pub fn mark_account_success(&self, account_id: &str) {
         self.rate_limit_tracker.mark_success(account_id);
+    }
+
+    /// Mark a request as successful using `email` (convenience wrapper).
+    ///
+    /// Many handlers only have an email string (because `get_token()` returns it),
+    /// but the rate-limit tracker keys are account IDs.
+    pub fn mark_success_by_email(&self, email: &str) {
+        let key = self.email_to_account_id(email).unwrap_or_else(|| email.to_string());
+        self.rate_limit_tracker.mark_success(&key);
+    }
+
+    /// Load all account JSON files from disk (including disabled ones).
+    ///
+    /// Used by `/account-limits` handler for external compatibility.
+    pub fn get_all_accounts_info(&self) -> Result<Vec<serde_json::Value>, String> {
+        let accounts_dir = self.data_dir.join("accounts");
+        if !accounts_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let entries =
+            std::fs::read_dir(&accounts_dir).map_err(|e| format!("读取账号目录失败: {}", e))?;
+
+        let mut accounts = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                continue;
+            }
+
+            let content =
+                std::fs::read_to_string(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+            let value: serde_json::Value =
+                serde_json::from_str(&content).map_err(|e| format!("解析 JSON 失败: {}", e))?;
+            accounts.push(value);
+        }
+
+        Ok(accounts)
     }
     
     /// 检查是否有可用的 Google 账号

@@ -205,17 +205,17 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
 #[allow(dead_code)]
 fn deep_clean_html(html: &str) -> String {
     let mut result = html.to_string();
-    
+
     // 1. 移除 <style>...</style> 及其内容
     if let Ok(re) = Regex::new(r"(?is)<style\b[^>]*>.*?</style>") {
         result = re.replace_all(&result, "[style omitted]").to_string();
     }
-    
+
     // 2. 移除 <script>...</script> 及其内容
     if let Ok(re) = Regex::new(r"(?is)<script\b[^>]*>.*?</script>") {
         result = re.replace_all(&result, "[script omitted]").to_string();
     }
-    
+
     // 3. 移除 inline Base64 数据 (如 src="data:image/png;base64,...")
     if let Ok(re) = Regex::new(r#"(?i)data:[^;/]+/[^;]+;base64,[A-Za-z0-9+/=]+"#) {
         result = re.replace_all(&result, "[base64 omitted]").to_string();
@@ -225,7 +225,7 @@ fn deep_clean_html(html: &str) -> String {
     if let Ok(re) = Regex::new(r"\n\s*\n") {
         result = re.replace_all(&result, "\n").to_string();
     }
-    
+
     result
 }
 
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn test_truncate_text() {
         let text = "a".repeat(300_000);
-        let result = truncate_text_safe(&text, 200_000);
+        let result = truncate_text(&text, 200_000);
         assert!(result.len() < 210_000); // 包含截断提示
         assert!(result.contains("[truncated"));
         assert!(result.contains("100000 chars]"));
@@ -330,7 +330,7 @@ mod tests {
     #[test]
     fn test_truncate_text_no_truncation() {
         let text = "short text";
-        let result = truncate_text_safe(text, 1000);
+        let result = truncate_text(text, 1000);
         assert_eq!(result, text);
     }
 

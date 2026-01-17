@@ -19,9 +19,10 @@ fn coerce_to_bool(value: &serde_json::Value) -> Option<serde_json::Value> {
                 None // Unknown string, can't coerce
             }
         }
-        serde_json::Value::Number(n) => {
-            Some(serde_json::json!(n.as_i64().map(|i| i != 0).unwrap_or(false)))
-        }
+        serde_json::Value::Number(n) => Some(serde_json::json!(n
+            .as_i64()
+            .map(|i| i != 0)
+            .unwrap_or(false))),
         _ => None,
     }
 }
@@ -81,7 +82,7 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                         let include_str = if let Some(arr) = includes.as_array() {
                             // Join with comma? Or take first? Claude Code expects a single glob string.
                             // Trying comma separation which is common for multi-glob
-                             arr.iter()
+                            arr.iter()
                                 .filter_map(|v| v.as_str())
                                 .collect::<Vec<_>>()
                                 .join(",")
@@ -90,10 +91,13 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                         } else {
                             String::new()
                         };
-                        
+
                         if !include_str.is_empty() {
                             obj.insert("include".to_string(), serde_json::json!(include_str));
-                            tracing::debug!("[Response] Remapped Grep: includes → include(\"{}\")", include_str);
+                            tracing::debug!(
+                                "[Response] Remapped Grep: includes → include(\"{}\")",
+                                include_str
+                            );
                         }
                     }
                 }
@@ -119,13 +123,22 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                 }
 
                 // [FIX #547] Coerce all known boolean parameters from string to bool
-                let bool_params = ["ignoreCase", "lineNumbers", "caseSensitive", "regex", "wholeWord"];
+                let bool_params = [
+                    "ignoreCase",
+                    "lineNumbers",
+                    "caseSensitive",
+                    "regex",
+                    "wholeWord",
+                ];
                 for param in bool_params {
                     if let Some(val) = obj.get(param).cloned() {
                         if val.is_string() {
                             if let Some(bool_val) = coerce_to_bool(&val) {
                                 obj.insert(param.to_string(), bool_val);
-                                tracing::debug!("[Response] Coerced Grep param '{}' from string to bool", param);
+                                tracing::debug!(
+                                    "[Response] Coerced Grep param '{}' from string to bool",
+                                    param
+                                );
                             }
                         }
                     }
@@ -217,7 +230,7 @@ impl NonStreamingProcessor {
             thinking_signature: None,
             trailing_signature: None,
             has_tool_call: false,
-            scaling_enabled: false, 
+            scaling_enabled: false,
             context_limit: 1_048_576, // Default to 1M
         }
     }
@@ -492,9 +505,8 @@ impl NonStreamingProcessor {
         }
 
         if !current_text.is_empty() {
-            self.content_blocks.push(ContentBlock::Text {
-                text: current_text,
-            });
+            self.content_blocks
+                .push(ContentBlock::Text { text: current_text });
         }
     }
 
@@ -607,7 +619,7 @@ mod tests {
             response_id: Some("resp_123".to_string()),
         };
 
-        let result = transform_response(&gemini_resp, false, 1_000_000);
+        let result = transform_response(&gemini_resp, false);
         assert!(result.is_ok());
 
         let claude_resp = result.unwrap();
@@ -657,7 +669,7 @@ mod tests {
             response_id: Some("resp_456".to_string()),
         };
 
-        let result = transform_response(&gemini_resp, false, 1_000_000);
+        let result = transform_response(&gemini_resp, false);
         assert!(result.is_ok());
 
         let claude_resp = result.unwrap();

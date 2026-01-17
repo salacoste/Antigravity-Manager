@@ -544,7 +544,11 @@ impl QuotaManager {
 mod tests {
     use super::*;
     use chrono::Utc;
+    use dashmap::DashMap;
+    use std::collections::HashSet;
     use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
 
     fn create_test_token(account_id: &str, project_id: Option<&str>) -> ProxyToken {
         ProxyToken {
@@ -558,6 +562,7 @@ mod tests {
             project_id: project_id.map(|s| s.to_string()),
             subscription_tier: Some("PRO".to_string()),
             remaining_quota: Some(100),
+            protected_models: HashSet::new(),
         }
     }
 
@@ -590,7 +595,7 @@ mod tests {
     #[tokio::test]
     async fn test_sync_all_quotas_empty_accounts() {
         let manager = QuotaManager::new(300);
-        let tokens = Arc::new(DashMap::new());
+        let tokens: Arc<DashMap<String, ProxyToken>> = Arc::new(DashMap::new());
 
         let result = manager.sync_all_quotas(&tokens).await;
         assert!(result.is_ok());
@@ -603,7 +608,7 @@ mod tests {
     #[tokio::test]
     async fn test_sync_all_quotas_with_invalid_accounts() {
         let manager = QuotaManager::new(300);
-        let tokens = Arc::new(DashMap::new());
+        let tokens: Arc<DashMap<String, ProxyToken>> = Arc::new(DashMap::new());
 
         tokens.insert(
             "acc1".to_string(),
@@ -626,7 +631,7 @@ mod tests {
     #[tokio::test]
     async fn test_background_monitor_starts() {
         let manager = Arc::new(QuotaManager::new(300));
-        let tokens = Arc::new(DashMap::new());
+        let tokens: Arc<DashMap<String, ProxyToken>> = Arc::new(DashMap::new());
 
         // Start monitor (will run indefinitely)
         let handle = manager.clone().start_background_monitor(tokens.clone(), 1);
@@ -659,7 +664,7 @@ mod tests {
     #[tokio::test]
     async fn test_cache_cleanup_during_sync() {
         let manager = QuotaManager::new(1); // 1 second TTL
-        let tokens = Arc::new(DashMap::new());
+        let tokens: Arc<DashMap<String, ProxyToken>> = Arc::new(DashMap::new());
 
         // Add expired cache entry
         manager.cache.set(
@@ -682,7 +687,7 @@ mod tests {
     #[tokio::test]
     async fn test_sync_with_missing_project_id() {
         let manager = QuotaManager::new(300);
-        let tokens = Arc::new(DashMap::new());
+        let tokens: Arc<DashMap<String, ProxyToken>> = Arc::new(DashMap::new());
 
         // Account without project_id
         tokens.insert("acc1".to_string(), create_test_token("acc1", None));
@@ -699,7 +704,7 @@ mod tests {
     #[tokio::test]
     async fn test_parallel_sync_performance() {
         let manager = QuotaManager::new(300);
-        let tokens = Arc::new(DashMap::new());
+        let tokens: Arc<DashMap<String, ProxyToken>> = Arc::new(DashMap::new());
 
         // Add 10 accounts
         for i in 0..10 {

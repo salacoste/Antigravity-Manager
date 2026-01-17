@@ -475,6 +475,7 @@ mod tests {
             instructions: None,
             input: None,
             prompt: None,
+            reasoning_effort: None,
         };
 
         let result = transform_openai_request(&req, "test-v", "gemini-1.5-flash");

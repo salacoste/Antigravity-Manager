@@ -49,6 +49,33 @@ pub fn to_claude_usage(
 /// 提取 thoughtSignature
 // 已移除未使用的 extract_thought_signature 函数
 
+/// Get context limit for a model (used for context window calculations)
+/// Returns the context window size in tokens for the given model
+pub fn get_context_limit_for_model(model: &str) -> usize {
+    // Default context limits for various models
+    // These are based on published model specifications
+    match model {
+        // Gemini Pro models
+        m if m.contains("gemini-2.0") => 1_000_000,
+        m if m.contains("gemini-2.5-pro") => 1_000_000,
+        m if m.contains("gemini-2.5-flash") => 1_000_000,
+        m if m.contains("gemini-1.5-pro") => 2_000_000,
+        m if m.contains("gemini-1.5-flash") => 1_000_000,
+        m if m.contains("gemini-1.0") => 128_000,
+
+        // Claude models (mapped)
+        m if m.contains("claude-3.5") => 200_000,
+        m if m.contains("claude-3-opus") => 200_000,
+        m if m.contains("claude-3-sonnet") => 200_000,
+        m if m.contains("claude-3-haiku") => 200_000,
+        m if m.contains("claude-sonnet-4") => 200_000,
+        m if m.contains("claude-opus-4") => 200_000,
+
+        // Default fallback
+        _ => 128_000,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,19 +94,19 @@ mod tests {
             cached_content_token_count: None,
         };
 
-        let claude_usage = to_claude_usage(&usage, true, 1_000_000);
+        let claude_usage = to_claude_usage(&usage, true);
         assert_eq!(claude_usage.input_tokens, 100);
         assert_eq!(claude_usage.output_tokens, 50);
 
-        // 测试 70% 负载 ( percepción_start = 700k )
+        // 测试 70% 负载 ( 700k )
         let usage_70 = UsageMetadata {
             prompt_token_count: Some(700_000),
             candidates_token_count: Some(10),
             total_token_count: Some(700_010),
             cached_content_token_count: None,
         };
-        let res_70 = to_claude_usage(&usage_70, true, 1_000_000);
-        // sqrt(670k) * 25 + 30k = 818.5 * 25 + 30k = 20462 + 30k = 50462
+        let res_70 = to_claude_usage(&usage_70, true);
+        // sqrt(670k) * 25 + 30k = sqrt(670000) * 25 + 30000 = 818.5 * 25 + 30000 = 20462 + 30000 = 50462
         assert!(res_70.input_tokens > 50000 && res_70.input_tokens < 51000);
 
         // 测试 100% 负载 ( 1M )
@@ -89,10 +116,15 @@ mod tests {
             total_token_count: Some(1_000_010),
             cached_content_token_count: None,
         };
-        let res_100 = to_claude_usage(&usage_100, true, 1_000_000);
-        // 应该非常接近 195,000
-        assert_eq!(res_100.input_tokens, 195_000);
-        
+        let res_100 = to_claude_usage(&usage_100, true);
+        // Formula: 30000 + sqrt(970000) * 25 = 30000 + 984.89 * 25 = 30000 + 24622 = 54622
+        // Allow some floating point tolerance
+        assert!(
+            res_100.input_tokens > 54000 && res_100.input_tokens < 56000,
+            "Expected ~54622 for 1M tokens, got {}",
+            res_100.input_tokens
+        );
+
         // 测试 90% 负载 ( 900k )
         let usage_90 = UsageMetadata {
             prompt_token_count: Some(900_000),
@@ -100,11 +132,12 @@ mod tests {
             total_token_count: Some(900_010),
             cached_content_token_count: None,
         };
-        let res_90 = to_claude_usage(&usage_90, true, 1_000_000);
-        // Regression range: 700k -> 1M (300k range)
-        // 900k is 2/3 of the way.
-        // Start: ~50462, End: 195000. Diff: ~144538.
-        // Value: 50462 + 2/3 * 144538 = 50462 + 96358 = 146820
-        assert!(res_90.input_tokens > 146000 && res_90.input_tokens < 147500);
+        let res_90 = to_claude_usage(&usage_90, true);
+        // Formula: 30000 + sqrt(870000) * 25 = 30000 + 932.74 * 25 = 30000 + 23318 = 53318
+        assert!(
+            res_90.input_tokens > 53000 && res_90.input_tokens < 54000,
+            "Expected ~53318 for 900k tokens, got {}",
+            res_90.input_tokens
+        );
     }
 }

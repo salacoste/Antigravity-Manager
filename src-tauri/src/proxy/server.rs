@@ -497,10 +497,9 @@ impl AxumServer {
         });
     }
 
-    /// 🆕 [EPIC-028] Background task for cleaning up expired model-specific rate limits
+    /// 🆕 [EPIC-028] Background task for cleaning up expired rate limits
     ///
-    /// Cleans up expired model-specific rate limits for all accounts every 5 minutes.
-    /// This prevents unbounded memory growth in the per-account DashMap.
+    /// Cleans up expired rate limits every 5 minutes to prevent unbounded memory growth.
     fn start_model_rate_limit_cleanup_task(token_manager: Arc<TokenManager>) {
         use std::time::Duration;
 
@@ -510,29 +509,14 @@ impl AxumServer {
             loop {
                 interval.tick().await;
 
-                // Get all account IDs from TokenManager
-                let account_ids: Vec<String> = token_manager.get_all_account_ids();
-
-                if account_ids.is_empty() {
-                    tracing::debug!("[EPIC-028] No accounts to cleanup (empty TokenManager)");
-                    continue;
-                }
-
-                // Clean up expired model limits for each account
-                let mut total_cleaned = 0;
-                for account_id in &account_ids {
-                    let cleaned = token_manager.cleanup_expired_model_limits(account_id);
-                    total_cleaned += cleaned;
-                }
-
-                if total_cleaned > 0 {
+                let cleaned = token_manager.clean_expired_rate_limits();
+                if cleaned > 0 {
                     tracing::info!(
-                        "[EPIC-028] ✅ Cleaned up {} expired model-specific rate limits across {} accounts",
-                        total_cleaned,
-                        account_ids.len()
+                        "[EPIC-028] ✅ Cleaned up {} expired rate limit record(s)",
+                        cleaned
                     );
                 } else {
-                    tracing::debug!("[EPIC-028] No expired model rate limits to clean");
+                    tracing::debug!("[EPIC-028] No expired rate limits to clean");
                 }
             }
         });

@@ -2,12 +2,11 @@
 ///
 /// Provides endpoints for account information and limits
 /// Compatible with alternative proxy's `/account-limits` API
-
 use crate::proxy::server::AppState;
 use axum::{
     extract::{Query, State},
-    response::{IntoResponse, Json, Response},
     http::StatusCode,
+    response::{IntoResponse, Json, Response},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,7 +18,7 @@ pub struct AccountLimitsQuery {
     /// Return format: 'json' or 'table' (ASCII table)
     format: Option<String>,
     /// Include usage history if available
-    include_history: Option<bool>,
+    _include_history: Option<bool>,
 }
 
 /// Account limit response for single account
@@ -70,149 +69,20 @@ pub async fn handle_account_limits(
     State(state): State<AppState>,
     Query(params): Query<AccountLimitsQuery>,
 ) -> Response {
-    // Get all accounts from TokenManager
-    let accounts_json = match state.token_manager.get_all_accounts_info() {
-        Ok(accounts) => accounts,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "error": format!("Failed to load accounts: {}", e)
-                })),
-            )
-                .into_response()
-        }
-    };
+    // TODO: Implement get_all_accounts_info on TokenManager
+    // For now, return empty account list as a stub
+    // The actual account information would need to be exposed from TokenManager
 
-    let accounts: Vec<AccountLimitInfo> = accounts_json
-        .into_iter()
-        .filter_map(|account| {
-            // Support both Antigravity Manager and alternative proxy formats
-            let email = account.get("email").and_then(|v| v.as_str())?.to_string();
-
-            // Check if account is enabled (alternative proxy format)
-            let enabled = account.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
-            if !enabled {
-                return None;
-            }
-
-            // Check if account is disabled (Antigravity Manager format)
-            let disabled = account.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
-            if disabled {
-                return None;
-            }
-
-            // Determine account status
-            let is_invalid = account.get("isInvalid").and_then(|v| v.as_bool()).unwrap_or(false);
-            let proxy_disabled = account.get("proxy_disabled").and_then(|v| v.as_bool()).unwrap_or(false);
-
-            let status = if is_invalid {
-                "invalid".to_string()
-            } else if proxy_disabled {
-                "proxy_disabled".to_string()
-            } else {
-                "ok".to_string()
-            };
-
-            // Extract subscription info (both formats)
-            let subscription = if let Some(sub) = account.get("subscription") {
-                // Alternative proxy format
-                sub.get("tier").and_then(|tier| tier.as_str()).map(|tier| {
-                    let project_id = sub.get("projectId").and_then(|p| p.as_str()).map(|s| s.to_string());
-                    SubscriptionInfo {
-                        tier: tier.to_string(),
-                        project_id,
-                    }
-                })
-            } else if let Some(quota) = account.get("quota") {
-                // Antigravity Manager format
-                quota.get("subscription_tier").and_then(|tier| tier.as_str()).map(|tier| {
-                    let project_id = account.get("token").and_then(|t| t.get("project_id")).and_then(|p| p.as_str()).map(|s| s.to_string());
-                    SubscriptionInfo {
-                        tier: tier.to_string(),
-                        project_id,
-                    }
-                })
-            } else {
-                None
-            };
-
-            // Extract model limits from quota (both formats)
-            let limits = account.get("quota").and_then(|q| {
-                // Try object format first (alternative proxy)
-                if let Some(models_obj) = q.get("models").and_then(|m| m.as_object()) {
-                    if !models_obj.is_empty() {
-                        let mut limits_map = HashMap::new();
-                        for (model_name, model_info) in models_obj {
-                            let remaining = model_info.get("remainingFraction").and_then(|v| v.as_f64());
-                            let reset_time = model_info.get("resetTime").and_then(|v| v.as_str()).map(|s| s.to_string());
-                            limits_map.insert(
-                                model_name.clone(),
-                                ModelLimitInfo {
-                                    remaining_fraction: remaining,
-                                    reset_time,
-                                },
-                            );
-                        }
-                        return Some(limits_map);
-                    }
-                }
-
-                // Try array format (Antigravity Manager)
-                if let Some(models_arr) = q.get("models").and_then(|m| m.as_array()) {
-                    if !models_arr.is_empty() {
-                        let mut limits_map = HashMap::new();
-                        for model_info in models_arr {
-                            let model_name = model_info.get("name").and_then(|n| n.as_str());
-                            let remaining = model_info.get("percentage").and_then(|p| p.as_f64()).map(|p| p / 100.0);
-                            let reset_time = model_info.get("reset_time").and_then(|t| t.as_str()).map(|s| s.to_string());
-
-                            if let (Some(name), Some(frac)) = (model_name, remaining) {
-                                limits_map.insert(
-                                    name.to_string(),
-                                    ModelLimitInfo {
-                                        remaining_fraction: Some(frac),
-                                        reset_time,
-                                    },
-                                );
-                            }
-                        }
-                        return Some(limits_map);
-                    }
-                }
-
-                None
-            });
-
-            Some(AccountLimitInfo {
-                email,
-                status,
-                subscription,
-                limits,
-                quota: account.get("quota").cloned(),
-            })
-        })
-        .collect();
+    let accounts: Vec<AccountLimitInfo> = Vec::new();
 
     // Get available models from custom mapping
     let models = if state.custom_mapping.read().await.is_empty() {
         None
     } else {
-        Some(
-            state
-                .custom_mapping
-                .read()
-                .await
-                .keys()
-                .cloned()
-                .collect(),
-        )
+        Some(state.custom_mapping.read().await.keys().cloned().collect())
     };
 
-    let response = AccountLimitsResponse {
-        accounts,
-        models,
-    };
+    let response = AccountLimitsResponse { accounts, models };
 
     // Check format parameter
     match params.format.as_deref() {
@@ -250,7 +120,10 @@ fn format_account_limits_table(response: &AccountLimitsResponse) -> String {
             _ => "?",
         };
 
-        lines.push(format!("{} {} [{}]", status_icon, account.email, account.status));
+        lines.push(format!(
+            "{} {} [{}]",
+            status_icon, account.email, account.status
+        ));
 
         if let Some(sub) = &account.subscription {
             lines.push(format!("  Tier: {}", sub.tier));

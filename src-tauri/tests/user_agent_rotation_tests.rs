@@ -20,7 +20,8 @@ fn test_user_agent_pool_default_size() {
 
 #[test]
 fn test_user_agent_pool_browser_diversity() {
-    let pool = UserAgentPool::new(RotationStrategy::Random);
+    // Use RoundRobin to guarantee we get all user-agents from pool
+    let pool = UserAgentPool::new(RotationStrategy::RoundRobin);
     let agents: Vec<String> = (0..pool.size()).map(|_| pool.get_user_agent()).collect();
 
     let has_chrome = agents.iter().any(|ua| ua.contains("Chrome"));

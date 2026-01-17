@@ -100,9 +100,12 @@ pub async fn handle_warmup(
             tools: None,
             metadata: Some(crate::proxy::mappers::claude::models::Metadata {
                 user_id: Some(session_id),
+                workspace_id: None,
+                cloudaicompanion_project: None,
             }),
             thinking: None,
             output_config: None,
+            tool_choice: None,
         };
 
         match crate::proxy::mappers::claude::transform_claude_request_in(

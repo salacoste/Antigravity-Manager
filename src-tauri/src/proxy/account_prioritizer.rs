@@ -396,6 +396,7 @@ impl AccountPrioritizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
     use std::path::PathBuf;
 
     fn create_test_token(account_id: &str, tier: Option<&str>) -> ProxyToken {
@@ -410,6 +411,7 @@ mod tests {
             project_id: Some("test-project".to_string()),
             subscription_tier: tier.map(|s| s.to_string()),
             remaining_quota: Some(100),
+            protected_models: HashSet::new(),
         }
     }
 

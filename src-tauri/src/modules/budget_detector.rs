@@ -453,7 +453,7 @@ impl BudgetSufficiencyDetector {
     }
 
     /// Get detector metrics
-    pub fn get_metrics(&self) -> DetectorMetrics {
+    pub(crate) fn get_metrics(&self) -> DetectorMetrics {
         self.metrics.read().unwrap().clone()
     }
 

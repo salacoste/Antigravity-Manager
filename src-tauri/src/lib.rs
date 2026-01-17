@@ -1,13 +1,13 @@
-mod models;
-mod modules;
 mod commands;
-mod utils;
-mod proxy;  // 反代服务模块
 pub mod error;
+pub mod models;
+pub mod modules;
+pub mod proxy; // 反代服务模块
+mod utils;
 
-use tauri::Manager;
 use modules::logger;
-use tracing::{info, error};
+use tauri::Manager;
+use tracing::{error, info};
 
 // 测试命令
 #[tauri::command]
@@ -19,7 +19,7 @@ fn greet(name: &str) -> String {
 pub fn run() {
     // 初始化日志
     logger::init_logger();
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -29,13 +29,13 @@ pub fn run() {
             Some(vec!["--minimized"]),
         ))
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app.get_webview_window("main")
-                .map(|window| {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                    #[cfg(target_os = "macos")]
-                    app.set_activation_policy(tauri::ActivationPolicy::Regular).unwrap_or(());
-                });
+            let _ = app.get_webview_window("main").map(|window| {
+                let _ = window.show();
+                let _ = window.set_focus();
+                #[cfg(target_os = "macos")]
+                app.set_activation_policy(tauri::ActivationPolicy::Regular)
+                    .unwrap_or(());
+            });
         }))
         .manage(commands::proxy::ProxyServiceState::new())
         .setup(|app| {
@@ -65,7 +65,7 @@ pub fn run() {
 
             modules::tray::create_tray(app.handle())?;
             info!("Tray created");
-            
+
             // 自动启动反代服务
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -78,7 +78,9 @@ pub fn run() {
                             config.proxy,
                             state,
                             handle.clone(),
-                        ).await {
+                        )
+                        .await
+                        {
                             error!("自动启动反代服务失败: {}", e);
                         } else {
                             info!("反代服务自动启动成功");
@@ -86,10 +88,10 @@ pub fn run() {
                     }
                 }
             });
-            
+
             // 启动智能调度器
             modules::scheduler::start_scheduler(app.handle().clone());
-            
+
             // 启动 HTTP API 服务器（供外部程序调用，如 VS Code 插件）
             match modules::http_api::load_settings() {
                 Ok(settings) if settings.enabled => {
@@ -101,12 +103,18 @@ pub fn run() {
                 }
                 Err(e) => {
                     // 加载失败时使用默认端口
-                    error!("Failed to load HTTP API settings: {}, using default port", e);
+                    error!(
+                        "Failed to load HTTP API settings: {}, using default port",
+                        e
+                    );
                     modules::http_api::spawn_server(modules::http_api::DEFAULT_PORT);
-                    info!("HTTP API server started on port {}", modules::http_api::DEFAULT_PORT);
+                    info!(
+                        "HTTP API server started on port {}",
+                        modules::http_api::DEFAULT_PORT
+                    );
                 }
             }
-            
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -115,7 +123,10 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 {
                     use tauri::Manager;
-                    window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory).unwrap_or(());
+                    window
+                        .app_handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Accessory)
+                        .unwrap_or(());
                 }
                 api.prevent_close();
             }
@@ -212,7 +223,9 @@ pub fn run() {
                     let _ = window.show();
                     let _ = window.unminimize();
                     let _ = window.set_focus();
-                    app_handle.set_activation_policy(tauri::ActivationPolicy::Regular).unwrap_or(());
+                    app_handle
+                        .set_activation_policy(tauri::ActivationPolicy::Regular)
+                        .unwrap_or(());
                 }
             }
             // Suppress unused variable warnings on non-macOS platforms

@@ -176,10 +176,20 @@ pub async fn handle_generate(
         // 4. 获取 Token (使用准确的 request_type)
         // 提取 SessionId (粘性指纹)
         let session_id = SessionManager::extract_gemini_session_id(&body, &model_name);
+        let session_id_opt = if session_id.is_empty() {
+            None
+        } else {
+            Some(session_id.as_str())
+        };
 
         // 🆕 [EPIC-028] 关键：在重试尝试 (attempt > 0) 时强制轮换账号 + передаём model_id
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, attempt > 0, Some(&session_id), Some(&mapped_model))
+            .get_token(
+                &config.request_type,
+                attempt > 0,
+                session_id_opt,
+                mapped_model.as_str(),
+            )
             .await
         {
             Ok(t) => t,
@@ -335,8 +345,8 @@ pub async fn handle_generate(
                     }
                 };
 
-                // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
-                token_manager.mark_model_success(&email, &mapped_model);
+                // 🆕 [EPIC-028] 请求成功：重置该账号的失败计数/限流状态
+                token_manager.mark_success_by_email(&email);
 
                 let body = Body::from_stream(stream);
                 return Ok(Response::builder()
@@ -449,8 +459,8 @@ pub async fn handle_generate(
                     .insert("X-First-Time-Right", ftr.parse().unwrap());
             }
 
-            // 🆕 [EPIC-028] Помечаем модель как успешную (сбрасываем rate limit)
-            token_manager.mark_model_success(&email, &mapped_model);
+            // 🆕 [EPIC-028] 请求成功：重置该账号的失败计数/限流状态
+            token_manager.mark_success_by_email(&email);
 
             return Ok(response);
         }
@@ -485,7 +495,7 @@ pub async fn handle_generate(
             );
 
             // 🆕 [EPIC-028] Помечаем модель как rate-limited для per-account отслеживания
-            let reset_ms = if let Some(ra) = retry_after.as_ref() {
+            let _reset_ms = if let Some(ra) = retry_after.as_ref() {
                 let now_ms = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -503,11 +513,8 @@ pub async fn handle_generate(
                 now_ms + 60000
             };
 
-            token_manager.mark_model_rate_limited(
-                &email,
-                &mapped_model,
-                reset_ms,
-            );
+            // Model-level rate limiting not implemented yet - skip mark_model_rate_limited
+            // token_manager.mark_model_rate_limited(&email, &mapped_model, reset_ms);
 
             // 只有明确包含 "QUOTA_EXHAUSTED" 才停止 -> 【Fix PR#493】改为继续尝试下一个账号
             if status_code == 429 && error_text.contains("QUOTA_EXHAUSTED") {
@@ -598,7 +605,7 @@ pub async fn handle_count_tokens(
     // 🆕 count_tokens 工具不需要 model-specific rate limiting, 传递 None
     let (_access_token, _project_id, _) = state
         .token_manager
-        .get_token(model_group, false, None, None)
+        .get_token(model_group, false, None, "count_tokens")
         .await
         .map_err(|e| {
             (

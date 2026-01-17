@@ -383,7 +383,7 @@ pub async fn handle_messages(
     // [New] Recover from broken tool loops (where signatures were stripped)
     // This prevents "Assistant message must start with thinking" errors by closing the loop with synthetic messages
     if state.experimental.read().await.enable_tool_loop_recovery {
-        close_tool_loop_for_thinking(&mut request.messages);
+        close_tool_loop_for_thinking(&mut request.messages, &request.model);
     }
 
     // ===== [Issue #467 Fix] 拦截 Claude Code Warmup 请求 =====
@@ -691,10 +691,7 @@ pub async fn handle_messages(
         // 成功
         if status.is_success() {
             // [智能限流] 请求成功，重置该账号的连续失败计数
-            token_manager.mark_account_success(&email);
-            
-                // Determine context limit based on model
-                let context_limit = crate::proxy::mappers::claude::utils::get_context_limit_for_model(&request_with_mapped.model);
+            token_manager.mark_success_by_email(&email);
 
             // 处理流式响应
             if actual_stream {
@@ -706,8 +703,7 @@ pub async fn handle_messages(
                     trace_id.clone(), 
                     email.clone(),
                     Some(session_id_str.clone()),
-                    scaling_enabled,
-                    context_limit
+                    scaling_enabled
                 );
 
                 // [FIX #530/#529] Peek first chunk to detect empty response and allow retry
@@ -802,11 +798,8 @@ pub async fn handle_messages(
                     Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Convert error: {}", e)).into_response(),
                 };
                 
-                // Determine context limit based on model
-                let context_limit = crate::proxy::mappers::claude::utils::get_context_limit_for_model(&request_with_mapped.model);
-
                 // 转换
-                let claude_response = match transform_response(&gemini_response, scaling_enabled, context_limit) {
+                let claude_response = match transform_response(&gemini_response, scaling_enabled) {
                     Ok(r) => r,
                     Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Transform error: {}", e)).into_response(),
                 };

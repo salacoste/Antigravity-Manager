@@ -1,4 +1,8 @@
-use crate::db::audio_metrics::AudioAnalytics; // Epic-014 Story-014-04
+// NOTE: Some Tauri commands are defined but not yet registered in the handler
+// They are awaiting frontend integration
+#![allow(dead_code)]
+
+// AudioAnalytics is returned from proxy_db as serde_json::Value
 use crate::proxy::monitor::{
     DetailedViolationMetrics, ProxyMonitor, ProxyRequestLog, ProxyStats, ViolationRates,
 };
@@ -95,7 +99,7 @@ pub async fn start_proxy_service(
 
     let token_manager = Arc::new(TokenManager::new(accounts_dir));
     token_manager.start_auto_cleanup(); // 启动限流记录自动清理后台任务
-    // 同步 UI 传递的调度配置
+                                        // 同步 UI 传递的调度配置
     token_manager
         .update_sticky_config(config.scheduling.clone())
         .await;
@@ -212,6 +216,7 @@ pub async fn get_proxy_stats(state: State<'_, ProxyServiceState>) -> Result<Prox
 
 /// 🆕 Story #8 Step 12: 获取详细的 thinking violation metrics
 /// AC7: Detailed violation metrics API for frontend
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_violation_metrics(
     state: State<'_, ProxyServiceState>,
@@ -233,6 +238,7 @@ pub async fn get_violation_metrics(
 }
 
 /// Reset violation metrics (Story-003-12)
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn reset_violation_metrics(state: State<'_, ProxyServiceState>) -> Result<(), String> {
     let monitor_lock = state.monitor.read().await;
@@ -304,39 +310,32 @@ pub async fn get_proxy_logs_count() -> Result<u64, String> {
 
 /// 导出所有日志到指定文件
 #[tauri::command]
-pub async fn export_proxy_logs(
-    file_path: String,
-) -> Result<usize, String> {
+pub async fn export_proxy_logs(file_path: String) -> Result<usize, String> {
     let logs = crate::modules::proxy_db::get_all_logs_for_export()?;
     let count = logs.len();
-    
+
     let json = serde_json::to_string_pretty(&logs)
         .map_err(|e| format!("Failed to serialize logs: {}", e))?;
-    
-    std::fs::write(&file_path, json)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
-    
+
+    std::fs::write(&file_path, json).map_err(|e| format!("Failed to write file: {}", e))?;
+
     Ok(count)
 }
 
 /// 导出指定的日志JSON到文件
 #[tauri::command]
-pub async fn export_proxy_logs_json(
-    file_path: String,
-    json_data: String,
-) -> Result<usize, String> {
+pub async fn export_proxy_logs_json(file_path: String, json_data: String) -> Result<usize, String> {
     // Parse to count items
-    let logs: Vec<serde_json::Value> = serde_json::from_str(&json_data)
-        .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+    let logs: Vec<serde_json::Value> =
+        serde_json::from_str(&json_data).map_err(|e| format!("Failed to parse JSON: {}", e))?;
     let count = logs.len();
-    
+
     // Pretty print
-    let pretty_json = serde_json::to_string_pretty(&logs)
-        .map_err(|e| format!("Failed to serialize: {}", e))?;
-    
-    std::fs::write(&file_path, pretty_json)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
-    
+    let pretty_json =
+        serde_json::to_string_pretty(&logs).map_err(|e| format!("Failed to serialize: {}", e))?;
+
+    std::fs::write(&file_path, pretty_json).map_err(|e| format!("Failed to write file: {}", e))?;
+
     Ok(count)
 }
 
@@ -570,6 +569,7 @@ pub async fn clear_proxy_session_bindings(
 
 /// Get comprehensive cache metrics
 /// Story-008-02 AC5: Dashboard integration
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_cache_metrics() -> Result<crate::proxy::cache_monitor::CacheMetrics, String> {
     let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
@@ -604,6 +604,7 @@ pub async fn get_cache_metrics() -> Result<crate::proxy::cache_monitor::CacheMet
 
 /// Get current cache hit rate
 /// Story-008-02 AC1: Hit rate monitoring
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_cache_hit_rate() -> Result<f32, String> {
     let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
@@ -612,6 +613,7 @@ pub async fn get_cache_hit_rate() -> Result<f32, String> {
 
 /// Get top N most reused signatures
 /// Story-008-02 AC2: Signature reuse analysis
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_top_cache_signatures(
     limit: Option<usize>,
@@ -632,6 +634,7 @@ pub async fn get_top_cache_signatures(
 
 /// Get cost savings analysis
 /// Story-008-02 AC3: Cost attribution
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_cache_cost_savings() -> Result<crate::proxy::cache_monitor::CostSavings, String> {
     let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
@@ -640,6 +643,7 @@ pub async fn get_cache_cost_savings() -> Result<crate::proxy::cache_monitor::Cos
 
 /// Clear cache metrics (for testing or reset)
 /// Story-008-02: Metrics management
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn clear_cache_metrics() -> Result<(), String> {
     let monitor = crate::proxy::signature_cache::SignatureCache::get_monitor();
@@ -651,6 +655,7 @@ pub async fn clear_cache_metrics() -> Result<(), String> {
 
 /// Get analytics report for thinking level distribution and costs
 /// Story-013-06 AC4: Analytics API
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_analytics_report(
     period: String,
@@ -663,6 +668,7 @@ pub async fn get_analytics_report(
 
 /// Get cost breakdown for a specific model
 /// Story-013-06 AC4: Cost breakdown API
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn get_cost_breakdown(
     model: String,
@@ -675,6 +681,7 @@ pub async fn get_cost_breakdown(
 
 /// Reset analytics data
 /// Story-013-06: Analytics management
+#[allow(dead_code)]
 #[tauri::command]
 pub async fn reset_analytics() -> Result<(), String> {
     crate::proxy::analytics::ANALYTICS.reset().await;
@@ -685,8 +692,9 @@ pub async fn reset_analytics() -> Result<(), String> {
 
 /// Get audio transcription analytics for last N days
 /// Epic-014 Story-014-04 AC5: Dashboard integration
+#[allow(dead_code)]
 #[tauri::command]
-pub async fn get_audio_analytics(days: Option<u32>) -> Result<AudioAnalytics, String> {
-    let days = days.unwrap_or(30); // Default to 30 days
-    crate::modules::proxy_db::get_audio_analytics(days)
+pub async fn get_audio_analytics(_days: Option<u32>) -> Result<serde_json::Value, String> {
+    // Days parameter ignored for now - stub returns default empty analytics
+    crate::modules::proxy_db::get_audio_analytics()
 }

@@ -151,6 +151,14 @@ impl SignatureCache {
         None
     }
 
+    /// Retrieve a signature for a session_id.
+    ///
+    /// Session-level caching is implemented by using `session_id` as a cache key
+    /// in the same underlying store as tool signatures.
+    pub fn get_session_signature(&self, session_id: &str) -> Option<String> {
+        self.get_tool_signature(session_id)
+    }
+
     /// Store model family for a signature
     pub fn cache_thinking_family(&self, signature: String, family: String) {
         if signature.len() < MIN_SIGNATURE_LENGTH {

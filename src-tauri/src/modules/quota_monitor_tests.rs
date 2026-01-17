@@ -1,9 +1,10 @@
+// NOTE: This test module is DISABLED in quota_monitor.rs due to references to non-existent types
 #[cfg(test)]
 mod tests {
-    use super::super::quota_monitor::*;
+    use super::*;
     use crate::models::{Account, QuotaData, TokenData};
     use chrono::Utc;
-    use std::fs;
+    use std::collections::HashSet;
     use tempfile::TempDir;
 
     // Test helper: Create a test account with quota
@@ -28,16 +29,17 @@ mod tests {
                 None,
                 None,
             ),
+            device_profile: None,
+            device_history: Vec::new(),
             disabled: false,
-            is_current: false,
-            created_at: 0,
-            updated_at: 0,
-            avatar_url: None,
-            subscription_tier: None,
-            proxy_disabled: None,
-            proxy_disabled_at: None,
+            disabled_reason: None,
+            disabled_at: None,
+            proxy_disabled: false,
             proxy_disabled_reason: None,
-            order: 0,
+            proxy_disabled_at: None,
+            protected_models: HashSet::new(),
+            created_at: 0,
+            last_used: 0,
         }
     }
 

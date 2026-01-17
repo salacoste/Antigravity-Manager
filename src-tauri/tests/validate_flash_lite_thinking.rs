@@ -19,7 +19,6 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::env;
 use std::time::Duration;
 
@@ -62,6 +61,7 @@ struct ClaudeResponse {
     usage: Option<UsageStats>,
 }
 
+#[allow(dead_code)] // Fields used for deserialization matching only
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum ContentBlock {
