@@ -7,6 +7,7 @@ mod utils;
 
 use modules::logger;
 use tauri::Manager;
+#[allow(unused_imports)]
 use tracing::{error, info, warn};
 
 /// 针对 macOS 提升文件描述符限制，防止 "Too many open files" 错误
