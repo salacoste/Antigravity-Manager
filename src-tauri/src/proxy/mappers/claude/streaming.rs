@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 
 /// [FIX #547] Helper function to coerce string values to boolean
 /// Gemini sometimes sends boolean parameters as strings (e.g., "true", "-n", "false")
+#[allow(dead_code)]
 fn coerce_to_bool(value: &serde_json::Value) -> Option<serde_json::Value> {
     match value {
         serde_json::Value::Bool(_) => Some(value.clone()), // Already boolean

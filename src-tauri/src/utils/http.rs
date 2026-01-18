@@ -42,6 +42,7 @@ pub fn get_long_client() -> Client {
 }
 
 /// 向后兼容接口：创建统一配置的 HTTP 客户端
+#[allow(dead_code)]
 pub fn create_client(timeout_secs: u64) -> Client {
     if timeout_secs == 15 {
         get_client()
@@ -53,6 +54,7 @@ pub fn create_client(timeout_secs: u64) -> Client {
 }
 
 /// 创建带指定代理配置的 HTTP 客户端 (特殊用途)
+#[allow(dead_code)]
 pub fn create_client_with_proxy(
     timeout_secs: u64,
     proxy_config: Option<crate::proxy::config::UpstreamProxyConfig>,

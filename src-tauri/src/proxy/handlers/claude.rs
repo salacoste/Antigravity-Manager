@@ -16,8 +16,7 @@ use crate::proxy::mappers::claude::{
     transform_claude_request_in, transform_response, create_claude_sse_stream, ClaudeRequest,
     filter_invalid_thinking_blocks_with_family, close_tool_loop_for_thinking,
     clean_cache_control_from_messages, merge_consecutive_messages,
-    thinking_utils::{analyze_conversation_state, ConversationState},
-    models::{ContentBlock, Message, MessageContent},
+    models::{ContentBlock},
 };
 use crate::proxy::server::AppState;
 use crate::proxy::mappers::context_manager::{ContextManager, PurificationStrategy};

@@ -822,6 +822,7 @@ fn build_system_instruction(
 }
 
 /// 构建 Contents (Messages)
+#[allow(dead_code)]
 fn build_contents(
     content: &MessageContent,
     is_assistant: bool,
@@ -1346,6 +1347,7 @@ fn build_contents(
 }
 
 /// 构建 Contents (Messages)
+#[allow(dead_code)]
 fn build_google_content(
     msg: &Message,
     claude_req: &ClaudeRequest,
@@ -1431,13 +1433,13 @@ fn build_google_content(
 /// 构建 Contents (Messages)
 fn build_google_contents(
     messages: &[Message],
-    claude_req: &ClaudeRequest,
+    _claude_req: &ClaudeRequest,
     tool_id_to_name: &mut HashMap<String, String>,
     is_thinking_enabled: bool,
     allow_dummy_thought: bool,
     mapped_model: &str,
     session_id: &str, // [NEW v3.3.17] Session ID for signature caching
-    is_retry: bool,
+    _is_retry: bool,
 ) -> Result<Value, String> {
     let mut contents = Vec::new();
     let mut last_thought_signature: Option<String> = None;
