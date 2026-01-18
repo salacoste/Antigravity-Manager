@@ -23,9 +23,7 @@ fn coerce_to_bool(value: &serde_json::Value) -> Option<serde_json::Value> {
                 None // Unknown string, can't coerce
             }
         }
-        serde_json::Value::Number(n) => {
-            Some(json!(n.as_i64().map(|i| i != 0).unwrap_or(false)))
-        }
+        serde_json::Value::Number(n) => Some(json!(n.as_i64().map(|i| i != 0).unwrap_or(false))),
         _ => None,
     }
 }
@@ -99,13 +97,22 @@ fn remap_function_call_args(tool_name: &str, args: &mut serde_json::Value) {
                 }
 
                 // [FIX #547] Coerce all known boolean parameters from string to bool
-                let bool_params = ["ignoreCase", "lineNumbers", "caseSensitive", "regex", "wholeWord"];
+                let bool_params = [
+                    "ignoreCase",
+                    "lineNumbers",
+                    "caseSensitive",
+                    "regex",
+                    "wholeWord",
+                ];
                 for param in bool_params {
                     if let Some(val) = obj.get(param).cloned() {
                         if val.is_string() {
                             if let Some(bool_val) = coerce_to_bool(&val) {
                                 obj.insert(param.to_string(), bool_val);
-                                tracing::debug!("[Streaming] Coerced Grep param '{}' from string to bool", param);
+                                tracing::debug!(
+                                    "[Streaming] Coerced Grep param '{}' from string to bool",
+                                    param
+                                );
                             }
                         }
                     }

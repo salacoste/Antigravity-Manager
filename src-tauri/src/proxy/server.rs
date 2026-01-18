@@ -302,7 +302,10 @@ impl AxumServer {
         // 构建路由
         let app = Router::new()
             // Account Management (compatible with alternative proxy)
-            .route("/account-limits", get(handlers::accounts::handle_account_limits))
+            .route(
+                "/account-limits",
+                get(handlers::accounts::handle_account_limits),
+            )
             // OpenAI Protocol
             .route("/v1/models", get(handlers::openai::handle_list_models))
             .route(

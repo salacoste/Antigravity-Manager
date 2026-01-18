@@ -580,7 +580,11 @@ fn calculate_percentile(values: &VecDeque<f64>, percentile: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::modules::proxy_db;
+    use once_cell::sync::Lazy;
     use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    static DB_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
     /// Helper: Clear cache_metrics table for test isolation
     fn clear_cache_metrics() {
@@ -593,6 +597,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_monitor_creation() {
+        let _guard = DB_LOCK.lock().unwrap();
         clear_cache_metrics();
 
         let monitor = CacheMonitor::new();
@@ -605,6 +610,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_hit_updates_counter() {
+        let _guard = DB_LOCK.lock().unwrap();
         clear_cache_metrics();
 
         let monitor = CacheMonitor::new();
@@ -619,6 +625,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_miss_updates_counter() {
+        let _guard = DB_LOCK.lock().unwrap();
         clear_cache_metrics();
 
         let monitor = CacheMonitor::new();
@@ -633,6 +640,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_hit_rate_calculation() {
+        let _guard = DB_LOCK.lock().unwrap();
         clear_cache_metrics();
 
         let monitor = CacheMonitor::new();
@@ -647,6 +655,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_signature_reuse_tracking() {
+        // No clear_cache_metrics here, but safe to lock if others run
+        let _guard = DB_LOCK.lock().unwrap();
         let monitor = CacheMonitor::new();
 
         let sig = "test_signature_123";
@@ -662,6 +672,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_top_signatures_sorting() {
+        let _guard = DB_LOCK.lock().unwrap();
         let monitor = CacheMonitor::new();
 
         // Signature 1: 5 hits
@@ -687,6 +698,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cost_attribution_per_account() {
+        let _guard = DB_LOCK.lock().unwrap();
         let monitor = CacheMonitor::new();
 
         monitor

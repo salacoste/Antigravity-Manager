@@ -2,11 +2,16 @@
 //! Story-008-02: Signature Cache Monitoring
 
 use antigravity_tools_lib::proxy::signature_cache::SignatureCache;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
 /// Test #1: Cache hit tracking integration
 /// Verify that signature cache operations are tracked by the monitor
 #[tokio::test]
 async fn test_cache_hit_tracking_integration() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 
@@ -37,6 +42,7 @@ async fn test_cache_hit_tracking_integration() {
 /// Uses relative comparison to avoid race conditions with parallel tests
 #[tokio::test]
 async fn test_cache_miss_tracking_integration() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 
@@ -66,6 +72,7 @@ async fn test_cache_miss_tracking_integration() {
 /// Verify that all metrics are properly exported
 #[tokio::test]
 async fn test_comprehensive_metrics_export() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 

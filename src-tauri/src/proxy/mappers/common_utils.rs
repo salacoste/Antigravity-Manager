@@ -63,13 +63,13 @@ pub fn resolve_request_config(
     // but if searching, we MUST ensure the model name is one the backend associates with search.
     // Force a stable search model for search requests.
     let mut final_model = mapped_model.trim_end_matches("-online").to_string();
-    
+
     // [FIX] Map logic aliases back to physical model names for upstream compatibility
     final_model = match final_model.as_str() {
         "gemini-3-pro-preview" => "gemini-3-pro-high".to_string(), // Preview maps back to High
         "gemini-3-pro-image-preview" => "gemini-3-pro-image".to_string(),
         "gemini-3-flash-preview" => "gemini-3-flash".to_string(),
-        _ => final_model
+        _ => final_model,
     };
 
     if enable_networking {

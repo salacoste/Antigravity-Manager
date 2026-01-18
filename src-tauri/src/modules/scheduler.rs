@@ -9,7 +9,8 @@ use tauri::Manager;
 use tokio::time::{self, Duration};
 
 // 预热历史记录：key = "email:model_name:100", value = 预热时间戳
-static WARMUP_HISTORY: Lazy<Mutex<HashMap<String, i64>>> = Lazy::new(|| Mutex::new(load_warmup_history()));
+static WARMUP_HISTORY: Lazy<Mutex<HashMap<String, i64>>> =
+    Lazy::new(|| Mutex::new(load_warmup_history()));
 
 fn get_warmup_history_path() -> Result<PathBuf, String> {
     let data_dir = account::get_data_dir()?;
@@ -18,12 +19,10 @@ fn get_warmup_history_path() -> Result<PathBuf, String> {
 
 fn load_warmup_history() -> HashMap<String, i64> {
     match get_warmup_history_path() {
-        Ok(path) if path.exists() => {
-            match std::fs::read_to_string(&path) {
-                Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-                Err(_) => HashMap::new(),
-            }
-        }
+        Ok(path) if path.exists() => match std::fs::read_to_string(&path) {
+            Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+            Err(_) => HashMap::new(),
+        },
         _ => HashMap::new(),
     }
 }
@@ -143,7 +142,7 @@ pub fn start_scheduler(app_handle: tauri::AppHandle) {
 
                         // 使用映射后的名字作为 key
                         let history_key = format!("{}:{}:100", account.email, model_to_ping);
-                        
+
                         // 检查冷却期：4小时内不重复预热
                         {
                             let history = WARMUP_HISTORY.lock().unwrap();
@@ -176,7 +175,7 @@ pub fn start_scheduler(app_handle: tauri::AppHandle) {
                             model.name.clone()
                         };
                         let history_key = format!("{}:{}:100", account.email, model_to_ping);
-                        
+
                         let mut history = WARMUP_HISTORY.lock().unwrap();
                         if history.remove(&history_key).is_some() {
                             save_warmup_history(&history);
@@ -291,7 +290,7 @@ pub async fn trigger_warmup_for_account(account: &Account) {
             // 检查历史，避免重复预热（带冷却期）
             {
                 let mut history = WARMUP_HISTORY.lock().unwrap();
-                
+
                 // 4小时冷却期
                 if let Some(&last_warmup_ts) = history.get(&history_key) {
                     let cooldown_seconds = 14400; // 4 小时（pro账号5h重置，留1h余量）
@@ -300,7 +299,7 @@ pub async fn trigger_warmup_for_account(account: &Account) {
                         continue;
                     }
                 }
-                
+
                 history.insert(history_key, now_ts);
                 save_warmup_history(&history);
             }

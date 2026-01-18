@@ -94,7 +94,8 @@ where
                     }
 
                     // 累积 reasoning_content (思考过程)
-                    if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str()) {
+                    if let Some(reasoning) = delta.get("reasoning_content").and_then(|v| v.as_str())
+                    {
                         reasoning_content.push_str(reasoning);
                     }
 
@@ -155,7 +156,11 @@ where
                 Some(OpenAIContent::String(content))
             },
             tool_calls: Some(tool_calls),
-            reasoning_content: if reasoning_content.is_empty() { None } else { Some(reasoning_content) },
+            reasoning_content: if reasoning_content.is_empty() {
+                None
+            } else {
+                Some(reasoning_content)
+            },
             tool_call_id: None,
             name: None,
         }
@@ -164,7 +169,11 @@ where
             role: "assistant".to_string(),
             content: Some(OpenAIContent::String(content)),
             tool_calls: None,
-            reasoning_content: if reasoning_content.is_empty() { None } else { Some(reasoning_content) },
+            reasoning_content: if reasoning_content.is_empty() {
+                None
+            } else {
+                Some(reasoning_content)
+            },
             tool_call_id: None,
             name: None,
         }
