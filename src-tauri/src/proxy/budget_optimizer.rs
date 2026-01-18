@@ -645,7 +645,7 @@ mod tests {
         let mapper = BudgetMapper::new();
         let budget = mapper.calculate(ComplexityLevel::Simple);
         assert!(
-            budget >= 2000 && budget <= 4000,
+            (2000..=4000).contains(&budget),
             "Simple budget should be 2000-4000, got {}",
             budget
         );
@@ -657,7 +657,7 @@ mod tests {
         let mapper = BudgetMapper::new();
         let budget = mapper.calculate(ComplexityLevel::Moderate);
         assert!(
-            budget >= 8000 && budget <= 12000,
+            (8000..=12000).contains(&budget),
             "Moderate budget should be 8000-12000, got {}",
             budget
         );
@@ -669,7 +669,7 @@ mod tests {
         let mapper = BudgetMapper::new();
         let budget = mapper.calculate(ComplexityLevel::Complex);
         assert!(
-            budget >= 16000 && budget <= 24000,
+            (16000..=24000).contains(&budget),
             "Complex budget should be 16000-24000, got {}",
             budget
         );
@@ -681,7 +681,7 @@ mod tests {
         let mapper = BudgetMapper::new();
         let budget = mapper.calculate(ComplexityLevel::Deep);
         assert!(
-            budget >= 24000 && budget <= 32000,
+            (24000..=32000).contains(&budget),
             "Deep budget should be 24000-32000, got {}",
             budget
         );
@@ -834,7 +834,7 @@ mod tests {
             assert!(result.is_ok(), "Failed to calculate budget for: {}", prompt);
 
             let budget = result.unwrap();
-            if budget >= min_budget && budget <= max_budget {
+            if (min_budget..=max_budget).contains(&budget) {
                 correct += 1;
             } else {
                 println!(

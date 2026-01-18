@@ -7,7 +7,6 @@
 //! don't persist data. These tests verify the stub behavior.
 
 #[cfg(test)]
-mod cache_monitor_integration_tests {
     use crate::modules::proxy_db;
     use crate::proxy::cache_monitor::{
         CacheMetrics, CacheMonitor, CostSavings, PerformanceMetrics,
@@ -178,4 +177,3 @@ mod cache_monitor_integration_tests {
             "Stub load returns default, not saved value"
         );
     }
-}

@@ -268,22 +268,22 @@ mod tests {
 
         // Allow ±10% tolerance for random distribution
         assert!(
-            chrome_pct >= 30.0 && chrome_pct <= 50.0,
+            (30.0..=50.0).contains(&chrome_pct),
             "Chrome distribution should be ~40%, got {:.1}%",
             chrome_pct
         );
         assert!(
-            firefox_pct >= 15.0 && firefox_pct <= 35.0,
+            (15.0..=35.0).contains(&firefox_pct),
             "Firefox distribution should be ~25%, got {:.1}%",
             firefox_pct
         );
         assert!(
-            safari_pct >= 10.0 && safari_pct <= 30.0,
+            (10.0..=30.0).contains(&safari_pct),
             "Safari distribution should be ~20%, got {:.1}%",
             safari_pct
         );
         assert!(
-            edge_pct >= 5.0 && edge_pct <= 25.0,
+            (5.0..=25.0).contains(&edge_pct),
             "Edge distribution should be ~15%, got {:.1}%",
             edge_pct
         );
@@ -377,7 +377,7 @@ mod tests {
         }
 
         // If we get here without panicking, thread safety is working
-        assert!(true);
+        // If we get here without panicking, thread safety is working
     }
 
     #[test]

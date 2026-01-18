@@ -201,7 +201,7 @@ fn sort_thinking_blocks_first(messages: &mut [Message]) {
                 let mut needs_reorder = false;
                 let mut saw_non_thinking = false;
 
-                for (_i, block) in blocks.iter().enumerate() {
+                for block in blocks.iter() {
                     match block {
                         ContentBlock::Thinking { .. } | ContentBlock::RedactedThinking { .. } => {
                             if saw_non_thinking {
@@ -260,7 +260,7 @@ fn sort_thinking_blocks_first(messages: &mut [Message]) {
     }
 }
 
-/// 转换 Claude 请求为 Gemini v1internal 格式
+// 转换 Claude 请求为 Gemini v1internal 格式
 
 /// [FIX #709] Reorder serialized Gemini parts to ensure thinking blocks are first
 fn reorder_gemini_parts(parts: &mut Vec<Value>) {
@@ -798,7 +798,7 @@ fn build_contents(
         }
     }
 
-    for (_i, msg) in messages.iter().enumerate() {
+    for msg in messages.iter() {
         let role = if msg.role == "assistant" {
             // Proactive Tool Chain Repair:
             // If we are about to process an Assistant message, but we still have pending tool_use_ids,
@@ -849,10 +849,8 @@ fn build_contents(
 
         match &msg.content {
             MessageContent::String(text) => {
-                if text != "(no content)" {
-                    if !text.trim().is_empty() {
-                        parts.push(json!({"text": text.trim()}));
-                    }
+                if text != "(no content)" && !text.trim().is_empty() {
+                    parts.push(json!({"text": text.trim()}));
                 }
             }
             MessageContent::Array(blocks) => {
@@ -950,7 +948,7 @@ fn build_contents(
                                 let cached_family = crate::proxy::SignatureCache::global()
                                     .get_signature_family(sig);
                                 if let Some(family) = cached_family {
-                                    if !is_model_compatible(&family, &mapped_model) {
+                                    if !is_model_compatible(&family, mapped_model) {
                                         tracing::warn!(
                                             "[Thinking-Compatibility] Incompatible signature detected (Family: {}, Target: {}). Dropping signature.",
                                             family, mapped_model
@@ -1035,31 +1033,29 @@ fn build_contents(
                                 .or_else(|| {
                                     // [NEW v3.3.17] Try session-based signature cache first (Layer 3)
                                     // This provides conversation-level isolation
-                                    crate::proxy::SignatureCache::global().get_session_signature(&session_id)
-                                        .map(|s: String| {
+                                    crate::proxy::SignatureCache::global().get_session_signature(session_id)
+                                        .inspect(|s: &String| {
                                             tracing::info!(
                                                 "[Claude-Request] Recovered signature from SESSION cache (session: {}, len: {})", 
                                                 session_id, s.len()
                                             );
-                                            s
                                         })
                                 })
                                 .or_else(|| {
                                     // Try tool-specific signature cache (Layer 1)
                                     crate::proxy::SignatureCache::global().get_tool_signature(id)
-                                        .map(|s: String| {
+                                        .inspect(|_| {
                                             tracing::info!("[Claude-Request] Recovered signature from TOOL cache for tool_id: {}", id);
-                                            s
                                         })
                                 })
                                 .or_else(|| {
                                     // [DEPRECATED] Global store fallback - kept for backward compatibility
                                     let global_sig = get_thought_signature();
-                                    if global_sig.is_some() {
+                                    if let Some(sig) = &global_sig {
                                         tracing::warn!(
                                             "[Claude-Request] Using deprecated GLOBAL thought_signature fallback (length: {}). \
                                              This indicates session cache miss.", 
-                                            global_sig.as_ref().unwrap().len()
+                                            sig.len()
                                         );
                                     }
                                     global_sig
@@ -1234,7 +1230,7 @@ fn build_contents(
             } else {
                 // [Crucial Check] 即使有 thought 块，也必须保证它位于 parts 的首位 (Index 0)
                 // 且必须包含 thought: true 标记
-                let first_is_thought = parts.get(0).map_or(false, |p| {
+                let first_is_thought = parts.first().is_some_and(|p| {
                     (p.get("thought").is_some() || p.get("thoughtSignature").is_some())
                         && p.get("text").is_some() // 对于 v1internal，通常 text + thought: true 才是合规的思维块
                 });

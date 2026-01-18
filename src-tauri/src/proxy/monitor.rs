@@ -596,7 +596,7 @@ mod tests {
         let _metrics = ViolationMetrics::new();
 
         // Should be created successfully
-        assert!(true);
+        // Placeholder test passed
     }
 
     /// Test #5: Record position violation должен сохранять index

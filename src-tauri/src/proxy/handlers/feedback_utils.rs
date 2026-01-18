@@ -293,7 +293,7 @@ mod tests {
         });
 
         let budget = extract_openai_budget(&response);
-        assert!(budget >= 200 && budget <= 300);
+        assert!((200..=300).contains(&budget));
     }
 
     #[test]

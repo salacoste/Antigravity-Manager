@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-/// Story-024-01: Quota Monitoring & Alerts
-/// Real-time quota tracking with multi-threshold alerts and auto-mitigation
+// Story-024-01: Quota Monitoring & Alerts
+// Real-time quota tracking with multi-threshold alerts and auto-mitigation
 
 /// Alert threshold configuration
 const DEFAULT_THRESHOLDS: [f32; 3] = [0.8, 0.9, 0.95]; // 80%, 90%, 95%

@@ -249,6 +249,12 @@ pub struct SignatureCacheLRU {
     metrics: Arc<RwLock<CacheMetrics>>,
 }
 
+impl Default for SignatureCacheLRU {
+    fn default() -> Self {
+        Self::new(1000, 7)
+    }
+}
+
 #[allow(dead_code)] // Epic-025 stub implementation
 impl SignatureCacheLRU {
     /// Creates a new signature cache with specified capacity and TTL
@@ -272,15 +278,6 @@ impl SignatureCacheLRU {
             ttl_days,
             metrics: Arc::new(RwLock::new(CacheMetrics::new())),
         }
-    }
-
-    /// Creates a cache with default settings
-    ///
-    /// Default settings:
-    /// - max_size: 1000 entries
-    /// - ttl_days: 7 days
-    pub fn default() -> Self {
-        Self::new(1000, 7)
     }
 
     /// Constructs a cache key from conversation and model IDs

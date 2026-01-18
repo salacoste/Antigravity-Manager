@@ -573,7 +573,7 @@ pub fn load_cache_metrics() -> Result<crate::proxy::cache_monitor::CacheMetrics,
 /// Accepts reference to Vec<SignatureStats>
 #[allow(unused_variables)]
 pub fn save_signature_stats(
-    stats: &Vec<crate::proxy::cache_monitor::SignatureStats>,
+    stats: &[crate::proxy::cache_monitor::SignatureStats],
 ) -> Result<(), String> {
     // Stub: no-op until signature stats persistence is implemented
     Ok(())

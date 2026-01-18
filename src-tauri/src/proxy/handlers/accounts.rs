@@ -105,12 +105,12 @@ pub async fn handle_account_limits(
 
 /// Format account limits as ASCII table (for CLI compatibility)
 fn format_account_limits_table(response: &AccountLimitsResponse) -> String {
-    let mut lines = Vec::new();
-
-    lines.push("╔══════════════════════════════════════════════════════════════╗".to_string());
-    lines.push("║                    Account Limits                           ║".to_string());
-    lines.push("╚══════════════════════════════════════════════════════════════╝".to_string());
-    lines.push("".to_string());
+    let mut lines = vec![
+        "╔══════════════════════════════════════════════════════════════╗".to_string(),
+        "║                    Account Limits                           ║".to_string(),
+        "╚══════════════════════════════════════════════════════════════╝".to_string(),
+        "".to_string(),
+    ];
 
     for account in &response.accounts {
         let status_icon = match account.status.as_str() {

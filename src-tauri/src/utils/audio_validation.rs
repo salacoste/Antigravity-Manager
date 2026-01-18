@@ -554,8 +554,8 @@ mod tests {
         b'M', b'4', b'A', b' ', // M4A brand
     ];
 
-    const VALID_OGG_HEADER: &[u8] = &[b'O', b'g', b'g', b'S'];
-    const VALID_FLAC_HEADER: &[u8] = &[b'f', b'L', b'a', b'C'];
+    const VALID_OGG_HEADER: &[u8] = b"OggS";
+    const VALID_FLAC_HEADER: &[u8] = b"fLaC";
     const VALID_AIFF_HEADER: &[u8] = &[
         b'F', b'O', b'R', b'M', // FORM
         0x00, 0x00, 0x00, 0x00, // Size

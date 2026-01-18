@@ -427,68 +427,76 @@ pub async fn warm_up_all_accounts() -> Result<String, String> {
 
         if !warmup_items.is_empty() {
             let total_before = warmup_items.len();
-            
+
             // 过滤掉4小时内已预热的模型
             warmup_items.retain(|(email, model, _, _, _)| {
                 let history_key = format!("{}:{}:100", email, model);
                 !crate::modules::scheduler::check_cooldown(&history_key, 14400)
             });
-            
+
             if warmup_items.is_empty() {
                 let skipped = total_before;
-                crate::modules::logger::log_info(&format!("[Warmup] 返回前端: 所有模型均在冷却期内，跳过 {} 个", skipped));
+                crate::modules::logger::log_info(&format!(
+                    "[Warmup] 返回前端: 所有模型均在冷却期内，跳过 {} 个",
+                    skipped
+                ));
                 return Ok(format!("所有模型均在4小时冷却期内，已跳过 {} 个", skipped));
             }
-            
+
             let total = warmup_items.len();
             let skipped = total_before - total;
-            
+
             if skipped > 0 {
                 crate::modules::logger::log_info(&format!(
                     "[Warmup] 已跳过 {} 个冷却期内的模型，将预热 {} 个",
                     skipped, total
                 ));
             }
-            
+
             crate::modules::logger::log_info(&format!(
                 "[Warmup] 🔥 启动手动预热: {} 个模型",
                 total
             ));
-            
+
             tokio::spawn(async move {
                 let mut success = 0;
                 let batch_size = 3;
                 let now_ts = chrono::Utc::now().timestamp();
-                
+
                 for (batch_idx, batch) in warmup_items.chunks(batch_size).enumerate() {
                     let mut handles = Vec::new();
-                    
+
                     for (email, model, token, pid, pct) in batch.iter() {
                         let email = email.clone();
                         let model = model.clone();
                         let token = token.clone();
                         let pid = pid.clone();
                         let pct = *pct;
-                        
+
                         let handle = tokio::spawn(async move {
-                            let result = warmup_model_directly(&token, &model, &pid, &email, pct).await;
+                            let result =
+                                warmup_model_directly(&token, &model, &pid, &email, pct).await;
                             (result, email, model)
                         });
                         handles.push(handle);
                     }
-                    
+
                     for handle in handles {
+                        #[allow(clippy::single_match)]
                         match handle.await {
                             Ok((true, email, model)) => {
                                 success += 1;
                                 let history_key = format!("{}:{}:100", email, model);
-                                crate::modules::scheduler::record_warmup_history(&history_key, now_ts);
+                                crate::modules::scheduler::record_warmup_history(
+                                    &history_key,
+                                    now_ts,
+                                );
                             }
                             _ => {}
                         }
                     }
-                    
-                    if batch_idx < (warmup_items.len() + batch_size - 1) / batch_size - 1 {
+
+                    if batch_idx < warmup_items.len().div_ceil(batch_size) - 1 {
                         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                     }
                 }
@@ -499,7 +507,10 @@ pub async fn warm_up_all_accounts() -> Result<String, String> {
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                 let _ = crate::modules::account::refresh_all_quotas_logic().await;
             });
-            crate::modules::logger::log_info(&format!("[Warmup] 返回前端: 已启动 {} 个模型的预热任务", total));
+            crate::modules::logger::log_info(&format!(
+                "[Warmup] 返回前端: 已启动 {} 个模型的预热任务",
+                total
+            ));
             return Ok(format!("已启动 {} 个模型的预热任务", total));
         }
 

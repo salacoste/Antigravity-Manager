@@ -1,6 +1,6 @@
 // OpenAI Handler
 use axum::{extract::Json, extract::State, http::StatusCode, response::IntoResponse};
-use base64::Engine as _; 
+use base64::Engine as _;
 use bytes::Bytes;
 use serde_json::{json, Value};
 use tracing::{debug, error, info}; // Import Engine trait for encode method
@@ -34,35 +34,64 @@ fn determine_retry_strategy(status_code: u16, error_text: &str) -> RetryStrategy
                 RetryStrategy::LinearBackoff { base_ms: 1000 }
             }
         }
-        503 | 529 => RetryStrategy::ExponentialBackoff { base_ms: 1000, max_ms: 8000 },
+        503 | 529 => RetryStrategy::ExponentialBackoff {
+            base_ms: 1000,
+            max_ms: 8000,
+        },
         500 => RetryStrategy::LinearBackoff { base_ms: 500 },
         401 | 403 => RetryStrategy::FixedDelay(Duration::from_millis(100)),
         _ => RetryStrategy::NoRetry,
     }
 }
 
-async fn apply_retry_strategy(strategy: RetryStrategy, attempt: usize, status_code: u16, trace_id: &str) -> bool {
+async fn apply_retry_strategy(
+    strategy: RetryStrategy,
+    attempt: usize,
+    status_code: u16,
+    trace_id: &str,
+) -> bool {
     match strategy {
         RetryStrategy::NoRetry => {
-            debug!("[{}] Non-retryable error {}, stopping", trace_id, status_code);
+            debug!(
+                "[{}] Non-retryable error {}, stopping",
+                trace_id, status_code
+            );
             false
         }
         RetryStrategy::FixedDelay(duration) => {
-            info!("[{}] ⏱️ Retry with fixed delay: status={}, attempt={}/{}", trace_id, status_code, attempt + 1, MAX_RETRY_ATTEMPTS);
+            info!(
+                "[{}] ⏱️ Retry with fixed delay: status={}, attempt={}/{}",
+                trace_id,
+                status_code,
+                attempt + 1,
+                MAX_RETRY_ATTEMPTS
+            );
             sleep(duration).await;
             true
         }
         RetryStrategy::LinearBackoff { base_ms } => {
             let delay = base_ms * (attempt as u64 + 1);
-            info!("[{}] ⏱️ Retry with linear backoff: status={}, attempt={}/{}", trace_id, status_code, attempt + 1, MAX_RETRY_ATTEMPTS);
+            info!(
+                "[{}] ⏱️ Retry with linear backoff: status={}, attempt={}/{}",
+                trace_id,
+                status_code,
+                attempt + 1,
+                MAX_RETRY_ATTEMPTS
+            );
             sleep(Duration::from_millis(delay)).await;
             true
         }
         RetryStrategy::ExponentialBackoff { base_ms, max_ms } => {
-             let delay = (base_ms * 2_u64.pow(attempt as u32)).min(max_ms);
-             info!("[{}] ⏱️ Retry with exponential backoff: status={}, attempt={}/{}", trace_id, status_code, attempt + 1, MAX_RETRY_ATTEMPTS);
-             sleep(Duration::from_millis(delay)).await;
-             true
+            let delay = (base_ms * 2_u64.pow(attempt as u32)).min(max_ms);
+            info!(
+                "[{}] ⏱️ Retry with exponential backoff: status={}, attempt={}/{}",
+                trace_id,
+                status_code,
+                attempt + 1,
+                MAX_RETRY_ATTEMPTS
+            );
+            sleep(Duration::from_millis(delay)).await;
+            true
         }
     }
 }
@@ -73,12 +102,12 @@ pub async fn handle_chat_completions(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     // [NEW] 自动检测并转换 Responses 格式
     // 如果请求包含 instructions 或 input 但没有 messages，则认为是 Responses 格式
-    let is_responses_format = !body.get("messages").is_some() 
+    let is_responses_format = body.get("messages").is_none()
         && (body.get("instructions").is_some() || body.get("input").is_some());
-    
+
     if is_responses_format {
         debug!("Detected Responses API format, converting to Chat Completions format");
-        
+
         // 转换 instructions 为 system message
         if let Some(instructions) = body.get("instructions").and_then(|v| v.as_str()) {
             if !instructions.is_empty() {
@@ -86,19 +115,19 @@ pub async fn handle_chat_completions(
                     "role": "system",
                     "content": instructions
                 });
-                
+
                 // 初始化 messages 数组
-                if !body.get("messages").is_some() {
+                if body.get("messages").is_none() {
                     body["messages"] = json!([]);
                 }
-                
+
                 // 将 system message 插入到开头
                 if let Some(messages) = body.get_mut("messages").and_then(|v| v.as_array_mut()) {
                     messages.insert(0, system_msg);
                 }
             }
         }
-        
+
         // 转换 input 为 user message（如果存在）
         if let Some(input) = body.get("input") {
             let user_msg = if input.is_string() {
@@ -113,7 +142,7 @@ pub async fn handle_chat_completions(
                     "content": input.to_string()
                 })
             };
-            
+
             if let Some(messages) = body.get_mut("messages").and_then(|v| v.as_array_mut()) {
                 messages.push(user_msg);
             }
@@ -158,10 +187,7 @@ pub async fn handle_chat_completions(
             &*state.custom_mapping.read().await,
         );
         // 将 OpenAI 工具转为 Value 数组以便探测联网
-        let tools_val: Option<Vec<Value>> = openai_req
-            .tools
-            .as_ref()
-            .map(|list| list.iter().cloned().collect());
+        let tools_val: Option<Vec<Value>> = openai_req.tools.as_ref().map(|list| list.to_vec());
         let config = crate::proxy::mappers::common_utils::resolve_request_config(
             &openai_req.model,
             &mapped_model,
@@ -174,7 +200,12 @@ pub async fn handle_chat_completions(
         // 4. 获取 Token (使用准确的 request_type)
         // 关键：在重试尝试 (attempt > 0) 时强制轮换账号
         let (access_token, project_id, email) = match token_manager
-            .get_token(&config.request_type, attempt > 0, Some(&session_id), &config.final_model)
+            .get_token(
+                &config.request_type,
+                attempt > 0,
+                Some(&session_id),
+                &config.final_model,
+            )
             .await
         {
             Ok(t) => t,
@@ -202,11 +233,11 @@ pub async fn handle_chat_completions(
         // [AUTO-CONVERSION] 非 Stream 请求自动转换为 Stream 以享受更宽松的配额
         let force_stream_internally = !client_wants_stream;
         let actual_stream = client_wants_stream || force_stream_internally;
-        
+
         if force_stream_internally {
             info!("[OpenAI] 🔄 Auto-converting non-stream request to stream for better quota");
         }
-        
+
         let method = if actual_stream {
             "streamGenerateContent"
         } else {
@@ -242,7 +273,7 @@ pub async fn handle_chat_completions(
                 let gemini_stream = response.bytes_stream();
                 let openai_stream =
                     create_openai_sse_stream(Box::pin(gemini_stream), openai_req.model.clone());
-                
+
                 // 判断客户端期望的格式
                 if client_wants_stream {
                     // 客户端本就要 Stream，直接返回 SSE
@@ -260,22 +291,33 @@ pub async fn handle_chat_completions(
                     // 客户端要非 Stream，需要收集完整响应并转换为 JSON
                     use crate::proxy::mappers::openai::collect_openai_stream_to_json;
                     use futures::StreamExt;
-                    
+
                     // 转换为 io::Error stream
                     let sse_stream = openai_stream.map(|result| -> Result<Bytes, std::io::Error> {
                         match result {
                             Ok(bytes) => Ok(bytes),
-                            Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+                            Err(e) => Err(std::io::Error::other(e)),
                         }
                     });
-                    
+
                     match collect_openai_stream_to_json(sse_stream).await {
                         Ok(full_response) => {
                             info!("[OpenAI] ✓ Stream collected and converted to JSON");
-                            return Ok((StatusCode::OK, [("X-Account-Email", email.as_str()), ("X-Mapped-Model", mapped_model.as_str())], Json(full_response)).into_response());
+                            return Ok((
+                                StatusCode::OK,
+                                [
+                                    ("X-Account-Email", email.as_str()),
+                                    ("X-Mapped-Model", mapped_model.as_str()),
+                                ],
+                                Json(full_response),
+                            )
+                                .into_response());
                         }
                         Err(e) => {
-                            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Stream collection error: {}", e)));
+                            return Err((
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Stream collection error: {}", e),
+                            ));
                         }
                     }
                 }
@@ -287,13 +329,28 @@ pub async fn handle_chat_completions(
                 .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Parse error: {}", e)))?;
 
             let openai_response = transform_openai_response(&gemini_resp);
-            return Ok((StatusCode::OK, [("X-Account-Email", email.as_str()), ("X-Mapped-Model", mapped_model.as_str())], Json(openai_response)).into_response());
+            return Ok((
+                StatusCode::OK,
+                [
+                    ("X-Account-Email", email.as_str()),
+                    ("X-Mapped-Model", mapped_model.as_str()),
+                ],
+                Json(openai_response),
+            )
+                .into_response());
         }
 
         // 处理特定错误并重试
         let status_code = status.as_u16();
-        let retry_after = response.headers().get("Retry-After").and_then(|h| h.to_str().ok()).map(|s| s.to_string());
-        let error_text = response.text().await.unwrap_or_else(|_| format!("HTTP {}", status_code));
+        let retry_after = response
+            .headers()
+            .get("Retry-After")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| format!("HTTP {}", status_code));
         last_error = format!("HTTP {}: {}", status_code, error_text);
 
         // [New] 打印错误报文日志
@@ -306,7 +363,12 @@ pub async fn handle_chat_completions(
         // 429/529/503 智能处理
         if status_code == 429 || status_code == 529 || status_code == 503 || status_code == 500 {
             // 记录限流信息 (全局同步)
-            token_manager.mark_rate_limited(&email, status_code, retry_after.as_deref(), &error_text);
+            token_manager.mark_rate_limited(
+                &email,
+                status_code,
+                retry_after.as_deref(),
+                &error_text,
+            );
 
             // 1. 优先尝试解析 RetryInfo (由 Google Cloud 直接下发)
             if let Some(delay_ms) = crate::proxy::upstream::retry::parse_retry_delay(&error_text) {
@@ -331,7 +393,9 @@ pub async fn handle_chat_completions(
                     attempt + 1,
                     max_attempts
                 );
-                return Ok((status, [("X-Account-Email", email.as_str())], error_text).into_response());
+                return Ok(
+                    (status, [("X-Account-Email", email.as_str())], error_text).into_response()
+                );
             }
 
             // 3. 其他限流或服务器过载情况，轮换账号
@@ -371,12 +435,14 @@ pub async fn handle_chat_completions(
             StatusCode::TOO_MANY_REQUESTS,
             [("X-Account-Email", email)],
             format!("All accounts exhausted. Last error: {}", last_error),
-        ).into_response())
+        )
+            .into_response())
     } else {
         Ok((
             StatusCode::TOO_MANY_REQUESTS,
             format!("All accounts exhausted. Last error: {}", last_error),
-        ).into_response())
+        )
+            .into_response())
     }
 }
 
@@ -643,37 +709,40 @@ pub async fn handle_completions(
     // [Fix Phase 2] Backport normalization logic from handle_chat_completions
     // Handle "instructions" + "input" (Codex style) -> system + user messages
     // This is critical because `transform_openai_request` expects `messages` to be populated.
-    
+
     // 1. If we have instructions/input, regardless of messages (which might be empty), force normalization.
     // Logic: if instructions OR input exists, we prefer creating messages from them.
     let has_codex_fields = body.get("instructions").is_some() || body.get("input").is_some();
     if has_codex_fields {
         tracing::debug!("[Codex] Detected Codex-style request (force normalization)");
-        
+
         let mut messages = Vec::new();
-        
+
         // instructions -> system message
         if let Some(inst) = body.get("instructions").and_then(|v| v.as_str()) {
             if !inst.is_empty() {
                 messages.push(json!({
                     "role": "system",
-                    "content": inst 
+                    "content": inst
                 }));
             }
         }
-        
+
         // input -> user message
         if let Some(input) = body.get("input") {
-             // Handle array or string input
+            // Handle array or string input
             let content = if let Some(s) = input.as_str() {
                 s.to_string()
             } else if let Some(arr) = input.as_array() {
-                 // Join array parts
-                 arr.iter().map(|v| v.as_str().unwrap_or("")).collect::<Vec<_>>().join("\n")
+                // Join array parts
+                arr.iter()
+                    .map(|v| v.as_str().unwrap_or(""))
+                    .collect::<Vec<_>>()
+                    .join("\n")
             } else {
                 input.to_string()
             };
-            
+
             if !content.is_empty() {
                 messages.push(json!({
                     "role": "user",
@@ -681,9 +750,12 @@ pub async fn handle_completions(
                 }));
             }
         }
-        
+
         if let Some(obj) = body.as_object_mut() {
-            tracing::debug!("[Codex] Injecting normalized messages: {} messages", messages.len());
+            tracing::debug!(
+                "[Codex] Injecting normalized messages: {} messages",
+                messages.len()
+            );
             obj.insert("messages".to_string(), json!(messages));
         }
     }
@@ -724,10 +796,7 @@ pub async fn handle_completions(
             &*state.custom_mapping.read().await,
         );
         // 将 OpenAI 工具转为 Value 数组以便探测联网
-        let tools_val: Option<Vec<Value>> = openai_req
-            .tools
-            .as_ref()
-            .map(|list| list.iter().cloned().collect());
+        let tools_val: Option<Vec<Value>> = openai_req.tools.as_ref().map(|list| list.to_vec());
         let config = crate::proxy::mappers::common_utils::resolve_request_config(
             &openai_req.model,
             &mapped_model,
@@ -738,21 +807,28 @@ pub async fn handle_completions(
         // [New] 使用 TokenManager 内部逻辑提取 session_id，支持粘性调度
         let session_id_str = SessionManager::extract_openai_session_id(&openai_req);
         let session_id = Some(session_id_str.as_str());
-        
+
         // 重试时强制轮换，除非只是简单的网络抖动但 Claude 逻辑里 attempt > 0 总是 force_rotate
         let force_rotate = attempt > 0;
 
-        let (access_token, project_id, email) =
-            match token_manager.get_token(&config.request_type, force_rotate, session_id, &config.final_model).await {
-                Ok(t) => t,
-                Err(e) => {
-                    return Err((
-                        StatusCode::SERVICE_UNAVAILABLE,
-                        format!("Token error: {}", e),
-                    ))
-                }
-            };
-        
+        let (access_token, project_id, email) = match token_manager
+            .get_token(
+                &config.request_type,
+                force_rotate,
+                session_id,
+                &config.final_model,
+            )
+            .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                return Err((
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("Token error: {}", e),
+                ))
+            }
+        };
+
         last_email = Some(email.clone());
 
         info!("✓ Using account: {} (type: {})", email, config.request_type);
@@ -760,8 +836,14 @@ pub async fn handle_completions(
         let gemini_body = transform_openai_request(&openai_req, &project_id, &mapped_model);
 
         // [New] 打印转换后的报文 (Gemini Body) 供调试 (Codex 路径) ———— 缩减为 simple debug
-        debug!("[Codex-Request] Transformed Gemini Body ({} parts)", 
-           gemini_body.get("contents").and_then(|c| c.as_array()).map(|a| a.len()).unwrap_or(0));
+        debug!(
+            "[Codex-Request] Transformed Gemini Body ({} parts)",
+            gemini_body
+                .get("contents")
+                .and_then(|c| c.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0)
+        );
 
         let list_response = openai_req.stream;
         let method = if list_response {
@@ -778,7 +860,12 @@ pub async fn handle_completions(
             Ok(r) => r,
             Err(e) => {
                 last_error = e.clone();
-                debug!("Codex Request failed on attempt {}/{}: {}", attempt + 1, max_attempts, e);
+                debug!(
+                    "Codex Request failed on attempt {}/{}: {}",
+                    attempt + 1,
+                    max_attempts,
+                    e
+                );
                 continue;
             }
         };
@@ -849,8 +936,15 @@ pub async fn handle_completions(
 
         // Handle errors and retry
         let status_code = status.as_u16();
-        let retry_after = response.headers().get("Retry-After").and_then(|h| h.to_str().ok()).map(|s| s.to_string());
-        let error_text = response.text().await.unwrap_or_else(|_| format!("HTTP {}", status_code));
+        let retry_after = response
+            .headers()
+            .get("Retry-After")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string());
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| format!("HTTP {}", status_code));
         last_error = format!("HTTP {}: {}", status_code, error_text);
 
         tracing::error!(
@@ -861,12 +955,20 @@ pub async fn handle_completions(
 
         // 3. 标记限流状态(用于 UI 显示)
         if status_code == 429 || status_code == 529 || status_code == 503 || status_code == 500 {
-            token_manager.mark_rate_limited_async(&email, status_code, retry_after.as_deref(), &error_text, Some(&mapped_model)).await;
+            token_manager
+                .mark_rate_limited_async(
+                    &email,
+                    status_code,
+                    retry_after.as_deref(),
+                    &error_text,
+                    Some(&mapped_model),
+                )
+                .await;
         }
 
         // 确定重试策略
         let strategy = determine_retry_strategy(status_code, &error_text);
-        
+
         if apply_retry_strategy(strategy, attempt, status_code, &trace_id).await {
             // 继续重试 (loop 会增加 attempt, 导致 force_rotate=true)
             continue;
@@ -882,30 +984,33 @@ pub async fn handle_completions(
             StatusCode::TOO_MANY_REQUESTS,
             [("X-Account-Email", email)],
             format!("All accounts exhausted. Last error: {}", last_error),
-        ).into_response())
+        )
+            .into_response())
     } else {
         Ok((
             StatusCode::TOO_MANY_REQUESTS,
             format!("All accounts exhausted. Last error: {}", last_error),
-        ).into_response())
+        )
+            .into_response())
     }
 }
 
 pub async fn handle_list_models(State(state): State<AppState>) -> impl IntoResponse {
     use crate::proxy::common::model_mapping::get_all_dynamic_models;
 
-    let model_ids = get_all_dynamic_models(
-        &state.custom_mapping,
-    ).await;
+    let model_ids = get_all_dynamic_models(&state.custom_mapping).await;
 
-    let data: Vec<_> = model_ids.into_iter().map(|id| {
-        json!({
-            "id": id,
-            "object": "model",
-            "created": 1706745600,
-            "owned_by": "antigravity"
+    let data: Vec<_> = model_ids
+        .into_iter()
+        .map(|id| {
+            json!({
+                "id": id,
+                "object": "model",
+                "created": 1706745600,
+                "owned_by": "antigravity"
+            })
         })
-    }).collect();
+        .collect();
 
     Json(json!({
         "object": "list",
@@ -986,7 +1091,9 @@ pub async fn handle_images_generations(
     let upstream = state.upstream.clone();
     let token_manager = state.token_manager;
 
-    let (access_token, project_id, email) = match token_manager.get_token("image_gen", false, None, "dall-e-3").await
+    let (access_token, project_id, email) = match token_manager
+        .get_token("image_gen", false, None, "dall-e-3")
+        .await
     {
         Ok(t) => t,
         Err(e) => {
@@ -1145,8 +1252,9 @@ pub async fn handle_images_generations(
     Ok((
         StatusCode::OK,
         [("X-Account-Email", email.as_str())],
-        Json(openai_response)
-    ).into_response())
+        Json(openai_response),
+    )
+        .into_response())
 }
 
 pub async fn handle_images_edits(
@@ -1240,7 +1348,9 @@ pub async fn handle_images_edits(
     let upstream = state.upstream.clone();
     let token_manager = state.token_manager;
     // Fix: Proper get_token call with correct signature and unwrap (using image_gen quota)
-    let (access_token, project_id, email) = match token_manager.get_token("image_gen", false, None, "dall-e-3").await
+    let (access_token, project_id, email) = match token_manager
+        .get_token("image_gen", false, None, "dall-e-3")
+        .await
     {
         Ok(t) => t,
         Err(e) => {
@@ -1421,6 +1531,7 @@ pub async fn handle_images_edits(
     Ok((
         StatusCode::OK,
         [("X-Account-Email", email.as_str())],
-        Json(openai_response)
-    ).into_response())
+        Json(openai_response),
+    )
+        .into_response())
 }

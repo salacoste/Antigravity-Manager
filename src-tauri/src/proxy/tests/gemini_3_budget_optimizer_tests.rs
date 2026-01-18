@@ -20,7 +20,7 @@ mod budget_optimizer_tests {
             .calculate_optimal_budget("hello", "gemini-3-flash")
             .unwrap();
         assert!(
-            simple_budget >= 2000 && simple_budget <= 4000,
+            (2000..=4000).contains(&simple_budget),
             "Simple queries should get 2000-4000 budget"
         );
         let level = determine_thinking_level("gemini-3-flash", Some(simple_budget as i32));
@@ -37,7 +37,7 @@ mod budget_optimizer_tests {
             )
             .unwrap();
         assert!(
-            moderate_budget >= 8000 && moderate_budget <= 12000,
+            (8000..=12000).contains(&moderate_budget),
             "Moderate queries should get 8000-12000 budget"
         );
         let level = determine_thinking_level("gemini-3-flash", Some(moderate_budget as i32));
@@ -54,7 +54,7 @@ mod budget_optimizer_tests {
             )
             .unwrap();
         assert!(
-            complex_budget >= 16000 && complex_budget <= 24000,
+            (16000..=24000).contains(&complex_budget),
             "Complex queries should get 16000-24000 budget"
         );
         let level = determine_thinking_level("gemini-3-flash", Some(complex_budget as i32));
@@ -71,7 +71,7 @@ mod budget_optimizer_tests {
             )
             .unwrap();
         assert!(
-            deep_budget >= 24000 && deep_budget <= 32000,
+            (24000..=32000).contains(&deep_budget),
             "Deep queries should get 24000-32000 budget"
         );
         let level = determine_thinking_level("gemini-3-flash", Some(deep_budget as i32));
@@ -170,7 +170,7 @@ mod budget_optimizer_tests {
         let optimizer = BudgetOptimizer::new();
 
         // Test 1: Progressive complexity increase
-        let greetings = vec!["hi", "hello", "hey there"];
+        let greetings = ["hi", "hello", "hey there"];
         let budgets: Vec<u32> = greetings
             .iter()
             .map(|&prompt| {
@@ -189,7 +189,7 @@ mod budget_optimizer_tests {
         }
 
         // Test 2: Technical complexity progression
-        let queries = vec![
+        let queries = [
             "what is rust",                                 // Simple
             "explain rust ownership",                       // Moderate
             "compare rust memory safety with C++",          // Complex
@@ -238,7 +238,7 @@ mod budget_optimizer_tests {
         let optimizer = BudgetOptimizer::new();
 
         // Test consistency across similar complexity queries
-        let architectural_queries = vec![
+        let architectural_queries = [
             "design a microservices architecture",
             "architect a distributed system",
             "plan a scalable cloud infrastructure",

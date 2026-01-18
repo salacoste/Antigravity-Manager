@@ -1,6 +1,6 @@
 //! HTTP API 模块
 //! 提供本地 HTTP 接口供外部程序（如 VS Code 插件）调用
-//! 
+//!
 //! 端点：
 //! - GET  /health                    健康检查
 //! - GET  /accounts                  获取所有账号及配额
@@ -71,8 +71,7 @@ pub fn load_settings() -> Result<HttpApiSettings, String> {
     let content = std::fs::read_to_string(&settings_path)
         .map_err(|e| format!("Failed to read settings file: {}", e))?;
 
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse settings: {}", e))
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse settings: {}", e))
 }
 
 /// 保存 HTTP API 设置
@@ -100,6 +99,12 @@ impl ApiState {
         Self {
             switching: Arc::new(RwLock::new(false)),
         }
+    }
+}
+
+impl Default for ApiState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -241,24 +246,26 @@ async fn list_accounts() -> Result<impl IntoResponse, (StatusCode, Json<ErrorRes
         )
     })?;
 
-    let current_id = account::get_current_account_id()
-        .ok()
-        .flatten();
+    let current_id = account::get_current_account_id().ok().flatten();
 
     let account_responses: Vec<AccountResponse> = accounts
         .into_iter()
         .map(|acc| {
             let is_current = current_id.as_ref().map(|id| id == &acc.id).unwrap_or(false);
             let quota = acc.quota.map(|q| QuotaResponse {
-                models: q.models.into_iter().map(|m| ModelQuota {
-                    name: m.name,
-                    percentage: m.percentage,
-                    reset_time: m.reset_time,
-                }).collect(),
+                models: q
+                    .models
+                    .into_iter()
+                    .map(|m| ModelQuota {
+                        name: m.name,
+                        percentage: m.percentage,
+                        reset_time: m.reset_time,
+                    })
+                    .collect(),
                 updated_at: Some(q.last_updated),
                 subscription_tier: q.subscription_tier,
             });
-            
+
             AccountResponse {
                 id: acc.id,
                 email: acc.email,
@@ -289,11 +296,15 @@ async fn get_current_account() -> Result<impl IntoResponse, (StatusCode, Json<Er
 
     let response = current.map(|acc| {
         let quota = acc.quota.map(|q| QuotaResponse {
-            models: q.models.into_iter().map(|m| ModelQuota {
-                name: m.name,
-                percentage: m.percentage,
-                reset_time: m.reset_time,
-            }).collect(),
+            models: q
+                .models
+                .into_iter()
+                .map(|m| ModelQuota {
+                    name: m.name,
+                    percentage: m.percentage,
+                    reset_time: m.reset_time,
+                })
+                .collect(),
             updated_at: Some(q.last_updated),
             subscription_tier: q.subscription_tier,
         });
@@ -343,7 +354,7 @@ async fn switch_account(
     // 异步执行切换（不阻塞响应）
     tokio::spawn(async move {
         logger::log_info(&format!("[HTTP API] 开始切换账号: {}", account_id));
-        
+
         match account::switch_account(&account_id).await {
             Ok(()) => {
                 logger::log_info(&format!("[HTTP API] 账号切换成功: {}", account_id));
@@ -432,16 +443,24 @@ async fn get_logs(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     let limit = if params.limit == 0 { 50 } else { params.limit };
 
-    let total = proxy_db::get_logs_count_filtered(&params.filter, params.errors_only)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e })))?;
+    let total =
+        proxy_db::get_logs_count_filtered(&params.filter, params.errors_only).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse { error: e }),
+            )
+        })?;
 
-    let logs = proxy_db::get_logs_filtered(&params.filter, params.errors_only, limit, params.offset)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(ErrorResponse { error: e })))?;
+    let logs =
+        proxy_db::get_logs_filtered(&params.filter, params.errors_only, limit, params.offset)
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse { error: e }),
+                )
+            })?;
 
-    Ok(Json(LogsResponse {
-        total,
-        logs,
-    }))
+    Ok(Json(LogsResponse { total, logs }))
 }
 
 // ============================================================================

@@ -102,7 +102,15 @@ impl QualityScorer {
     pub fn new() -> Self {
         Self
     }
+}
 
+impl Default for QualityScorer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl QualityScorer {
     /// Score response completeness (0.0-1.0)
     /// Based on finish_reason and whether response appears truncated
     pub fn score_completeness(
@@ -187,7 +195,15 @@ impl EfficiencyTracker {
             optimal_range: (0.75, 0.95),
         }
     }
+}
 
+impl Default for EfficiencyTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EfficiencyTracker {
     /// Calculate budget efficiency score (0.0-1.0)
     pub fn calculate_efficiency(&self, thinking_tokens: u32, thinking_budget: u32) -> f64 {
         if thinking_budget == 0 {
@@ -227,7 +243,15 @@ impl FeedbackAggregator {
     pub fn new() -> Self {
         Self
     }
+}
 
+impl Default for FeedbackAggregator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FeedbackAggregator {
     /// Aggregate weekly feedback from recent quality data
     pub async fn aggregate_weekly_feedback(&self, days: u32) -> Result<WeeklyFeedback, String> {
         let now = Utc::now();
@@ -429,7 +453,15 @@ impl ThinkingQualityMonitor {
             metrics: Arc::new(RwLock::new(QualityMetrics::default())),
         }
     }
+}
 
+impl Default for ThinkingQualityMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ThinkingQualityMonitor {
     /// Analyze request/response quality
     pub async fn analyze_quality(
         &self,

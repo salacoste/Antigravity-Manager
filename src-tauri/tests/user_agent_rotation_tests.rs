@@ -132,22 +132,22 @@ fn test_weighted_rotation_strategy() {
 
     // Allow ±10% tolerance for random distribution
     assert!(
-        chrome_pct >= 30.0 && chrome_pct <= 50.0,
+        (30.0..=50.0).contains(&chrome_pct),
         "Chrome distribution should be ~40%, got {:.1}%",
         chrome_pct
     );
     assert!(
-        firefox_pct >= 15.0 && firefox_pct <= 35.0,
+        (15.0..=35.0).contains(&firefox_pct),
         "Firefox distribution should be ~25%, got {:.1}%",
         firefox_pct
     );
     assert!(
-        safari_pct >= 10.0 && safari_pct <= 30.0,
+        (10.0..=30.0).contains(&safari_pct),
         "Safari distribution should be ~20%, got {:.1}%",
         safari_pct
     );
     assert!(
-        edge_pct >= 5.0 && edge_pct <= 25.0,
+        (5.0..=25.0).contains(&edge_pct),
         "Edge distribution should be ~15%, got {:.1}%",
         edge_pct
     );
@@ -275,7 +275,7 @@ fn test_upstream_client_with_ua_rotation_enabled() {
 
     // Client should be created successfully
     // (We can't test HTTP requests without a mock server, but we can verify creation)
-    assert!(true, "UpstreamClient created with UA rotation enabled");
+    // UpstreamClient created with UA rotation enabled
 }
 
 #[test]
@@ -289,14 +289,14 @@ fn test_upstream_client_with_ua_rotation_disabled() {
     let _client = UpstreamClient::new_with_ua_config(None, Some(ua_config));
 
     // Client should fall back to static user-agent
-    assert!(true, "UpstreamClient created with UA rotation disabled");
+    // UpstreamClient created with UA rotation disabled
 }
 
 #[test]
 fn test_upstream_client_backward_compatibility() {
     // Legacy constructor should still work (no UA rotation)
     let _client = UpstreamClient::new(None);
-    assert!(true, "Legacy constructor works for backward compatibility");
+    // Legacy constructor works for backward compatibility
 }
 
 #[test]
@@ -325,7 +325,7 @@ fn test_thread_safety_of_round_robin() {
     }
 
     // If we get here without panicking, thread safety is working
-    assert!(true, "Round-robin rotation is thread-safe");
+    // Round-robin rotation is thread-safe
 }
 
 #[test]
@@ -400,22 +400,22 @@ fn test_weighted_rotation_long_term_distribution() {
 
     // Tighter tolerance (±5%) for large sample
     assert!(
-        chrome_pct >= 35.0 && chrome_pct <= 45.0,
+        (35.0..=45.0).contains(&chrome_pct),
         "Chrome long-term distribution should be ~40% (±5%), got {:.1}%",
         chrome_pct
     );
     assert!(
-        firefox_pct >= 20.0 && firefox_pct <= 30.0,
+        (20.0..=30.0).contains(&firefox_pct),
         "Firefox long-term distribution should be ~25% (±5%), got {:.1}%",
         firefox_pct
     );
     assert!(
-        safari_pct >= 15.0 && safari_pct <= 25.0,
+        (15.0..=25.0).contains(&safari_pct),
         "Safari long-term distribution should be ~20% (±5%), got {:.1}%",
         safari_pct
     );
     assert!(
-        edge_pct >= 10.0 && edge_pct <= 20.0,
+        (10.0..=20.0).contains(&edge_pct),
         "Edge long-term distribution should be ~15% (±5%), got {:.1}%",
         edge_pct
     );

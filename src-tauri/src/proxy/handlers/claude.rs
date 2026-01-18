@@ -45,7 +45,7 @@ fn has_valid_signature(block: &ContentBlock) -> bool {
                 return true;
             }
             // 有内容 + 足够长度的 signature = 有效
-            signature.as_ref().map_or(false, |s| s.len() >= MIN_SIGNATURE_LENGTH)
+            signature.as_ref().is_some_and(|s| s.len() >= MIN_SIGNATURE_LENGTH)
         }
         _ => true  // 非 thinking 块默认有效
     }
@@ -67,7 +67,7 @@ fn sanitize_thinking_block(block: ContentBlock) -> ContentBlock {
 }
 
 /// 过滤消息中的无效 thinking 块
-fn filter_invalid_thinking_blocks(messages: &mut Vec<Message>) {
+fn filter_invalid_thinking_blocks(messages: &mut [Message]) {
     let mut total_filtered = 0;
     
     for msg in messages.iter_mut() {
@@ -1241,7 +1241,7 @@ fn create_warmup_response(request: &ClaudeRequest, is_stream: bool) -> Response 
     
     if is_stream {
         // 流式响应：发送标准的 SSE 事件序列
-        let events = vec![
+        let events = [
             // message_start
             format!(
                 "event: message_start\ndata: {{\"type\":\"message_start\",\"message\":{{\"id\":\"{}\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"{}\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{{\"input_tokens\":1,\"output_tokens\":0}}}}}}\n\n",

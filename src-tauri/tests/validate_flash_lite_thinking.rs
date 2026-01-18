@@ -176,10 +176,10 @@ fn extract_thinking_tokens(response: &ClaudeResponse) -> Option<u32> {
 
 /// Helper to check if response contains thinking blocks
 fn has_thinking_blocks(response: &ClaudeResponse) -> bool {
-    response.content.iter().any(|block| match block {
-        ContentBlock::Thinking { .. } => true,
-        _ => false,
-    })
+    response
+        .content
+        .iter()
+        .any(|block| matches!(block, ContentBlock::Thinking { .. }))
 }
 
 // ==================================================================================

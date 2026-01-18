@@ -171,7 +171,7 @@ mod edge_case_tests {
     #[test]
     fn test_malformed_thinking_config() {
         // Invalid JSON structure handled gracefully
-        let invalid_configs = vec![
+        let invalid_configs = [
             // Gemini 3.x with thinkingBudget instead of thinkingLevel
             json!({
                 "generationConfig": {
@@ -333,6 +333,5 @@ mod edge_case_tests {
         }
 
         // If we got here, all concurrent executions succeeded
-        assert!(true, "Concurrent requests handled correctly");
     }
 }

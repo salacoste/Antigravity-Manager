@@ -551,7 +551,7 @@ Finally, add proper error handling and documentation.
     async fn test_metrics_reset() {
         let optimizer = BudgetOptimizer::new();
 
-        optimizer.allocate_budget("test", &vec![]).await;
+        optimizer.allocate_budget("test", &[]).await;
         assert_eq!(optimizer.get_metrics().await.total_requests, 1);
 
         optimizer.reset_metrics().await;

@@ -78,6 +78,6 @@ mod tests {
     #[test]
     fn test_auth_placeholder() {
         // Placeholder test
-        assert!(true);
+        // Placeholder test passed
     }
 }
