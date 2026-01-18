@@ -580,25 +580,29 @@ fn calculate_percentile(values: &VecDeque<f64>, percentile: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::modules::proxy_db;
-    use once_cell::sync::Lazy;
-    use rusqlite::Connection;
-    use std::sync::Mutex;
+    use std::path::PathBuf;
+    use tempfile::NamedTempFile;
 
-    static DB_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+    /// Helper: Setup isolated test DB
+    fn setup_test_db() -> PathBuf {
+        let temp_file = NamedTempFile::new().expect("Failed to create temp file");
+        let _path = temp_file.path().to_path_buf();
+        // Keep the file path but let the temp_file handle go (file might be deleted on some OS, so we persist path)
+        // Actually, persisting NamedTempFile is better, but here we just need a unique path.
+        // We clone the path and let the file logic handle itself or be recreated by sqlite.
+        let path = std::env::temp_dir().join(format!("test_db_{}.db", uuid::Uuid::new_v4()));
 
-    /// Helper: Clear cache_metrics table for test isolation
-    fn clear_cache_metrics() {
+        proxy_db::set_test_db_path_override(Some(path.clone()));
         proxy_db::init_db().expect("DB init should succeed");
-        let db_path = proxy_db::get_proxy_db_path().expect("DB path should exist");
-        let conn = Connection::open(db_path).expect("DB connection should succeed");
-        conn.execute("DELETE FROM cache_metrics", [])
-            .expect("Clear should succeed");
+        // Clear metrics just in case (though file is new)
+        let _ = proxy_db::clear_logs();
+
+        path
     }
 
     #[tokio::test]
     async fn test_cache_monitor_creation() {
-        let _guard = DB_LOCK.lock().unwrap();
-        clear_cache_metrics();
+        let _db_path = setup_test_db();
 
         let monitor = CacheMonitor::new();
         let metrics = monitor.export_metrics().await;
@@ -610,8 +614,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_hit_updates_counter() {
-        let _guard = DB_LOCK.lock().unwrap();
-        clear_cache_metrics();
+        let _db_path = setup_test_db();
 
         let monitor = CacheMonitor::new();
 
@@ -625,8 +628,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_miss_updates_counter() {
-        let _guard = DB_LOCK.lock().unwrap();
-        clear_cache_metrics();
+        let _db_path = setup_test_db();
 
         let monitor = CacheMonitor::new();
 
@@ -640,8 +642,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_hit_rate_calculation() {
-        let _guard = DB_LOCK.lock().unwrap();
-        clear_cache_metrics();
+        let _db_path = setup_test_db();
 
         let monitor = CacheMonitor::new();
 
@@ -655,8 +656,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_signature_reuse_tracking() {
-        // No clear_cache_metrics here, but safe to lock if others run
-        let _guard = DB_LOCK.lock().unwrap();
+        let _db_path = setup_test_db();
         let monitor = CacheMonitor::new();
 
         let sig = "test_signature_123";
@@ -672,7 +672,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_top_signatures_sorting() {
-        let _guard = DB_LOCK.lock().unwrap();
+        let _db_path = setup_test_db();
         let monitor = CacheMonitor::new();
 
         // Signature 1: 5 hits
@@ -698,7 +698,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cost_attribution_per_account() {
-        let _guard = DB_LOCK.lock().unwrap();
+        let _db_path = setup_test_db();
         let monitor = CacheMonitor::new();
 
         monitor
@@ -758,7 +758,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_savings_percentage_calculation() {
-        clear_cache_metrics();
+        let _db_path = setup_test_db();
 
         let monitor = CacheMonitor::new();
 

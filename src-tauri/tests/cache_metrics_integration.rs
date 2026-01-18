@@ -1,17 +1,30 @@
 //! Integration tests for cache metrics system
 //! Story-008-02: Signature Cache Monitoring
 
+use antigravity_tools_lib::modules::proxy_db;
 use antigravity_tools_lib::proxy::signature_cache::SignatureCache;
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
+use std::path::PathBuf;
+use tempfile::NamedTempFile;
 
-static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+/// Helper: Setup isolated test DB
+fn setup_test_db() -> PathBuf {
+    let temp_file = NamedTempFile::new().expect("Failed to create temp file");
+    let _path = temp_file.path().to_path_buf();
+    let path =
+        std::env::temp_dir().join(format!("test_integration_db_{}.db", uuid::Uuid::new_v4()));
+
+    proxy_db::set_test_db_path_override(Some(path.clone()));
+    let _ = proxy_db::init_db();
+    let _ = proxy_db::clear_logs(); // Clear to be safe
+
+    path
+}
 
 /// Test #1: Cache hit tracking integration
 /// Verify that signature cache operations are tracked by the monitor
 #[tokio::test]
 async fn test_cache_hit_tracking_integration() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _db_path = setup_test_db();
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 
@@ -42,7 +55,7 @@ async fn test_cache_hit_tracking_integration() {
 /// Uses relative comparison to avoid race conditions with parallel tests
 #[tokio::test]
 async fn test_cache_miss_tracking_integration() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _db_path = setup_test_db(); // Use isolated DB
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 
@@ -72,7 +85,7 @@ async fn test_cache_miss_tracking_integration() {
 /// Verify that all metrics are properly exported
 #[tokio::test]
 async fn test_comprehensive_metrics_export() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _db_path = setup_test_db(); // Use isolated DB
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 
@@ -125,10 +138,11 @@ async fn test_comprehensive_metrics_export() {
 /// Verify that most reused signatures are correctly ranked
 #[tokio::test]
 async fn test_top_signatures_ranking() {
+    let _db_path = setup_test_db(); // Use isolated DB
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 
-    // Clear any existing metrics
+    // Clear any existing metrics matching this DB (isolated now)
     monitor.clear().await;
 
     // Create signatures with different reuse patterns
@@ -177,6 +191,7 @@ async fn test_top_signatures_ranking() {
 /// Verify that lookup and write times are tracked
 #[tokio::test]
 async fn test_performance_metrics_tracking() {
+    let _db_path = setup_test_db(); // Use isolated DB
     let cache = SignatureCache::global();
     let monitor = SignatureCache::get_monitor();
 

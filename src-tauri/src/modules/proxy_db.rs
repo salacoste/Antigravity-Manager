@@ -1,8 +1,32 @@
 use crate::proxy::monitor::ProxyRequestLog;
 use rusqlite::{params, Connection};
+use std::cell::RefCell;
 use std::path::PathBuf;
 
+thread_local! {
+    static TEST_DB_PATH: RefCell<Option<PathBuf>> = RefCell::new(None);
+}
+
+/// Sets a thread-local override for the database path.
+/// This is intended for use in tests to ensure isolation.
+#[doc(hidden)] // Hidden from main docs but available
+pub fn set_test_db_path_override(path: Option<PathBuf>) {
+    TEST_DB_PATH.with(|p| {
+        *p.borrow_mut() = path;
+    });
+}
+
 pub fn get_proxy_db_path() -> Result<PathBuf, String> {
+    // Check for thread-local test override first
+    let result = TEST_DB_PATH.with(|p| p.borrow().clone());
+    if let Some(path) = result {
+        // Ensure parent directory exists for the test path
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        return Ok(path);
+    }
+
     let data_dir = crate::modules::account::get_data_dir()?;
     Ok(data_dir.join("proxy_logs.db"))
 }
