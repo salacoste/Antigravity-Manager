@@ -20,7 +20,8 @@ import {
     Code,
     Check,
     X,
-    Edit2
+    Edit2,
+    Activity
 } from 'lucide-react';
 import { AppConfig, ProxyConfig, StickySessionConfig, ExperimentalConfig } from '../types/config';
 import HelpTooltip from '../components/common/HelpTooltip';
@@ -29,13 +30,10 @@ import { showToast } from '../components/common/ToastContainer';
 import { cn } from '../utils/cn';
 import { useProxyModels } from '../hooks/useProxyModels';
 import GroupedSelect, { SelectOption } from '../components/common/GroupedSelect';
-<<<<<<< HEAD
 import ConfigurationProfiles from '../components/proxy/ConfigurationProfiles';
 import { CacheMetricsCard } from '../components/proxy/CacheMetricsCard';
 import { TopSignaturesTable } from '../components/proxy/TopSignaturesTable';
-=======
 import { CliSyncCard } from '../components/proxy/CliSyncCard';
->>>>>>> upstream/main
 
 interface ProxyStatus {
     running: boolean;

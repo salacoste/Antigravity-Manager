@@ -15,11 +15,8 @@ function Navbar() {
         { path: '/', label: t('nav.dashboard') },
         { path: '/accounts', label: t('nav.accounts') },
         { path: '/api-proxy', label: t('nav.proxy') },
-<<<<<<< HEAD
         { path: '/budget-optimizer', label: 'Budget' },
-=======
         { path: '/monitor', label: t('nav.call_records') },
->>>>>>> upstream/main
         { path: '/settings', label: t('nav.settings') },
     ];
 
