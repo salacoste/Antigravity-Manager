@@ -136,7 +136,7 @@ impl ContextManager {
     /// - Level 0 (None): No change
     /// - Level 1 (Soft): Keep thinking in last 2 turns, strip others
     /// - Level 2 (Aggressive): Strip ALL thinking in history (except current generation which is handled by LLM)
-    pub fn purify_history(messages: &mut Vec<Message>, strategy: PurificationStrategy) -> bool {
+    pub fn purify_history(messages: &mut [Message], strategy: PurificationStrategy) -> bool {
         if strategy == PurificationStrategy::None {
             return false;
         }

@@ -70,7 +70,7 @@ pub fn remap_function_call_args(name: &str, args: &mut Value) {
                 if !obj.contains_key("path") {
                     if let Some(paths) = obj.remove("paths") {
                         let path_str = if let Some(arr) = paths.as_array() {
-                            arr.get(0)
+                            arr.first()
                                 .and_then(|v| v.as_str())
                                 .unwrap_or(".")
                                 .to_string()

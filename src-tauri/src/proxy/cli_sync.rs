@@ -176,8 +176,7 @@ pub fn check_cli_installed(app: &CliApp) -> (bool, Option<String>) {
             // 例如 "codex-cli 0.86.0" -> "0.86.0"
             let cleaned = s
                 .split(|c: char| !c.is_numeric() && c != '.')
-                .filter(|part| !part.is_empty())
-                .last()
+                .rfind(|part| !part.is_empty())
                 .map(|p| p.trim())
                 .unwrap_or(&s)
                 .to_string();
@@ -199,6 +198,12 @@ pub fn get_sync_status(app: &CliApp, proxy_url: &str) -> (bool, bool, Option<Str
     let mut all_synced = true;
     let mut has_backup = false;
     let mut current_base_url = None;
+
+    // [FIX] Pre-compile regexes to avoid compilation in loop (clippy::regex_creation_in_loops)
+    let codex_re =
+        regex::Regex::new(r#"(?m)^\s*base_url\s*=\s*['"]([^'"]+)['"]"#).expect("Invalid regex");
+    let gemini_re =
+        regex::Regex::new(r#"(?m)^GOOGLE_GEMINI_BASE_URL=(.*)$"#).expect("Invalid regex");
 
     for file in &files {
         // 使用更简单的命名规则: original_name + .antigravity.bak
@@ -257,9 +262,7 @@ pub fn get_sync_status(app: &CliApp, proxy_url: &str) -> (bool, bool, Option<Str
             CliApp::Codex => {
                 if file.name == "config.toml" {
                     // 正则匹配 base_url
-                    let re =
-                        regex::Regex::new(r#"(?m)^\s*base_url\s*=\s*['"]([^'"]+)['"]"#).unwrap();
-                    if let Some(caps) = re.captures(&content) {
+                    if let Some(caps) = codex_re.captures(&content) {
                         let url = &caps[1];
                         current_base_url = Some(url.to_string());
                         if url.trim_end_matches('/') != proxy_url.trim_end_matches('/') {
@@ -272,8 +275,7 @@ pub fn get_sync_status(app: &CliApp, proxy_url: &str) -> (bool, bool, Option<Str
             }
             CliApp::Gemini => {
                 if file.name == ".env" {
-                    let re = regex::Regex::new(r#"(?m)^GOOGLE_GEMINI_BASE_URL=(.*)$"#).unwrap();
-                    if let Some(caps) = re.captures(&content) {
+                    if let Some(caps) = gemini_re.captures(&content) {
                         let url = caps[1].trim();
                         current_base_url = Some(url.to_string());
                         if url.trim_end_matches('/') != proxy_url.trim_end_matches('/') {
