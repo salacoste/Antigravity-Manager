@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 
 thread_local! {
-    static TEST_DB_PATH: RefCell<Option<PathBuf>> = RefCell::new(None);
+    static TEST_DB_PATH: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
 }
 
 /// Sets a thread-local override for the database path.

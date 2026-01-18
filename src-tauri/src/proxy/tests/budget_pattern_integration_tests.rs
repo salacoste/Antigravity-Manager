@@ -12,13 +12,39 @@ use crate::proxy::budget_optimizer::{BudgetOptimizer, BudgetPattern, ComplexityL
 use rusqlite::Connection;
 use std::sync::Arc;
 
-/// Helper: Clear budget_patterns table for test isolation
-fn clear_budget_patterns_table() {
+use std::path::PathBuf;
+use tempfile::NamedTempFile;
+
+/// Helper: Setup isolated test DB
+fn setup_test_db() -> PathBuf {
+    let temp_file = NamedTempFile::new().expect("Failed to create temp file");
+    let _path = temp_file.path().to_path_buf();
+    let path = std::env::temp_dir().join(format!("test_budget_db_{}.db", uuid::Uuid::new_v4()));
+
+    proxy_db::set_test_db_path_override(Some(path.clone()));
     proxy_db::init_db().expect("Database initialization should succeed");
-    let db_path = proxy_db::get_proxy_db_path().expect("DB path should exist");
-    let conn = Connection::open(db_path).expect("DB connection should succeed");
-    conn.execute("DELETE FROM budget_patterns", [])
-        .expect("Clear budget_patterns should succeed");
+
+    // Ensure budget_patterns table exists as init_db() might not create it yet if it's new
+    // But since this is a test for it, let's create it manually if needed, or assume init_db should have done it.
+    // Given the error "no such table: budget_patterns", init_db probably doesn't include it yet.
+    // Let's check init_db in proxy_db.rs later, but for now we'll execute create if not exists here to be safe and fix the test.
+    let conn = Connection::open(&path).expect("DB connection should succeed");
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS budget_patterns (
+            signature TEXT PRIMARY KEY,
+            complexity TEXT,
+            last_updated INTEGER,
+            usage_count INTEGER,
+            avg_duration INTEGER,
+            success_rate REAL
+        )",
+        [],
+    )
+    .expect("Create budget_patterns table failed");
+
+    proxy_db::clear_logs().unwrap_or(());
+
+    path
 }
 
 /// Test 1: Full persistence lifecycle
@@ -26,8 +52,8 @@ fn clear_budget_patterns_table() {
 /// Tests: Create pattern → Save to DB → Load from DB → Restore to store
 #[test]
 fn test_pattern_persistence_lifecycle() {
-    // Clear existing patterns for test isolation
-    clear_budget_patterns_table();
+    // Setup isolated DB
+    let _db_path = setup_test_db();
 
     // Step 1: Create optimizer and pattern
     let optimizer = Arc::new(BudgetOptimizer::new());
@@ -89,7 +115,8 @@ fn test_pattern_persistence_lifecycle() {
 #[test]
 fn test_feedback_recording() {
     // Clear existing patterns for test isolation
-    clear_budget_patterns_table();
+    // Setup isolated DB
+    let _db_path = setup_test_db();
 
     let optimizer = Arc::new(BudgetOptimizer::new());
 
@@ -147,7 +174,8 @@ fn test_feedback_recording() {
 #[test]
 fn test_graceful_degradation() {
     // Clear existing patterns for test isolation
-    clear_budget_patterns_table();
+    // Setup isolated DB
+    let _db_path = setup_test_db();
 
     let optimizer = Arc::new(BudgetOptimizer::new());
 
@@ -183,7 +211,8 @@ fn test_graceful_degradation() {
 #[test]
 fn test_pattern_store_methods() {
     // Clear existing patterns for test isolation
-    clear_budget_patterns_table();
+    // Setup isolated DB
+    let _db_path = setup_test_db();
 
     let optimizer = Arc::new(BudgetOptimizer::new());
 
