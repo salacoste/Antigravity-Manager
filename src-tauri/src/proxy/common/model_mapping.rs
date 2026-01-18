@@ -20,16 +20,16 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     m.insert("claude-3-haiku-20240307", "claude-sonnet-4-5");
     m.insert("claude-haiku-4-5-20251001", "claude-sonnet-4-5");
     // OpenAI 协议映射表
-    m.insert("gpt-4", "gemini-2.5-pro");
-    m.insert("gpt-4-turbo", "gemini-2.5-pro");
-    m.insert("gpt-4-turbo-preview", "gemini-2.5-pro");
-    m.insert("gpt-4-0125-preview", "gemini-2.5-pro");
-    m.insert("gpt-4-1106-preview", "gemini-2.5-pro");
-    m.insert("gpt-4-0613", "gemini-2.5-pro");
+    m.insert("gpt-4", "gemini-2.5-flash");
+    m.insert("gpt-4-turbo", "gemini-2.5-flash");
+    m.insert("gpt-4-turbo-preview", "gemini-2.5-flash");
+    m.insert("gpt-4-0125-preview", "gemini-2.5-flash");
+    m.insert("gpt-4-1106-preview", "gemini-2.5-flash");
+    m.insert("gpt-4-0613", "gemini-2.5-flash");
 
-    m.insert("gpt-4o", "gemini-2.5-pro");
-    m.insert("gpt-4o-2024-05-13", "gemini-2.5-pro");
-    m.insert("gpt-4o-2024-08-06", "gemini-2.5-pro");
+    m.insert("gpt-4o", "gemini-2.5-flash");
+    m.insert("gpt-4o-2024-05-13", "gemini-2.5-flash");
+    m.insert("gpt-4o-2024-08-06", "gemini-2.5-flash");
 
     m.insert("gpt-4o-mini", "gemini-2.5-flash");
     m.insert("gpt-4o-mini-2024-07-18", "gemini-2.5-flash");
@@ -119,7 +119,7 @@ pub async fn get_all_dynamic_models(
 
     model_ids.insert("gemini-2.0-flash-exp".to_string());
     model_ids.insert("gemini-2.5-flash".to_string());
-    model_ids.insert("gemini-2.5-pro".to_string());
+    // gemini-2.5-pro removed
     model_ids.insert("gemini-3-flash".to_string());
     model_ids.insert("gemini-3-pro-high".to_string());
     model_ids.insert("gemini-3-pro-low".to_string());

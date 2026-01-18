@@ -3,6 +3,7 @@
         "loading": "Loading...",
         "load_more": "Load More",
         "add": "Add",
+        "copy": "Copy",
         "action": "Action",
         "save": "Save",
         "saved": "Saved successfully",
@@ -37,6 +38,7 @@
         "dashboard": "Dashboard",
         "accounts": "Accounts",
         "proxy": "API Proxy",
+        "call_records": "Traffic Logs",
         "settings": "Settings",
         "theme_to_dark": "Switch to Dark Mode",
         "theme_to_light": "Switch to Light Mode",
@@ -130,6 +132,43 @@
         "switch_to": "Switch to this account",
         "actions": "Actions",
         "device_fingerprint": "Device Fingerprint",
+        "device_fingerprint_dialog": {
+            "title": "Device Fingerprint",
+            "operations": "Device Fingerprint Operations",
+            "generate_and_bind": "Generate and Bind",
+            "restore_original": "Restore Original",
+            "open_storage_directory": "Open Storage Directory",
+            "current_storage": "Current Storage",
+            "effective": "Effective",
+            "current_storage_desc": "Read from storage.json (updated after applying binding when switching accounts)",
+            "account_binding": "Account Binding",
+            "pending_application": "Pending Application",
+            "account_binding_desc": "Saved as binding after generation/restoration, written to storage.json when switching accounts",
+            "historical_fingerprints": "Historical Fingerprints (optional restore/delete)",
+            "no_history": "No History",
+            "current": "Current",
+            "restore": "Restore",
+            "delete_version": "Delete this version",
+            "confirm_generate_title": "Confirm generate and bind?",
+            "confirm_generate_desc": "Will generate a new set of device fingerprints and set as current fingerprint. Confirm continue?",
+            "confirm_restore_title": "Confirm restore original fingerprint?",
+            "confirm_restore_desc": "Will restore to original fingerprint and overwrite current fingerprint. Confirm continue?",
+            "cancel": "Cancel",
+            "confirm": "Confirm",
+            "processing": "Processing...",
+            "loading": "Loading...",
+            "failed_to_load_device_info": "Failed to load device info",
+            "generation_failed": "Generation failed",
+            "binding_failed": "Binding failed",
+            "restoration_failed": "Restoration failed",
+            "deletion_failed": "Deletion failed",
+            "directory_open_failed": "Unable to open directory",
+            "generated_and_bound": "Generated and bound",
+            "restored": "Restored",
+            "deleted": "Deleted",
+            "directory_opened": "Storage directory opened",
+            "original_fingerprint_not_found": "Original fingerprint not found"
+        },
         "warmup_all": "One-click Warmup",
         "warmup_selected": "Warmup ({{count}})",
         "warmup_this": "Warmup this account",
@@ -275,6 +314,10 @@
             "range": "Range",
             "example": "Example: At {{percentage}}%, an account with {{total}} quota will be disabled when remaining ≤ {{threshold}}",
             "auto_restore_info": "Account will be automatically re-enabled when quota resets"
+        },
+        "pinned_quota_models": {
+            "title": "Pinned Quota Models",
+            "desc": "Choose which model quotas to display in the account list. Unselected models are only shown in the detail popup."
         },
         "proxy": {
             "title": "Proxy Settings"
@@ -436,10 +479,10 @@
                     "advanced_tooltip": "Optional exact-match overrides. If an incoming model string matches a rule key, it will be replaced with the mapped z.ai model id.",
                     "from_label": "Incoming model",
                     "to_label": "z.ai model",
-                    "from_placeholder": "e.g. claude-opus-4-5-thinking",
-                    "to_placeholder": "e.g. glm-4.7",
                     "add_rule": "Add",
-                    "empty": "No override rules configured."
+                    "empty": "No override rules configured.",
+                    "from_placeholder": "From (e.g. claude-3-opus)",
+                    "to_placeholder": "To (e.g. glm-4)"
                 },
                 "modes": {
                     "off": "Off",
@@ -464,7 +507,7 @@
             },
             "request_timeout": "Request Timeout",
             "request_timeout_tooltip": "Maximum time (seconds) the proxy waits for an upstream response, including streaming. Increase for long generations; restart required to apply.",
-            "request_timeout_hint": "Default 120s, range 30-3600s. Restart service to apply changes.",
+            "request_timeout_hint": "Default 120s, range 30-7200s. Restart service to apply changes.",
             "enable_logging": "Enable Request Logging",
             "enable_logging_hint": "Record history for debugging (Minor perf cost)",
             "upstream_proxy": {
@@ -616,12 +659,13 @@
             "default_suffix": " (Default)",
             "original_id": "Original ID",
             "route_to": "Route To",
-            "select_target_model": "Select Target Model"
+            "select_target_model": "Select Target Model",
+            "original_placeholder": "Original (e.g. gpt-4 or gpt-4*)"
         },
         "multi_protocol": {
             "title": "Multi-Protocol Support",
-            "subtitle": "Protocol Support",
-            "description": "Proxy service supports both OpenAI and Anthropic API formats to meet different tool requirements",
+            "subtitle": "Seamlessly integrate with your favorite AI tools and CLIs",
+            "description": "The local proxy supports OpenAI, Anthropic, and Gemini protocols, ensuring compatibility with a wide range of applications.",
             "openai_label": "OpenAI Protocol",
             "anthropic_label": "Anthropic Protocol",
             "openai_tools": "Cherry Studio, NextChat",
@@ -629,7 +673,8 @@
             "gemini_label": "Gemini Protocol",
             "gemini_tools": "Google AI SDK, LangChain",
             "quick_integration": "Quick Integration",
-            "click_tip": "👆 Click any model on the left to update this code."
+            "click_tip": "👆 Click a model to update code examples",
+            "copy_base": "Copy Base"
         },
         "supported_models": {
             "title": "Supported Models & Integration",
@@ -637,6 +682,35 @@
             "model_id": "Model ID",
             "description": "Description",
             "action": "Action"
+        },
+        "cli_sync": {
+            "title": "One-click CLI Sync",
+            "subtitle": "Quickly sync current API endpoints and keys to your local AI CLI tools.",
+            "card_title": "{{name}} Config",
+            "status": {
+                "not_installed": "Not detected",
+                "installed": "v{{version}}",
+                "synced": "Pointed to this app",
+                "not_synced": "Not synced",
+                "detecting": "Detecting...",
+                "current_base_url": "Current Base URL"
+            },
+            "btn_sync": "Sync Config Now",
+            "btn_view": "View Config",
+            "btn_restore": "Restore Defaults",
+            "btn_restore_backup": "Restore Backup",
+            "restore_confirm": "Are you sure you want to restore the configuration for {{name}} to the official default URL?",
+            "restore_backup_confirm": "Backup configuration found. Are you sure you want to restore it?",
+            "modal": {
+                "view_title": "{{name}} Config Content",
+                "copy_success": "Config content copied"
+            },
+            "toast": {
+                "sync_success": "Sync successful! {{name}} is ready.",
+                "sync_error": "Sync failed: {{error}}"
+            },
+            "sync_confirm_title": "Sync Confirmation",
+            "sync_confirm_message": "Ready to sync {{name}} configuration. ⚠️ Warning: This will overwrite your existing local configuration files (e.g. login tokens, API Keys). Are you sure you want to continue?"
         }
     },
     "monitor": {
@@ -667,6 +741,7 @@
             "status": "Status",
             "method": "Method",
             "model": "Model",
+            "protocol": "Protocol",
             "account": "Account",
             "path": "Path",
             "usage": "Tokens",
@@ -682,7 +757,11 @@
             "tokens": "Tokens (I/O)",
             "time": "Time",
             "model": "Model",
-            "id": "Request ID"
+            "mapped_model": "Mapped Model",
+            "protocol": "Protocol",
+            "account_used": "Account Used",
+            "id": "Request ID",
+            "payload_empty": "No data"
         },
         "dialog": {
             "clear_title": "Clear Proxy Logs",

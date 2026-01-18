@@ -119,7 +119,6 @@ pub async fn start_proxy_service(
     }
 
     // Set global AppHandle for event emission from mappers
-    crate::proxy::mappers::claude::set_app_handle(app_handle.clone());
 
     // 启动 Axum 服务器
     let (axum_server, server_handle) = match crate::proxy::AxumServer::start(

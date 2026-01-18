@@ -159,6 +159,11 @@ impl SignatureCache {
         self.get_tool_signature(session_id)
     }
 
+    /// Store a signature for a session_id.
+    pub fn cache_session_signature(&self, session_id: &str, signature: String) {
+        self.cache_tool_signature(session_id, signature);
+    }
+
     /// Store model family for a signature
     pub fn cache_thinking_family(&self, signature: String, family: String) {
         if signature.len() < MIN_SIGNATURE_LENGTH {

@@ -754,7 +754,6 @@ impl TokenManager {
 
                         // 【新增】主动避开限流或 5xx 锁定的账号 (来自 PR #28 的高可用思路)
                         if self.is_rate_limited_by_account_id(&candidate.account_id) {
-                            // Changed to account_id
                             continue;
                         }
 

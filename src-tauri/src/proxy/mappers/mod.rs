@@ -9,3 +9,4 @@ pub mod gemini;
 pub mod openai;
 pub mod signature_store;
 pub mod tool_result_compressor;
+pub mod context_manager;

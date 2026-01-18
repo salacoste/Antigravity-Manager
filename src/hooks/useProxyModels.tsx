@@ -56,13 +56,7 @@ export const useProxyModels = () => {
             group: 'Gemini 2.5',
             icon: <Zap size={16} />
         },
-        {
-            id: 'gemini-2.5-pro',
-            name: 'Gemini 2.5 Pro',
-            desc: t('proxy.model.pro_legacy'),
-            group: 'Gemini 2.5',
-            icon: <Cpu size={16} />
-        },
+
         {
             id: 'gemini-2.5-flash-thinking',
             name: 'Gemini 2.5 Flash (Thinking)',

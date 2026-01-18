@@ -206,13 +206,14 @@ impl RateLimitTracker {
         // 4. 处理默认值与软避让逻辑（根据限流类型设置不同默认值）
         let retry_sec = match retry_after_sec {
             Some(s) => {
-                // 引入 PR #28 的安全缓冲区：最小 2 秒，防止极高频无效重试
+                // 设置安全缓冲区：最小 2 秒，防止极高频无效重试
                 if s < 2 {
                     2
                 } else {
                     s
                 }
             }
+
             None => {
                 // 获取连续失败次数，用于指数退避（带自动过期逻辑）
                 let failure_count = {
@@ -432,7 +433,7 @@ impl RateLimitTracker {
 
     /// 从错误消息 body 中解析重置时间
     fn parse_retry_time_from_body(&self, body: &str) -> Option<u64> {
-        // A. 优先尝试 JSON 精准解析 (借鉴 PR #28)
+        // A. 优先尝试 JSON 精准解析
         let trimmed = body.trim();
         if trimmed.starts_with('{') || trimmed.starts_with('[') {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {

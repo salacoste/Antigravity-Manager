@@ -224,7 +224,7 @@ mod tests {
                 },
                 "finishReason": "STOP"
             }],
-            "modelVersion": "gemini-2.5-pro",
+            "modelVersion": "gemini-2.5-flash",
             "responseId": "resp_123"
         });
 
@@ -251,7 +251,7 @@ mod tests {
                 "totalTokenCount": 150,
                 "cachedContentTokenCount": 25
             },
-            "modelVersion": "gemini-2.5-pro",
+            "modelVersion": "gemini-2.5-flash",
             "responseId": "resp_123"
         });
 
@@ -273,7 +273,7 @@ mod tests {
                 "content": {"parts": [{"text": "Hello!"}]},
                 "finishReason": "STOP"
             }],
-            "modelVersion": "gemini-2.5-pro",
+            "modelVersion": "gemini-2.5-flash",
             "responseId": "resp_123"
         });
 

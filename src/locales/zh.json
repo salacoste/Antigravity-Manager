@@ -3,6 +3,7 @@
         "loading": "加载中...",
         "load_more": "加载更多",
         "add": "添加",
+        "copy": "复制",
         "action": "操作",
         "save": "保存",
         "saved": "保存成功",
@@ -37,6 +38,7 @@
         "dashboard": "仪表盘",
         "accounts": "账号管理",
         "proxy": "API 反代",
+        "call_records": "流量日志",
         "settings": "设置",
         "theme_to_dark": "切换到深色模式",
         "theme_to_light": "切换到浅色模式",
@@ -130,6 +132,43 @@
         "switch_to": "切换到此账号",
         "actions": "操作",
         "device_fingerprint": "设备指纹",
+        "device_fingerprint_dialog": {
+            "title": "设备指纹",
+            "operations": "设备指纹操作",
+            "generate_and_bind": "生成并绑定",
+            "restore_original": "恢复原始",
+            "open_storage_directory": "打开存储目录",
+            "current_storage": "当前存储",
+            "effective": "已生效",
+            "current_storage_desc": "读取自 storage.json（切换账号时应用绑定后更新）",
+            "account_binding": "账号绑定",
+            "pending_application": "待应用",
+            "account_binding_desc": "生成/恢复后保存为绑定，切换账号时写入 storage.json",
+            "historical_fingerprints": "历史指纹（可选恢复/删除）",
+            "no_history": "暂无历史",
+            "current": "当前",
+            "restore": "恢复",
+            "delete_version": "删除此版本",
+            "confirm_generate_title": "确认生成并绑定？",
+            "confirm_generate_desc": "将生成一套新的设备指纹并设置为当前指纹。确认继续？",
+            "confirm_restore_title": "确认恢复原始指纹？",
+            "confirm_restore_desc": "将恢复为原始指纹并覆盖当前指纹。确认继续？",
+            "cancel": "取消",
+            "confirm": "确认",
+            "processing": "处理中...",
+            "loading": "加载中...",
+            "failed_to_load_device_info": "加载设备信息失败",
+            "generation_failed": "生成失败",
+            "binding_failed": "绑定失败",
+            "restoration_failed": "恢复失败",
+            "deletion_failed": "删除失败",
+            "directory_open_failed": "无法打开目录",
+            "generated_and_bound": "已生成并绑定",
+            "restored": "已恢复",
+            "deleted": "已删除",
+            "directory_opened": "已打开设备存储目录",
+            "original_fingerprint_not_found": "未找到原始指纹"
+        },
         "warmup_all": "一键预热",
         "warmup_selected": "预热 ({{count}})",
         "warmup_this": "预热该账号",
@@ -275,6 +314,10 @@
             "range": "范围",
             "example": "示例：设置 {{percentage}}% 时，{{total}} 次配额的账号剩余 ≤ {{threshold}} 次时将被自动禁用",
             "auto_restore_info": "配额重置后将自动重新启用账号"
+        },
+        "pinned_quota_models": {
+            "title": "配额关注列表",
+            "desc": "选择要在账号列表外层显示的模型配额，未选中的模型只在详情弹窗中显示"
         },
         "proxy": {
             "title": "代理设置"
@@ -436,10 +479,10 @@
                     "advanced_tooltip": "可选的精确匹配覆盖规则：如果 incoming model 字符串与规则键完全一致，则替换为对应的 z.ai 模型 ID。",
                     "from_label": "incoming model",
                     "to_label": "z.ai 模型",
-                    "from_placeholder": "例如：claude-opus-4-5-thinking",
-                    "to_placeholder": "例如：glm-4.7",
                     "add_rule": "添加",
-                    "empty": "未配置任何覆盖规则。"
+                    "empty": "尚未配置自定义替换规则。",
+                    "from_placeholder": "源模型 (如 claude-3-opus)",
+                    "to_placeholder": "映射至 (如 glm-4)"
                 },
                 "modes": {
                     "off": "关闭",
@@ -464,7 +507,7 @@
             },
             "request_timeout": "请求超时",
             "request_timeout_tooltip": "代理等待上游响应的最大时间（秒），包含流式输出。长文本/长推理可适当调大；修改后需重启生效。",
-            "request_timeout_hint": "默认 120 秒，范围 30-3600 秒。修改后需重启服务生效。",
+            "request_timeout_hint": "默认 120 秒，范围 30-7200 秒。修改后需重启服务生效。",
             "enable_logging": "启用请求日志",
             "enable_logging_hint": "记录历史记录以便调试 (微小性能损耗)",
             "upstream_proxy": {
@@ -613,15 +656,16 @@
             "no_custom_mapping": "暂无自定义精确映射",
             "gemini3_only_warning": "⚠️ 仅支持 Gemini 3 系列",
             "default_suffix": "（默认）",
-            "select_target_model": "选择目标模型"
+            "select_target_model": "选择目标模型",
+            "original_placeholder": "原始名 (如 gpt-4 或 gpt-4*)"
         },
         "examples": {
             "title": "使用示例"
         },
         "multi_protocol": {
             "title": "多协议支持 (Multi-Protocol Support)",
-            "subtitle": "协议支持",
-            "description": "反代服务支持 OpenAI 和 Anthropic 两种 API 格式，满足不同工具需求",
+            "subtitle": "快速同步 API 地址与密钥到本地 AI 工具",
+            "description": "反代服务支持 OpenAI、Anthropic 和 Gemini 协议，满足不同工具的集成需求",
             "openai_label": "OpenAI 协议",
             "anthropic_label": "Anthropic 协议",
             "openai_tools": "Cherry Studio, NextChat",
@@ -629,7 +673,8 @@
             "gemini_label": "Gemini 协议",
             "gemini_tools": "Google AI SDK, LangChain",
             "quick_integration": "快速集成 (Quick Integration)",
-            "click_tip": "👆 点击左侧任意模型以更新代码"
+            "click_tip": "👆 点击模型以更新代码示例",
+            "copy_base": "复制 Base"
         },
         "supported_models": {
             "title": "支持模型与集成 (Supported Models & Integration)",
@@ -637,6 +682,35 @@
             "model_id": "模型 ID",
             "description": "描述",
             "action": "操作"
+        },
+        "cli_sync": {
+            "title": "CLI 配置一键同步",
+            "subtitle": "快速将当前 API 服务地址与 API 密钥同步到本地 AI CLI 工具中",
+            "card_title": "{{name}} 配置",
+            "status": {
+                "not_installed": "未检测到安装",
+                "installed": "v{{version}}",
+                "synced": "已指向本项目",
+                "not_synced": "未同步",
+                "detecting": "检测中...",
+                "current_base_url": "当前接口地址 (Base URL)"
+            },
+            "btn_sync": "立即同步配置",
+            "btn_view": "查看当前配置",
+            "btn_restore": "恢复默认配置",
+            "btn_restore_backup": "恢复原有配置",
+            "restore_confirm": "确定要将 {{name}} 的配置恢复为官方默认地址吗？",
+            "restore_backup_confirm": "检测到旧的配置文件备份，确定要还原吗？",
+            "modal": {
+                "view_title": "{{name}} 配置文件内容",
+                "copy_success": "配置内容已复制"
+            },
+            "toast": {
+                "sync_success": "同步成功！{{name}} 已准备就绪。",
+                "sync_error": "同步失败：{{error}}"
+            },
+            "sync_confirm_title": "同步确认",
+            "sync_confirm_message": "即将为您同步 {{name}} 的配置。⚠️ 注意：此操作将覆盖您本地已有的配置文件（如登录状态、API Key 等）。确定要继续吗？"
         }
     },
     "monitor": {
@@ -667,6 +741,7 @@
             "status": "状态",
             "method": "方法",
             "model": "模型",
+            "protocol": "协议",
             "account": "账号",
             "path": "路径",
             "usage": "Token 消耗",
@@ -682,7 +757,11 @@
             "tokens": "Token 消耗 (输入/输出)",
             "time": "请求时间",
             "model": "使用模型",
-            "id": "请求 ID"
+            "mapped_model": "映射模型",
+            "protocol": "请求协议",
+            "account_used": "使用账号",
+            "id": "请求 ID",
+            "payload_empty": "无数据"
         },
         "dialog": {
             "clear_title": "清除监控日志",

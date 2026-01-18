@@ -113,7 +113,9 @@ fn set_zai_auth(headers: &mut HeaderMap, incoming: &HeaderMap, api_key: &str) {
 pub fn deep_remove_cache_control(value: &mut Value) {
     match value {
         Value::Object(map) => {
-            map.remove("cache_control");
+            if let Some(v) = map.remove("cache_control") {
+                tracing::info!("[ISSUE-744] Deep Cleaning found nested cache_control: {:?}", v);
+            }
             for v in map.values_mut() {
                 deep_remove_cache_control(v);
             }
@@ -170,6 +172,9 @@ pub async fn forward_anthropic_json(
 
     // [FIX #290] Clean cache_control before sending to Anthropic API
     // This prevents "Extra inputs are not permitted" errors
+    if let Some(cc) = body.get("cache_control") {
+        tracing::info!("[ISSUE-744] Deep cleaning cache_control from ROOT: {:?}", cc);
+    }
     deep_remove_cache_control(&mut body);
 
     // [FIX #307] Explicitly serialize body to Vec<u8> to ensure Content-Length is set correctly.

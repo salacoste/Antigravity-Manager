@@ -27,6 +27,7 @@ pub struct ProxyRequestLog {
     pub response_body: Option<String>,
     pub input_tokens: Option<u32>,
     pub output_tokens: Option<u32>,
+    pub protocol: Option<String>, // 协议类型: "openai", "anthropic", "gemini"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -286,7 +287,24 @@ impl ProxyMonitor {
 
         // Emit event (send summary only, without body to reduce memory)
         if let Some(app) = &self.app_handle {
-            let _ = app.emit("proxy://request", &log);
+            let log_summary = ProxyRequestLog {
+                id: log.id.clone(),
+                timestamp: log.timestamp,
+                method: log.method.clone(),
+                url: log.url.clone(),
+                status: log.status,
+                duration: log.duration,
+                model: log.model.clone(),
+                mapped_model: log.mapped_model.clone(),
+                account_email: log.account_email.clone(),
+                error: log.error.clone(),
+                request_body: None,  // Don't send body in event
+                response_body: None, // Don't send body in event
+                input_tokens: log.input_tokens,
+                output_tokens: log.output_tokens,
+                protocol: log.protocol.clone(),
+            };
+            let _ = app.emit("proxy://request", &log_summary);
         }
     }
 

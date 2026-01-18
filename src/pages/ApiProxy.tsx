@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
     Power,
@@ -19,7 +18,6 @@ import {
     ArrowRight,
     Sparkles,
     Code,
-    Activity,
     Check,
     X,
     Edit2
@@ -31,9 +29,13 @@ import { showToast } from '../components/common/ToastContainer';
 import { cn } from '../utils/cn';
 import { useProxyModels } from '../hooks/useProxyModels';
 import GroupedSelect, { SelectOption } from '../components/common/GroupedSelect';
+<<<<<<< HEAD
 import ConfigurationProfiles from '../components/proxy/ConfigurationProfiles';
 import { CacheMetricsCard } from '../components/proxy/CacheMetricsCard';
 import { TopSignaturesTable } from '../components/proxy/TopSignaturesTable';
+=======
+import { CliSyncCard } from '../components/proxy/CliSyncCard';
+>>>>>>> upstream/main
 
 interface ProxyStatus {
     running: boolean;
@@ -133,7 +135,6 @@ function CollapsibleCard({
 
 export default function ApiProxy() {
     const { t } = useTranslation();
-    const navigate = useNavigate();
 
     const { models } = useProxyModels();
 
@@ -145,6 +146,8 @@ export default function ApiProxy() {
     });
 
     const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+    const [configLoading, setConfigLoading] = useState(true);
+    const [configError, setConfigError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState<string | null>(null);
     const [selectedProtocol, setSelectedProtocol] = useState<'openai' | 'anthropic' | 'gemini'>('openai');
@@ -195,11 +198,16 @@ export default function ApiProxy() {
     }, []);
 
     const loadConfig = async () => {
+        setConfigLoading(true);
+        setConfigError(null);
         try {
             const config = await invoke<AppConfig>('load_config');
             setAppConfig(config);
         } catch (error) {
             console.error('加载配置失败:', error);
+            setConfigError(String(error));
+        } finally {
+            setConfigLoading(false);
         }
     };
 
@@ -629,9 +637,46 @@ print(response.text)`;
         <div className="h-full w-full overflow-y-auto overflow-x-hidden">
             <div className="p-5 space-y-4 max-w-7xl mx-auto">
 
+                {/* Loading State */}
+                {configLoading && (
+                    <div className="flex items-center justify-center py-20">
+                        <div className="flex flex-col items-center gap-4">
+                            <RefreshCw size={32} className="animate-spin text-blue-500" />
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                {t('common.loading') || 'Loading...'}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Error State */}
+                {!configLoading && configError && (
+                    <div className="flex items-center justify-center py-20">
+                        <div className="flex flex-col items-center gap-4 text-center">
+                            <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                <Settings size={32} className="text-red-500" />
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                    {t('proxy.error.load_failed') || 'Failed to load configuration'}
+                                </h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md">
+                                    {configError}
+                                </p>
+                            </div>
+                            <button
+                                onClick={loadConfig}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+                            >
+                                <RefreshCw size={16} />
+                                {t('common.retry') || 'Retry'}
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* 配置区 */}
-                {appConfig && (
+                {!configLoading && !configError && appConfig && (
                     <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200">
                         <div className="px-4 py-2.5 border-b border-gray-100 dark:border-base-200 flex items-center justify-between">
                             <div className="flex items-center gap-4">
@@ -652,15 +697,6 @@ print(response.text)`;
 
                             {/* 控制按钮 */}
                             <div className="flex items-center gap-2">
-                                {status.running && (
-                                    <button
-                                        onClick={() => navigate('/monitor')}
-                                        className="px-3 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 border bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-blue-600"
-                                    >
-                                        <Activity size={14} />
-                                        {t('monitor.open_monitor')}
-                                    </button>
-                                )}
                                 <button
                                     onClick={handleToggle}
                                     disabled={loading || !appConfig}
@@ -717,11 +753,11 @@ print(response.text)`;
                                         value={appConfig.proxy.request_timeout || 120}
                                         onChange={(e) => {
                                             const value = parseInt(e.target.value);
-                                            const timeout = Math.max(30, Math.min(3600, value));
+                                            const timeout = Math.max(30, Math.min(7200, value));
                                             updateProxyConfig({ request_timeout: timeout });
                                         }}
                                         min={30}
-                                        max={3600}
+                                        max={7200}
                                         disabled={status.running}
                                         className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-base-200 rounded-lg bg-white dark:bg-base-200 text-xs text-gray-900 dark:text-base-content focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
                                     />
@@ -803,7 +839,7 @@ print(response.text)`;
                                             </label>
                                             <label className="flex items-center cursor-pointer gap-2">
                                                 <span className="text-[11px] text-gray-600 dark:text-gray-400 inline-flex items-center gap-1">
-                                                    {t('proxy.config.auth.enabled')}
+                                                    {(appConfig.proxy.auth_mode || 'off') !== 'off' ? t('proxy.config.auth.enabled') : t('common.disabled')}
                                                     <HelpTooltip
                                                         text={t('proxy.config.auth.enabled_tooltip')}
                                                         ariaLabel={t('proxy.config.auth.enabled')}
@@ -937,7 +973,7 @@ print(response.text)`;
 
                 {/* External Providers Integration */}
                 {
-                    appConfig && (
+                    !configLoading && !configError && appConfig && (
                         <div className="space-y-4">
                             <div className="px-1 flex items-center gap-2 text-gray-400">
                                 <Layers size={14} />
@@ -1080,13 +1116,13 @@ print(response.text)`;
                                                 <div className="flex items-center gap-2 pt-2 border-t border-gray-200/50">
                                                     <input
                                                         className="input input-xs input-bordered flex-1 font-mono"
-                                                        placeholder="From (e.g. claude-3-opus)"
+                                                        placeholder={t('proxy.config.zai.models.from_placeholder') || "From (e.g. claude-3-opus)"}
                                                         value={zaiNewMappingFrom}
                                                         onChange={e => setZaiNewMappingFrom(e.target.value)}
                                                     />
                                                     <input
                                                         className="input input-xs input-bordered flex-1 font-mono"
-                                                        placeholder="To (e.g. glm-4)"
+                                                        placeholder={t('proxy.config.zai.models.to_placeholder') || "To (e.g. glm-4)"}
                                                         value={zaiNewMappingTo}
                                                         onChange={e => setZaiNewMappingTo(e.target.value)}
                                                     />
@@ -1338,7 +1374,7 @@ print(response.text)`;
 
                 {/* 模型路由中心 */}
                 {
-                    appConfig && (
+                    !configLoading && !configError && appConfig && (
                         <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 overflow-hidden">
                             <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/50">
                                 <div className="flex items-center justify-between">
@@ -1473,7 +1509,7 @@ print(response.text)`;
                                                     <input
                                                         id="custom-key"
                                                         type="text"
-                                                        placeholder="Original (e.g. gpt-4 or gpt-4*)"
+                                                        placeholder={t('proxy.router.original_placeholder') || "Original (e.g. gpt-4 or gpt-4*)"}
                                                         className="input input-xs input-bordered flex-1 font-mono text-[11px] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600 h-8"
                                                     />
                                                     <div className="w-full sm:w-48">
@@ -1509,9 +1545,21 @@ print(response.text)`;
                         </div>
                     )
                 }
+                {/* CLI 同步卡片 */}
+                {
+                    !configLoading && !configError && appConfig && status.running && (
+                        <div className="mt-4">
+                            <CliSyncCard
+                                proxyUrl={status.base_url}
+                                apiKey={appConfig.proxy.api_key}
+                            />
+                        </div>
+                    )
+                }
+
                 {/* 多协议支持信息 */}
                 {
-                    appConfig && status.running && (
+                    !configLoading && !configError && appConfig && status.running && (
                         <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 overflow-hidden">
                             <div className="p-3">
                                 <div className="flex items-center gap-3 mb-3">
@@ -1541,7 +1589,7 @@ print(response.text)`;
                                         <div className="flex items-center justify-between mb-2">
                                             <span className="text-xs font-bold text-blue-600">{t('proxy.multi_protocol.openai_label')}</span>
                                             <button onClick={(e) => { e.stopPropagation(); copyToClipboard(`${status.base_url}/v1`, 'openai'); }} className="btn btn-ghost btn-xs">
-                                                {copied === 'openai' ? <CheckCircle size={14} /> : <div className="flex items-center gap-1 text-[10px]"><Copy size={12} /> Base</div>}
+                                                {copied === 'openai' ? <CheckCircle size={14} /> : <div className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-tighter"><Copy size={12} /> {t('proxy.multi_protocol.copy_base', { defaultValue: 'Base' })}</div>}
                                             </button>
                                         </div>
                                         <div className="space-y-1">
@@ -1599,9 +1647,10 @@ print(response.text)`;
                     )
                 }
 
+
                 {/* 支持模型与集成 */}
                 {
-                    appConfig && (
+                    !configLoading && !configError && appConfig && (
                         <div className="bg-white dark:bg-base-100 rounded-xl shadow-sm border border-gray-100 dark:border-base-200 overflow-hidden mt-4">
                             <div className="px-4 py-2.5 border-b border-gray-100 dark:border-base-200">
                                 <h2 className="text-base font-bold text-gray-900 dark:text-base-content flex items-center gap-2">
@@ -1643,7 +1692,7 @@ print(response.text)`;
                                                                     copyToClipboard(m.id, `model-${m.id}`);
                                                                 }}
                                                             >
-                                                                {copied === `model-${m.id}` ? <CheckCircle size={14} /> : <div className="flex items-center gap-1 text-[10px]"><Copy size={12} /> Copy</div>}
+                                                                {copied === `model-${m.id}` ? <CheckCircle size={14} /> : <div className="flex items-center gap-1 text-[10px] font-bold tracking-tight"><Copy size={12} /> {t('common.copy')}</div>}
                                                             </button>
                                                         </td>
                                                     </tr>

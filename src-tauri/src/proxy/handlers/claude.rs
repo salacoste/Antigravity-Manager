@@ -13,10 +13,14 @@ use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info};
 
 use crate::proxy::mappers::claude::{
-    close_tool_loop_for_thinking, create_claude_sse_stream, transform_claude_request_in,
-    transform_response, ClaudeRequest,
+    transform_claude_request_in, transform_response, create_claude_sse_stream, ClaudeRequest,
+    filter_invalid_thinking_blocks_with_family, close_tool_loop_for_thinking,
+    clean_cache_control_from_messages, merge_consecutive_messages,
+    thinking_utils::{analyze_conversation_state, ConversationState},
+    models::{ContentBlock, Message, MessageContent},
 };
 use crate::proxy::server::AppState;
+use crate::proxy::mappers::context_manager::{ContextManager, PurificationStrategy};
 use axum::http::HeaderMap;
 use std::sync::atomic::Ordering;
 
@@ -34,9 +38,8 @@ const BACKGROUND_MODEL_STANDARD: &str = "gemini-2.5-flash"; // For complex backg
 
 // ===== Thinking 块处理辅助函数 =====
 
-use crate::proxy::mappers::claude::models::{ContentBlock, Message, MessageContent};
-
 /// 检查 thinking 块是否有有效签名
+#[allow(dead_code)] // Might be used internally by filter logic
 fn has_valid_signature(block: &ContentBlock) -> bool {
     match block {
         ContentBlock::Thinking {
@@ -57,100 +60,7 @@ fn has_valid_signature(block: &ContentBlock) -> bool {
     }
 }
 
-/// 清理 thinking 块,只保留必要字段(移除 cache_control 等)
-fn sanitize_thinking_block(block: ContentBlock) -> ContentBlock {
-    match block {
-        ContentBlock::Thinking {
-            thinking,
-            signature,
-            ..
-        } => {
-            // 重建块,移除 cache_control 等额外字段
-            ContentBlock::Thinking {
-                thinking,
-                signature,
-                cache_control: None,
-            }
-        }
-        _ => block,
-    }
-}
-
-/// 过滤消息中的无效 thinking 块
-fn filter_invalid_thinking_blocks(messages: &mut [Message]) {
-    let mut total_filtered = 0;
-
-    for msg in messages.iter_mut() {
-        // 只处理 assistant 消息
-        // [CRITICAL FIX] Handle 'model' role too (Google history usage)
-        if msg.role != "assistant" && msg.role != "model" {
-            continue;
-        }
-        tracing::error!("[DEBUG-FILTER] Inspecting msg with role: {}", msg.role);
-
-        if let MessageContent::Array(blocks) = &mut msg.content {
-            let original_len = blocks.len();
-
-            // 过滤并清理
-            let mut new_blocks = Vec::new();
-            for block in blocks.drain(..) {
-                if matches!(block, ContentBlock::Thinking { .. }) {
-                    // [DEBUG] 强制输出日志
-                    if let ContentBlock::Thinking { ref signature, .. } = block {
-                        tracing::error!(
-                            "[DEBUG-FILTER] Found thinking block. Sig len: {:?}",
-                            signature.as_ref().map(|s| s.len())
-                        );
-                    }
-
-                    // [CRITICAL FIX] Vertex AI 不认可 skip_thought_signature_validator
-                    // 必须直接删除无效的 thinking 块
-                    if has_valid_signature(&block) {
-                        new_blocks.push(sanitize_thinking_block(block));
-                    } else {
-                        // [IMPROVED] 保留内容转换为 text，而不是直接丢弃
-                        if let ContentBlock::Thinking { thinking, .. } = &block {
-                            if !thinking.is_empty() {
-                                tracing::info!(
-                                    "[Claude-Handler] Converting thinking block with invalid signature to text.
-                                     Content length: {} chars",
-                                    thinking.len()
-                                );
-                                new_blocks.push(ContentBlock::Text {
-                                    text: thinking.clone(),
-                                });
-                            } else {
-                                tracing::debug!("[Claude-Handler] Dropping empty thinking block with invalid signature");
-                            }
-                        }
-                    }
-                } else {
-                    new_blocks.push(block);
-                }
-            }
-
-            *blocks = new_blocks;
-            let filtered_count = original_len - blocks.len();
-            total_filtered += filtered_count;
-
-            // 如果过滤后为空,添加一个空文本块以保持消息有效
-            if blocks.is_empty() {
-                blocks.push(ContentBlock::Text {
-                    text: String::new(),
-                });
-            }
-        }
-    }
-
-    if total_filtered > 0 {
-        debug!(
-            "Filtered {} invalid thinking block(s) from history",
-            total_filtered
-        );
-    }
-}
-
-/// 移除尾部的无签名 thinking 块
+/// 移除尾部的无签名 thinking 块 (Local Logic)
 fn remove_trailing_unsigned_thinking(blocks: &mut Vec<ContentBlock>) {
     if blocks.is_empty() {
         return;
@@ -413,13 +323,33 @@ pub async fn handle_messages(
         }
     };
 
-    // [CRITICAL FIX] 过滤并修复 Thinking 块签名
-    filter_invalid_thinking_blocks(&mut request.messages);
+    // [CRITICAL FIX] 预先清理所有消息中的 cache_control 字段 (Issue #744)
+    // 必须在序列化之前处理，以确保 z.ai 和 Google Flow 都不受历史消息缓存标记干扰
+    clean_cache_control_from_messages(&mut request.messages);
+
+    // [FIX #813] 合并连续的同角色消息 (Consecutive User Messages)
+    // 这对于 z.ai (Anthropic 直接转发) 路径至关重要，因为原始结构必须符合协议
+    merge_consecutive_messages(&mut request.messages);
+
+    // Get model family for signature validation
+    let target_family = if use_zai {
+        Some("claude")
+    } else {
+        let mapped_model = crate::proxy::common::model_mapping::map_claude_model_to_gemini(&request.model);
+        if mapped_model.contains("gemini") {
+            Some("gemini")
+        } else {
+            Some("claude")
+        }
+    };
+
+    // [CRITICAL FIX] 过滤并修复 Thinking 块签名 (Enhanced with family check)
+    filter_invalid_thinking_blocks_with_family(&mut request.messages, target_family);
 
     // [New] Recover from broken tool loops (where signatures were stripped)
     // This prevents "Assistant message must start with thinking" errors by closing the loop with synthetic messages
     if state.experimental.read().await.enable_tool_loop_recovery {
-        close_tool_loop_for_thinking(&mut request.messages, &request.model);
+        close_tool_loop_for_thinking(&mut request.messages);
     }
 
     // ===== [Issue #467 Fix] 拦截 Claude Code Warmup 请求 =====
@@ -586,7 +516,9 @@ pub async fn handle_messages(
     let token_manager = state.token_manager;
 
     let pool_size = token_manager.len();
-    let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size).max(1);
+    // [FIX] Ensure max_attempts is at least 2 to allow for internal retries (e.g. stripping signatures)
+    // even if the user has only 1 account.
+    let max_attempts = MAX_RETRY_ATTEMPTS.min(pool_size.saturating_add(1)).max(2);
 
     let mut last_error = String::new();
     let mut retried_without_thinking = false;
@@ -692,13 +624,12 @@ pub async fn handle_messages(
                 }
             }
         } else {
-            // 真实用户请求,保持原映射
+            // 真实用户请求,保持原映射 (Local Logic)
             debug!(
                 "[{}][USER] 用户交互请求,保持映射: {}",
                 trace_id, mapped_model
             );
 
-            // 对真实请求应用额外的清理:移除尾部无签名的 thinking 块
             // 对真实请求应用额外的清理:移除尾部无签名的 thinking 块
             for msg in request_with_mapped.messages.iter_mut() {
                 if msg.role == "assistant" || msg.role == "model" {
@@ -711,12 +642,55 @@ pub async fn handle_messages(
             }
         }
 
+        // ===== [Context Purification] Dynamic Thinking Stripping (Issue #PromptTooLong) (Upstream Logic) =====
+        // 对 Pro/Flash 模型进行差异化的上下文管理
+        let mut is_purified = false;
+        if !retried_without_thinking {
+            // 1. 确定上下文限制 (Flash: ~1M, Pro: ~2M)
+            // Conservatively use 900k for Flash and 1.8M for Pro to check pressure
+            let context_limit = if mapped_model.contains("flash") {
+                1_000_000
+            } else {
+                2_000_000
+            };
+
+            // 2. 估算当前用量
+            let estimated_usage = ContextManager::estimate_token_usage(&request_with_mapped);
+            let usage_ratio = estimated_usage as f32 / context_limit as f32;
+
+            // 3. 确定清洗策略
+            // > 90%: 激进剥离 (Aggressive) - 移除所有历史 Thinking
+            // > 60%: 柔性剥离 (Soft) - 仅保留最近 2 轮 Thinking
+            // < 60%: 不处理
+            let strategy = if usage_ratio > 0.9 {
+                PurificationStrategy::Aggressive
+            } else if usage_ratio > 0.6 {
+                PurificationStrategy::Soft
+            } else {
+                PurificationStrategy::None
+            };
+            
+            // 4. 执行清洗
+            if strategy != PurificationStrategy::None {
+                info!(
+                    "[{}] [ContextManager] Context pressure: {:.1}% ({} / {}), Strategy: {:?} => Purifying history", 
+                    trace_id, usage_ratio * 100.0, estimated_usage, context_limit, strategy
+                );
+                
+                if ContextManager::purify_history(&mut request_with_mapped.messages, strategy) {
+                    is_purified = true;
+                    debug!("[{}] History purified successfully", trace_id);
+                }
+
+                }
+            }
+
         request_with_mapped.model = mapped_model;
 
         // 生成 Trace ID (简单用时间戳后缀)
         // let _trace_id = format!("req_{}", chrono::Utc::now().timestamp_subsec_millis());
 
-        let gemini_body = match transform_claude_request_in(&request_with_mapped, &project_id) {
+        let gemini_body = match transform_claude_request_in(&request_with_mapped, &project_id, retried_without_thinking) {
             Ok(b) => {
                 debug!(
                     "[{}] Transformed Gemini Body: {}",
@@ -739,7 +713,6 @@ pub async fn handle_messages(
                     .into_response();
             }
         };
-
         // 4. 上游调用 - 自动转换逻辑
         let client_wants_stream = request.stream;
         // [AUTO-CONVERSION] 非 Stream 请求自动转换为 Stream 以享受更宽松的配额
@@ -760,8 +733,15 @@ pub async fn handle_messages(
         };
         let query = if actual_stream { Some("alt=sse") } else { None };
 
+        // [FIX #765] Prepare Beta Headers for Thinking + Tools
+        let mut extra_headers = std::collections::HashMap::new();
+        if request_with_mapped.thinking.is_some() && request_with_mapped.tools.is_some() {
+            extra_headers.insert("anthropic-beta".to_string(), "interleaved-thinking-2025-05-14".to_string());
+            tracing::debug!("[{}] Added Beta Header: interleaved-thinking-2025-05-14", trace_id);
+        }
+
         let response = match upstream
-            .call_v1_internal(method, &access_token, gemini_body, query)
+            .call_v1_internal_with_headers(method, &access_token, gemini_body, query, extra_headers)
             .await
         {
             Ok(r) => r,
@@ -834,6 +814,7 @@ pub async fn handle_messages(
                                 .header(header::CONNECTION, "keep-alive")
                                 .header("X-Account-Email", &email)
                                 .header("X-Mapped-Model", &request_with_mapped.model)
+                                .header("X-Context-Purified", if is_purified { "true" } else { "false" })
                                 .body(Body::from_stream(combined_stream))
                                 .unwrap();
                         } else {
@@ -851,9 +832,8 @@ pub async fn handle_messages(
                                         .header(header::CONTENT_TYPE, "application/json")
                                         .header("X-Account-Email", &email)
                                         .header("X-Mapped-Model", &request_with_mapped.model)
-                                        .body(Body::from(
-                                            serde_json::to_string(&full_response).unwrap(),
-                                        ))
+                                        .header("X-Context-Purified", if is_purified { "true" } else { "false" })
+                                        .body(Body::from(serde_json::to_string(&full_response).unwrap()))
                                         .unwrap();
                                 }
                                 Err(e) => {
@@ -927,7 +907,11 @@ pub async fn handle_messages(
                     };
 
                 // 转换
-                let claude_response = match transform_response(&gemini_response, scaling_enabled) {
+                // [FIX #765] Pass session_id and model_name for signature caching
+                let s_id_owned = session_id.map(|s| s.to_string());
+                let context_limit = 2_000_000; // Default context limit
+
+                let claude_response = match transform_response(&gemini_response, scaling_enabled, context_limit, s_id_owned, request_with_mapped.model.clone()) {
                     Ok(r) => r,
                     Err(e) => {
                         return (
@@ -997,8 +981,7 @@ pub async fn handle_messages(
                 .await;
         }
 
-        // 4. 处理 400 错误 (Thinking 签名失效)
-        // 由于已经主动过滤,这个错误应该很少发生
+        // 4. 处理 400 错误 (Thinking 签名失效 或 块顺序错误)
         if status_code == 400
             && !retried_without_thinking
             && (
@@ -1007,10 +990,16 @@ pub async fn handle_messages(
                 || error_text.contains("thinking.thinking: Field required")
                 || error_text.contains("thinking.signature")
                 || error_text.contains("thinking.thinking")
-                || error_text.contains("INVALID_ARGUMENT")  // [New] Catch generic Google 400s
+                || error_text.contains("INVALID_ARGUMENT") // [New] Catch generic Google 400s
                 || error_text.contains("Corrupted thought signature") // [New] Explicit signature corruption
                 || error_text.contains("failed to deserialise")
                 // [New] JSON structure issues
+                || error_text.contains("Invalid signature")
+                || error_text.contains("thinking block")
+                || error_text.contains("Found `text`")
+                || error_text.contains("Found 'text'")
+                || error_text.contains("must be `thinking`")
+                || error_text.contains("must be 'thinking'")
             )
         {
             // Existing logic for thinking signature...
@@ -1023,23 +1012,39 @@ pub async fn handle_messages(
                 trace_id
             );
 
-            // 完全移除所有 thinking 相关内容
-            request_for_body.thinking = None;
-
-            // 清理历史消息中的所有 Thinking Block
+            // [IMPROVED] 不再禁用 Thinking 模式！
+            // 既然我们已经将历史 Thinking Block 转换为 Text，那么当前请求可以视为一个新的 Thinking 会话
+            // 保持 thinking 配置开启，让模型重新生成思维，避免退化为简单的 "OK" 回复
+            // request_for_body.thinking = None;
+            
+            // 清理历史消息中的所有 Thinking Block，将其转换为 Text 以保留上下文
             for msg in request_for_body.messages.iter_mut() {
-                if let crate::proxy::mappers::claude::models::MessageContent::Array(blocks) =
-                    &mut msg.content
-                {
-                    blocks.retain(|b| {
-                        !matches!(b,
-                        crate::proxy::mappers::claude::models::ContentBlock::Thinking { .. } |
-                        crate::proxy::mappers::claude::models::ContentBlock::RedactedThinking { .. }
-                    )
-                    });
+                if let crate::proxy::mappers::claude::models::MessageContent::Array(blocks) = &mut msg.content {
+                    let mut new_blocks = Vec::with_capacity(blocks.len());
+                    for block in blocks.drain(..) {
+                        match block {
+                            crate::proxy::mappers::claude::models::ContentBlock::Thinking { thinking, .. } => {
+                                // 降级为 text
+                                if !thinking.is_empty() {
+                                    tracing::debug!("[Fallback] Converting thinking block to text (len={})", thinking.len());
+                                    new_blocks.push(crate::proxy::mappers::claude::models::ContentBlock::Text { 
+                                        text: thinking 
+                                    });
+                                }
+                            },
+                            crate::proxy::mappers::claude::models::ContentBlock::RedactedThinking { .. } => {
+                                // Redacted thinking 没什么用，直接丢弃
+                            },
+                            _ => new_blocks.push(block),
+                        }
+                    }
+                    // Re-assign back to blocks
+                    *blocks = new_blocks;
                 }
             }
-
+            
+            // [NEW] Heal session first (remove broken tool loops)
+            crate::proxy::mappers::claude::close_tool_loop_for_thinking(&mut request_for_body.messages);
             // 清理模型名中的 -thinking 后缀
             if request_for_body.model.contains("claude-") {
                 let mut m = request_for_body.model.clone();
@@ -1051,11 +1056,14 @@ pub async fn handle_messages(
                 }
                 request_for_body.model = m;
             }
-
-            // 使用统一退避策略
-            let strategy =
-                determine_retry_strategy(status_code, &error_text, retried_without_thinking);
-            if apply_retry_strategy(strategy, attempt, status_code, &trace_id).await {
+            // [FIX] 强制重试：因为我们已经清理了 thinking block，所以这是一个新的、可以重试的请求
+            // 不要使用 determine_retry_strategy，因为它会因为 retried_without_thinking=true 而返回 NoRetry
+            if apply_retry_strategy(
+                RetryStrategy::FixedDelay(Duration::from_millis(100)), 
+                attempt, 
+                status_code, 
+                &trace_id
+            ).await {
                 continue;
             }
         }
@@ -1353,14 +1361,16 @@ fn select_background_model(task_type: BackgroundTaskType) -> &'static str {
 /// 2. tool_result 内容为 "Warmup" 错误
 /// 3. 消息循环模式：助手发送工具调用，用户返回 Warmup 错误
 fn is_warmup_request(request: &ClaudeRequest) -> bool {
-    // 检查最近的消息是否包含 Warmup 特征
-    let mut warmup_tool_result_count = 0;
-    let mut total_tool_results = 0;
-
-    for msg in request.messages.iter().rev().take(10) {
+    // [FIX] Only check the LATEST message for Warmup characteristics.
+    // Scanning history (take(10)) caused a "poisoned session" bug where one historical Warmup
+    // message would cause all subsequent user inputs (e.g. "Continue") to be intercepted 
+    // and replied with "OK".
+    
+    if let Some(msg) = request.messages.last() {
+        // We only care if the *current* trigger is a Warmup
         match &msg.content {
             crate::proxy::mappers::claude::models::MessageContent::String(s) => {
-                // 简单文本消息：检查是否以 Warmup 开头
+                // Check if simple text starts with Warmup (and is short)
                 if s.trim().starts_with("Warmup") && s.len() < 100 {
                     return true;
                 }
@@ -1368,37 +1378,25 @@ fn is_warmup_request(request: &ClaudeRequest) -> bool {
             crate::proxy::mappers::claude::models::MessageContent::Array(arr) => {
                 for block in arr {
                     match block {
-                        // 检查 text block 是否为 Warmup
                         crate::proxy::mappers::claude::models::ContentBlock::Text { text } => {
                             let trimmed = text.trim();
                             if trimmed == "Warmup" || trimmed.starts_with("Warmup\n") {
                                 return true;
                             }
                         }
-                        // 检查 tool_result 是否返回 Warmup 错误
-                        crate::proxy::mappers::claude::models::ContentBlock::ToolResult {
-                            content,
-                            is_error,
-                            ..
+                        crate::proxy::mappers::claude::models::ContentBlock::ToolResult { 
+                            content, is_error, .. 
                         } => {
-                            total_tool_results += 1;
-                            // content 是 serde_json::Value，需要转换为字符串检查
+                            // Check tool result errors
                             let content_str = if let Some(s) = content.as_str() {
                                 s.to_string()
                             } else {
                                 content.to_string()
                             };
-                            if content_str.contains("Warmup") {
-                                warmup_tool_result_count += 1;
-                                // 如果是错误且内容为 Warmup，很可能是 warmup 请求
-                                if *is_error == Some(true)
-                                    && content_str.trim().starts_with("Warmup")
-                                {
-                                    // 如果连续多个 tool_result 都是 Warmup 错误，确认为 warmup 请求
-                                    if warmup_tool_result_count >= 2 {
-                                        return true;
-                                    }
-                                }
+                            
+                            // If it's an error and starts with Warmup, it's a warmup signal
+                            if *is_error == Some(true) && content_str.trim().starts_with("Warmup") {
+                                return true;
                             }
                         }
                         _ => {}
@@ -1407,12 +1405,6 @@ fn is_warmup_request(request: &ClaudeRequest) -> bool {
             }
         }
     }
-
-    // 如果大多数 tool_result 都是 Warmup 错误，确认为 warmup 请求
-    if total_tool_results >= 3 && warmup_tool_result_count >= total_tool_results / 2 {
-        return true;
-    }
-
     false
 }
 

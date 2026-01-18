@@ -3,6 +3,7 @@
         "loading": "載入中...",
         "load_more": "載入更多",
         "add": "新增",
+        "copy": "複製",
         "action": "操作",
         "save": "儲存",
         "saved": "儲存成功",
@@ -37,6 +38,7 @@
         "dashboard": "儀表板",
         "accounts": "帳號管理",
         "proxy": "API 反向代理",
+        "call_records": "流量日誌",
         "settings": "設定",
         "theme_to_dark": "切換到深色模式",
         "theme_to_light": "切換到淺色模式",
@@ -125,6 +127,43 @@
         "switch_to": "切換到此帳號",
         "actions": "操作",
         "device_fingerprint": "裝置指紋",
+        "device_fingerprint_dialog": {
+            "title": "裝置指紋",
+            "operations": "裝置指紋操作",
+            "generate_and_bind": "生成並綁定",
+            "restore_original": "恢復原始",
+            "open_storage_directory": "開啟儲存目錄",
+            "current_storage": "目前儲存",
+            "effective": "已生效",
+            "current_storage_desc": "從 storage.json 讀取（切換帳號時應用綁定後更新）",
+            "account_binding": "帳號綁定",
+            "pending_application": "待應用",
+            "account_binding_desc": "生成/恢復後儲存為綁定，切換帳號時寫入 storage.json",
+            "historical_fingerprints": "歷史指紋（可選恢復/刪除）",
+            "no_history": "暫無歷史",
+            "current": "目前",
+            "restore": "恢復",
+            "delete_version": "刪除此版本",
+            "confirm_generate_title": "確認生成並綁定？",
+            "confirm_generate_desc": "將生成一套新的裝置指紋並設定為目前指紋。確認繼續？",
+            "confirm_restore_title": "確認恢復原始指紋？",
+            "confirm_restore_desc": "將恢復為原始指紋並覆蓋目前指紋。確認繼續？",
+            "cancel": "取消",
+            "confirm": "確認",
+            "processing": "處理中...",
+            "loading": "載入中...",
+            "failed_to_load_device_info": "載入裝置資訊失敗",
+            "generation_failed": "生成失敗",
+            "binding_failed": "綁定失敗",
+            "restoration_failed": "恢復失敗",
+            "deletion_failed": "刪除失敗",
+            "directory_open_failed": "無法開啟目錄",
+            "generated_and_bound": "已生成並綁定",
+            "restored": "已恢復",
+            "deleted": "已刪除",
+            "directory_opened": "已開啟裝置儲存目錄",
+            "original_fingerprint_not_found": "未找到原始指紋"
+        },
         "warmup_all": "一鍵預熱",
         "warmup_selected": "預熱 ({{count}})",
         "warmup_this": "預熱該帳號",
@@ -270,6 +309,10 @@
             "range": "範圍",
             "example": "示例：設定 {{percentage}}% 時，{{total}} 次配額的帳號剩餘 ≤ {{threshold}} 次時將被自動停用",
             "auto_restore_info": "配額重置後將自動重新啟用帳號"
+        },
+        "pinned_quota_models": {
+            "title": "配額關注列表",
+            "desc": "選擇要在帳號列表外層顯示的模型配額，未選中的模型只在詳情彈窗中顯示"
         },
         "proxy": {
             "title": "代理設定"
@@ -431,10 +474,10 @@
                     "advanced_tooltip": "可選的精確比對覆蓋規則：如果 incoming model 字串與規則鍵完全一致，則替換為對應的 z.ai 模型 ID。",
                     "from_label": "incoming model",
                     "to_label": "z.ai 模型",
-                    "from_placeholder": "例如：claude-opus-4-5-thinking",
-                    "to_placeholder": "例如：glm-4.7",
                     "add_rule": "新增",
-                    "empty": "未配置任何覆蓋規則。"
+                    "empty": "尚未配置自定義替換規則。",
+                    "from_placeholder": "源模型 (如 claude-3-opus)",
+                    "to_placeholder": "映射至 (如 glm-4)"
                 },
                 "modes": {
                     "off": "關閉",
@@ -459,7 +502,7 @@
             },
             "request_timeout": "請求逾時",
             "request_timeout_tooltip": "代理等待上游響應的最大時間（秒），包含流式輸出。長文字/長推理可適當調大；修改後需重啟生效。",
-            "request_timeout_hint": "預設 120 秒，範圍 30-3600 秒。修改後需重啟服務生效。",
+            "request_timeout_hint": "預設 120 秒，範圍 30-7200 秒。修改後需重啟服務生效。",
             "enable_logging": "啟用請求紀錄",
             "enable_logging_hint": "記錄歷史紀錄以便除錯 (微小效能損耗)",
             "upstream_proxy": {
@@ -608,15 +651,16 @@
             "no_custom_mapping": "暫無自定義精確對映",
             "gemini3_only_warning": "⚠️ 僅支援 Gemini 3 系列",
             "default_suffix": "（預設）",
-            "select_target_model": "選擇目標模型"
+            "select_target_model": "選擇目標模型",
+            "original_placeholder": "原始名 (如 gpt-4 或 gpt-4*)"
         },
         "examples": {
             "title": "使用示例"
         },
         "multi_protocol": {
             "title": "多協定支援 (Multi-Protocol Support)",
-            "subtitle": "協定支援",
-            "description": "反向代理服務支援 OpenAI 和 Anthropic 兩種 API 格式，滿足不同工具需求",
+            "subtitle": "快速同步 API 地址與金鑰到本地 AI 工具",
+            "description": "反代服務支援 OpenAI、Anthropic 和 Gemini 協定，滿足不同工具的整合需求",
             "openai_label": "OpenAI 協定",
             "anthropic_label": "Anthropic 協定",
             "openai_tools": "Cherry Studio, NextChat",
@@ -624,7 +668,38 @@
             "gemini_label": "Gemini 協定",
             "gemini_tools": "Google AI SDK, LangChain",
             "quick_integration": "快速整合 (Quick Integration)",
-            "click_tip": "👆 點選左側任意模型以更新程式碼"
+            "click_tip": "👆 點擊模型以更新程式碼範例",
+            "copy_base": "複製 Base"
+        },
+        "cli_sync": {
+            "title": "CLI 配置一鍵同步",
+            "subtitle": "快速將當前 API 服務地址與 API 密鑰同步到本地 AI CLI 工具中",
+            "card_title": "{{name}} 配置",
+            "status": {
+                "not_installed": "未檢測到安裝",
+                "installed": "v{{version}}",
+                "synced": "已指向本項目",
+                "not_synced": "未同步",
+                "detecting": "檢測中...",
+                "current_base_url": "當前介面地址 (Base URL)"
+            },
+            "btn_sync": "立即同步配置",
+            "btn_view": "檢視當前配置",
+            "btn_restore": "恢復預設配置",
+            "btn_restore_backup": "還原原有配置",
+            "restore_backup_confirm": "檢測到舊的配置檔案備份，確定要還原嗎？",
+            "sync_confirm_title": "同步確認",
+            "sync_confirm_message": "即將為您同步 {{name}} 的配置。⚠️ 注意：此操作將覆蓋您本地已有的配置檔案（如登入狀態、API Key 等）。確定要繼續嗎？",
+            "restore_confirm": "確定要將 {{name}} 的配置恢復為官方預設 URL 嗎？",
+            "modal": {
+                "view_title": "{{name}} 配置文件內容",
+                "copy_success": "配置內容已複製到剪貼簿"
+            },
+            "toast": {
+                "config_missing": "請先生成 API Key 並啟動服務",
+                "sync_success": "同步成功！{{name}} 已準備就緒。",
+                "sync_error": "同步 {{name}} 失敗: {{error}}"
+            }
         },
         "supported_models": {
             "title": "支援模型與整合 (Supported Models & Integration)",
@@ -662,6 +737,7 @@
             "status": "狀態",
             "method": "方法",
             "model": "模型",
+            "protocol": "協定",
             "account": "帳號",
             "path": "路徑",
             "usage": "Token 消耗",
@@ -677,7 +753,11 @@
             "tokens": "Token 消耗 (輸入/輸出)",
             "time": "請求時間",
             "model": "使用模型",
-            "id": "請求 ID"
+            "id": "請求 ID",
+            "protocol": "協定類型",
+            "mapped_model": "路由後模型",
+            "account_used": "使用帳號",
+            "payload_empty": "無封包資料"
         },
         "dialog": {
             "clear_title": "清除監控紀錄",

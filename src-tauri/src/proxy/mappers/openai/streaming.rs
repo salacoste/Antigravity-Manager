@@ -44,6 +44,7 @@ pub fn store_thought_signature(sig: &str) {
 }
 
 /// 获取全局存储的 thoughtSignature（不清除）
+#[allow(dead_code)]
 pub fn get_thought_signature() -> Option<String> {
     if let Ok(guard) = get_thought_sig_storage().lock() {
         guard.clone()

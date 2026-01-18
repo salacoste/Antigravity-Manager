@@ -14,6 +14,7 @@ pub enum SchedulingMode {
 
 /// 粘性会话配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct StickySessionConfig {
     /// 当前调度模式
     pub mode: SchedulingMode,

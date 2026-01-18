@@ -53,13 +53,14 @@ struct Tier {
     slug: Option<String>,
 }
 
-/// 创建配置好的 HTTP Client
+/// 获取共享配置好的 HTTP Client (15秒超时)
 fn create_client() -> reqwest::Client {
-    crate::utils::http::create_client(15)
+    crate::utils::http::get_client()
 }
 
+/// 获取共享配置好的 HTTP Client (60秒超时)
 fn create_warmup_client() -> reqwest::Client {
-    crate::utils::http::create_client(60) // 60 秒超时
+    crate::utils::http::get_long_client()
 }
 
 const CLOUD_CODE_BASE_URL: &str = "https://cloudcode-pa.googleapis.com";
@@ -554,7 +555,6 @@ pub async fn warm_up_account(account_id: &str) -> Result<String, String> {
             } else {
                 m.name.clone()
             };
-
             // 2. 严格白名单过滤
             match model_name.as_str() {
                 "gemini-3-flash" | "claude-sonnet-4-5" | "gemini-3-pro-high"

@@ -8,6 +8,7 @@ import ModalDialog from '../components/common/ModalDialog';
 import { showToast } from '../components/common/ToastContainer';
 import QuotaProtection from '../components/settings/QuotaProtection';
 import SmartWarmup from '../components/settings/SmartWarmup';
+import PinnedQuotaModels from '../components/settings/PinnedQuotaModels';
 
 import { useTranslation } from 'react-i18next';
 
@@ -43,6 +44,9 @@ function Settings() {
             enabled: false,
             threshold_percentage: 10,
             monitored_models: []
+        },
+        pinned_quota_models: {
+            models: ['gemini-3-pro-high', 'gemini-3-flash', 'gemini-3-pro-image', 'claude-sonnet-4-5-thinking']
         }
     });
 
@@ -495,6 +499,17 @@ function Settings() {
                                     })}
                                 />
                             </div>
+
+                            {/* 配额关注列表 (Pinned Quota Models) */}
+                            <div className="group bg-white dark:bg-base-100 rounded-xl p-5 border border-gray-100 dark:border-base-200 hover:border-indigo-200 transition-all duration-300 shadow-sm">
+                                <PinnedQuotaModels
+                                    config={formData.pinned_quota_models}
+                                    onChange={(newConfig) => setFormData({
+                                        ...formData,
+                                        pinned_quota_models: newConfig
+                                    })}
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -711,7 +726,7 @@ function Settings() {
                                     <p className="text-sm text-gray-600 dark:text-gray-400">{t('settings.advanced.logs_desc')}</p>
                                 </div>
                                 <div className="badge badge-primary badge-outline gap-2 font-mono">
-                                    v3.3.34
+                                    v3.3.44
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <button
@@ -813,7 +828,7 @@ function Settings() {
                                         <h3 className="text-3xl font-black text-gray-900 dark:text-base-content tracking-tight mb-2">Antigravity Tools</h3>
                                         <div className="flex items-center justify-center gap-2 text-sm">
                                             <span className="px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border border-blue-200 dark:border-blue-800">
-                                                v3.3.34
+                                                v3.3.44
                                             </span>
                                             <span className="text-gray-400 dark:text-gray-600">•</span>
                                             <span className="text-gray-500 dark:text-gray-400">Professional Account Management</span>

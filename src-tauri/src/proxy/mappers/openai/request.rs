@@ -11,20 +11,17 @@ pub fn transform_openai_request(
     // 将 OpenAI 工具转为 Value 数组以便探测
     let tools_val = request.tools.as_ref().map(|list| list.to_vec());
 
+    let mapped_model_lower = mapped_model.to_lowercase();
+    
     // Resolve grounding config
-    let config = crate::proxy::mappers::common_utils::resolve_request_config(
-        &request.model,
-        mapped_model,
-        &tools_val,
-    );
+    let config = crate::proxy::mappers::common_utils::resolve_request_config(&request.model, &mapped_model_lower, &tools_val);
 
-    tracing::debug!(
-        "[Debug] OpenAI Request: original='{}', mapped='{}', type='{}', has_image_config={}",
-        request.model,
-        mapped_model,
-        config.request_type,
-        config.image_config.is_some()
-    );
+    // 检测 Gemini 3 Pro thinking 模型
+    let is_gemini_3_thinking = mapped_model_lower.contains("gemini-3") && 
+        (mapped_model_lower.ends_with("-high") || mapped_model_lower.ends_with("-low") || mapped_model_lower.contains("-pro"));
+    let is_claude_thinking = mapped_model_lower.ends_with("-thinking");
+    let is_thinking_model = is_gemini_3_thinking || is_claude_thinking;
+
 
     // 1. 提取所有 System Message 并注入补丁
     let mut system_instructions: Vec<String> = request
@@ -72,7 +69,7 @@ pub fn transform_openai_request(
         }
     }
 
-    // 从全局存储获取 thoughtSignature (PR #93 支持)
+    // 从全局存储获取 thoughtSignature 支持
     let global_thought_sig = get_thought_signature();
     if let Some(sig) = &global_thought_sig {
         tracing::debug!("从全局存储获取到 thoughtSignature (长度: {})", sig.len());
@@ -178,7 +175,7 @@ pub fn transform_openai_request(
                                     }
                                 }
                                 OpenAIContentBlock::AudioUrl { audio_url: _ } => {
-                                    // [PR #311 部分合并] 暂时跳过 audio_url 处理
+                                    // 暂时跳过 audio_url 处理
                                     // 完整实现需要下载音频文件并转换为 Gemini inlineData 格式
                                     // 这会与 v3.3.16 的 thinkingConfig 逻辑冲突，留待后续版本实现
                                     tracing::debug!("[OpenAI-Request] Skipping audio_url (not yet implemented in v3.3.16)");
@@ -200,7 +197,18 @@ pub fn transform_openai_request(
                     }
                     */
 
-                    let args = serde_json::from_str::<Value>(&tc.function.arguments).unwrap_or(json!({}));
+                    let mut args = serde_json::from_str::<Value>(&tc.function.arguments).unwrap_or(json!({}));
+                    
+                    // [CRITICAL FIX] Shell tool command must be an array of strings
+                    if tc.function.name == "local_shell_call" {
+                        if let Some(command) = args.get_mut("command") {
+                            if let Value::String(s) = command {
+                                tracing::info!("[OpenAI-Request] Converting shell command string to array: {}", s);
+                                *command = json!([s]);
+                            }
+                        }
+                    }
+
                     let mut func_call_part = json!({
                         "functionCall": {
                             "name": if tc.function.name == "local_shell_call" { "shell" } else { &tc.function.name },
@@ -209,9 +217,16 @@ pub fn transform_openai_request(
                         }
                     });
 
-                    // [修复] 为该消息内的所有工具调用注入 thoughtSignature (PR #114 优化)
+                    // [New] 递归清理参数中可能存在的非法校验字段
+                    crate::proxy::common::json_schema::clean_json_schema(&mut func_call_part);
+
+                    // [修复] 为该消息内的所有工具调用注入 thoughtSignature
                     if let Some(ref sig) = global_thought_sig {
                         func_call_part["thoughtSignature"] = json!(sig);
+                    } else if is_thinking_model && !mapped_model.starts_with("projects/") {
+                        // [NEW] Handle missing signature for Gemini thinking models
+                        tracing::debug!("[OpenAI-Signature] Adding GEMINI_SKIP_SIGNATURE for tool_use: {}", tc.id);
+                        func_call_part["thoughtSignature"] = json!("skip_thought_signature_validator");
                     }
 
                     parts.push(func_call_part);
@@ -245,7 +260,7 @@ pub fn transform_openai_request(
         .filter(|msg| !msg["parts"].as_array().map(|a| a.is_empty()).unwrap_or(true))
         .collect();
 
-    // [PR #合并] 合并连续相同角色的消息 (Gemini 强制要求 user/model 交替)
+    // 合并连续相同角色的消息 (Gemini 强制要求 user/model 交替)
     let mut merged_contents: Vec<Value> = Vec::new();
     for msg in contents {
         if let Some(last) = merged_contents.last_mut() {
@@ -264,17 +279,10 @@ pub fn transform_openai_request(
     let contents = merged_contents;
 
     // 3. 构建请求体
-    // [FIX PR #368] 检测 Gemini 3 Pro thinking 模型，注入 thinkingBudget 配置
-    // 加入 Claude thinking 模型支援
-    let is_gemini_3_thinking = mapped_model.contains("gemini-3")
-        && (mapped_model.ends_with("-high")
-            || mapped_model.ends_with("-low")
-            || mapped_model.contains("-pro"));
-    let is_claude_thinking = mapped_model.ends_with("-thinking");
-    let is_thinking_model = is_gemini_3_thinking || is_claude_thinking;
+
 
     let mut gen_config = json!({
-        "maxOutputTokens": request.max_tokens.unwrap_or(64000),
+        "maxOutputTokens": request.max_tokens.unwrap_or(16384),
         "temperature": request.temperature.unwrap_or(1.0),
         "topP": request.top_p.unwrap_or(1.0),
     });
@@ -284,7 +292,7 @@ pub fn transform_openai_request(
         gen_config["candidateCount"] = json!(n);
     }
 
-    // [FIX PR #368] 为 thinking 模型注入 thinkingConfig (使用 thinkingBudget 而非 thinkingLevel)
+    // 为 thinking 模型注入 thinkingConfig (使用 thinkingBudget 而非 thinkingLevel)
     if is_thinking_model {
         gen_config["thinkingConfig"] = json!({
             "includeThoughts": true,

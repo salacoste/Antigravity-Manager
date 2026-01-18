@@ -14,6 +14,7 @@ pub mod audio; // 音频处理模块 (PR #311)
 pub mod budget_optimizer; // Adaptive budget optimization (Story-008-01)
 pub mod cache; // 图片缓存 (Story-007-04)
 pub mod cache_monitor; // Signature cache monitoring (Story-008-02)
+pub mod cli_sync;
 pub mod common; // 公共工具
 pub mod detection; // Detection event tracking (Story-024-04 Part 1)
 pub mod errors; // 错误处理工具 (Story-007-03)
@@ -30,7 +31,7 @@ pub mod sticky_config; // 粘性调度配置
 pub mod upstream; // 上游客户端
 pub mod user_agent; // User-Agent rotation (Story-024-03)
 pub mod zai_vision_mcp; // Built-in Vision MCP server state
-pub mod zai_vision_tools; // Built-in Vision MCP tools (z.ai vision API)
+pub mod zai_vision_tools; // Built-in Vision MCP tools (z.ai vision API) // CLI 配置同步 (v3.3.35)
 
 pub use config::ProxyAuthMode;
 pub use config::ProxyConfig;

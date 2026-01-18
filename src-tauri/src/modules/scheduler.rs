@@ -113,12 +113,7 @@ pub fn start_scheduler(app_handle: tauri::AppHandle) {
 
                     // 核心逻辑：检测 100% 额度
                     if model.percentage == 100 {
-                        // 模型名称映射（先映射再检查）
-                        let model_to_ping = if model.name == "gemini-2.5-flash" {
-                            "gemini-3-flash".to_string()
-                        } else {
-                            model.name.clone()
-                        };
+                        let model_to_ping = model.name.clone();
 
                         // 仅对用户配置的模型进行预热
                         if app_config
@@ -169,11 +164,7 @@ pub fn start_scheduler(app_handle: tauri::AppHandle) {
                         ));
                     } else if model.percentage < 100 {
                         // 额度未满，清除历史记录，需要先映射名字
-                        let model_to_ping = if model.name == "gemini-2.5-flash" {
-                            "gemini-3-flash".to_string()
-                        } else {
-                            model.name.clone()
-                        };
+                        let model_to_ping = model.name.clone();
                         let history_key = format!("{}:{}:100", account.email, model_to_ping);
 
                         let mut history = WARMUP_HISTORY.lock().unwrap();
@@ -304,11 +295,7 @@ pub async fn trigger_warmup_for_account(account: &Account) {
                 save_warmup_history(&history);
             }
 
-            let model_to_ping = if model.name == "gemini-2.5-flash" {
-                "gemini-3-flash".to_string()
-            } else {
-                model.name.clone()
-            };
+            let model_to_ping = model.name.clone();
 
             // 仅对用户勾选的模型进行预热
             let Ok(app_config) = config::load_app_config() else {

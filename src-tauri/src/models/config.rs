@@ -21,6 +21,8 @@ pub struct AppConfig {
     pub scheduled_warmup: ScheduledWarmupConfig, // [NEW] 定时预热配置
     #[serde(default)]
     pub quota_protection: QuotaProtectionConfig, // [NEW] 配额保护配置
+    #[serde(default)]
+    pub pinned_quota_models: PinnedQuotaModelsConfig, // [NEW] 配额关注列表
 }
 
 /// 定时预热配置
@@ -96,6 +98,37 @@ impl Default for QuotaProtectionConfig {
     }
 }
 
+/// 配额关注列表配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PinnedQuotaModelsConfig {
+    /// 关注的模型列表 (在账号列表外层显示)
+    #[serde(default = "default_pinned_models")]
+    pub models: Vec<String>,
+}
+
+fn default_pinned_models() -> Vec<String> {
+    vec![
+        "gemini-3-pro-high".to_string(),
+        "gemini-3-flash".to_string(),
+        "gemini-3-pro-image".to_string(),
+        "claude-sonnet-4-5-thinking".to_string(),
+    ]
+}
+
+impl PinnedQuotaModelsConfig {
+    pub fn new() -> Self {
+        Self {
+            models: default_pinned_models(),
+        }
+    }
+}
+
+impl Default for PinnedQuotaModelsConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppConfig {
     pub fn new() -> Self {
         Self {
@@ -112,6 +145,7 @@ impl AppConfig {
             auto_launch: false,
             scheduled_warmup: ScheduledWarmupConfig::default(),
             quota_protection: QuotaProtectionConfig::default(),
+            pinned_quota_models: PinnedQuotaModelsConfig::default(),
         }
     }
 }

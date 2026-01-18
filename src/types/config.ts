@@ -62,6 +62,10 @@ export interface QuotaProtectionConfig {
     monitored_models: string[];
 }
 
+export interface PinnedQuotaModelsConfig {
+    models: string[];
+}
+
 export interface ExperimentalConfig {
     enable_usage_scaling: boolean;
 }
@@ -82,6 +86,7 @@ export interface AppConfig {
     accounts_page_size?: number; // 账号列表每页显示数量,默认 0 表示自动计算
     scheduled_warmup: ScheduledWarmupConfig;
     quota_protection: QuotaProtectionConfig; // [NEW] 配额保护配置
+    pinned_quota_models: PinnedQuotaModelsConfig; // [NEW] 配额关注列表
     proxy: ProxyConfig;
 }
 

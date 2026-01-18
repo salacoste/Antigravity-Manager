@@ -8,7 +8,12 @@ const IDE_TYPE: &str = "ANTIGRAVITY";
 const IDE_VERSION: &str = "1.13.3";
 
 /// 包装请求体为 v1internal 格式
-pub fn wrap_request(body: &Value, project_id: &str, mapped_model: &str) -> Value {
+pub fn wrap_request(
+    body: &Value,
+    project_id: &str,
+    mapped_model: &str,
+    session_id: Option<&str>,
+) -> Value {
     // 优先使用传入的 mapped_model，其次尝试从 body 获取
     let original_model = body
         .get("model")
@@ -27,6 +32,34 @@ pub fn wrap_request(body: &Value, project_id: &str, mapped_model: &str) -> Value
 
     // 深度清理 [undefined] 字符串 (Cherry Studio 等客户端常见注入)
     crate::proxy::mappers::common_utils::deep_clean_undefined(&mut inner_request);
+
+    // [FIX #765] Inject thought_signature into functionCall parts
+    if let Some(s_id) = session_id {
+        if let Some(contents) = inner_request
+            .get_mut("contents")
+            .and_then(|c| c.as_array_mut())
+        {
+            for content in contents {
+                if let Some(parts) = content.get_mut("parts").and_then(|p| p.as_array_mut()) {
+                    for part in parts {
+                        if part.get("functionCall").is_some() {
+                            // Only inject if it doesn't already have one
+                            if part.get("thoughtSignature").is_none() {
+                                if let Some(sig) = crate::proxy::SignatureCache::global()
+                                    .get_session_signature(s_id)
+                                {
+                                    if let Some(obj) = part.as_object_mut() {
+                                        obj.insert("thoughtSignature".to_string(), json!(sig));
+                                        tracing::debug!("[Gemini-Wrap] Injected signature (len: {}) for session: {}", sig.len(), s_id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // [FIX] Removed forced maxOutputTokens (64000) as it exceeds limits for Gemini 1.5 Flash/Pro standard models (8192).
     // This caused upstream to return empty/invalid responses, leading to 'NoneType' object has no attribute 'strip' in Python clients.
@@ -182,6 +215,39 @@ pub fn wrap_request(body: &Value, project_id: &str, mapped_model: &str) -> Value
     final_request
 }
 
+#[cfg(test)]
+mod test_fixes {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_wrap_request_with_signature() {
+        let session_id = "test-session-sig";
+        let signature = "test-signature-must-be-longer-than-fifty-characters-to-be-cached-by-signature-cache-12345"; // > 50 chars
+        crate::proxy::SignatureCache::global()
+            .cache_session_signature(session_id, signature.to_string());
+
+        let body = json!({
+            "model": "gemini-pro",
+            "contents": [{
+                "role": "user",
+                "parts": [{
+                    "functionCall": {
+                        "name": "get_weather",
+                        "args": {"location": "London"}
+                    }
+                }]
+            }]
+        });
+
+        let result = wrap_request(&body, "proj", "gemini-pro", Some(session_id));
+        let injected_sig = result["request"]["contents"][0]["parts"][0]["thoughtSignature"]
+            .as_str()
+            .unwrap();
+        assert_eq!(injected_sig, signature);
+    }
+}
+
 /// 解包响应（提取 response 字段）
 pub fn unwrap_response(response: &Value) -> Value {
     response.get("response").unwrap_or(response).clone()
@@ -199,7 +265,7 @@ mod tests {
             "contents": [{"role": "user", "parts": [{"text": "Hi"}]}]
         });
 
-        let result = wrap_request(&body, "test-project", "gemini-2.5-flash");
+        let result = wrap_request(&body, "test-project", "gemini-2.5-flash", None);
         assert_eq!(result["project"], "test-project");
         assert_eq!(result["model"], "gemini-2.5-flash");
         assert!(result["requestId"].as_str().unwrap().starts_with("agent-"));
@@ -225,7 +291,7 @@ mod tests {
             "messages": []
         });
 
-        let result = wrap_request(&body, "test-proj", "gemini-pro");
+        let result = wrap_request(&body, "test-proj", "gemini-pro", None);
 
         // 验证 systemInstruction
         let sys = result
@@ -254,12 +320,13 @@ mod tests {
             }
         });
 
-        let result = wrap_request(&body, "test-proj", "gemini-pro");
+        let result = wrap_request(&body, "test-proj", "gemini-pro", None);
         let sys = result
             .get("request")
             .unwrap()
             .get("systemInstruction")
             .unwrap();
+
         let parts = sys.get("parts").unwrap().as_array().unwrap();
 
         // Should have 2 parts: Antigravity + User
@@ -285,12 +352,13 @@ mod tests {
             }
         });
 
-        let result = wrap_request(&body, "test-proj", "gemini-pro");
+        let result = wrap_request(&body, "test-proj", "gemini-pro", None);
         let sys = result
             .get("request")
             .unwrap()
             .get("systemInstruction")
             .unwrap();
+
         let parts = sys.get("parts").unwrap().as_array().unwrap();
 
         // Should NOT inject duplicate, so only 1 part remains

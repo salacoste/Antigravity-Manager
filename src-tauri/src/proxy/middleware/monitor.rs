@@ -94,6 +94,17 @@ pub async fn monitor_middleware(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string());
 
+    // Determine protocol from URL path
+    let protocol = if uri.contains("/v1/messages") {
+        Some("anthropic".to_string())
+    } else if uri.contains("/v1beta/models") {
+        Some("gemini".to_string())
+    } else if uri.starts_with("/v1/") {
+        Some("openai".to_string())
+    } else {
+        None
+    };
+
     let monitor = state.monitor.clone();
     let mut log = ProxyRequestLog {
         id: uuid::Uuid::new_v4().to_string(),
@@ -110,18 +121,22 @@ pub async fn monitor_middleware(
         response_body: None,
         input_tokens: None,
         output_tokens: None,
+        protocol,
     };
 
     if content_type.contains("text/event-stream") {
-        log.response_body = Some("[Stream Data]".to_string());
         let (parts, body) = response.into_parts();
         let mut stream = body.into_data_stream();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
 
         tokio::spawn(async move {
+            let mut all_stream_data = Vec::new();
             let mut last_few_bytes = Vec::new();
+
             while let Some(chunk_res) = stream.next().await {
                 if let Ok(chunk) = chunk_res {
+                    all_stream_data.extend_from_slice(&chunk);
+
                     if chunk.len() > 8192 {
                         last_few_bytes = chunk.slice(chunk.len() - 8192..).to_vec();
                     } else {
@@ -136,29 +151,147 @@ pub async fn monitor_middleware(
                 }
             }
 
-            if let Ok(full_tail) = std::str::from_utf8(&last_few_bytes) {
-                for line in full_tail.lines().rev() {
-                    if line.starts_with("data: ") && line.contains("\"usage\"") {
-                        let json_str = line.trim_start_matches("data: ").trim();
-                        if let Ok(json) = serde_json::from_str::<Value>(json_str) {
-                            if let Some(usage) = json.get("usage") {
-                                log.input_tokens = usage
-                                    .get("prompt_tokens")
-                                    .or(usage.get("input_tokens"))
-                                    .and_then(|v| v.as_u64())
-                                    .map(|v| v as u32);
+            // Parse and consolidate stream data into readable format
+            if let Ok(full_response) = std::str::from_utf8(&all_stream_data) {
+                let mut thinking_content = String::new();
+                let mut response_content = String::new();
+                let mut thinking_signature = String::new();
+
+                for line in full_response.lines() {
+                    if !line.starts_with("data: ") {
+                        continue;
+                    }
+                    let json_str = line.trim_start_matches("data: ").trim();
+                    if json_str == "[DONE]" {
+                        continue;
+                    }
+
+                    if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+                        // OpenAI format: choices[0].delta.content / reasoning_content
+                        if let Some(choices) = json.get("choices").and_then(|c| c.as_array()) {
+                            for choice in choices {
+                                if let Some(delta) = choice.get("delta") {
+                                    // Thinking/reasoning content
+                                    if let Some(thinking) =
+                                        delta.get("reasoning_content").and_then(|v| v.as_str())
+                                    {
+                                        thinking_content.push_str(thinking);
+                                    }
+                                    // Main response content
+                                    if let Some(content) =
+                                        delta.get("content").and_then(|v| v.as_str())
+                                    {
+                                        response_content.push_str(content);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Claude/Anthropic format: content_block_delta
+                        if let Some(delta) = json.get("delta") {
+                            // Thinking block
+                            if let Some(thinking) = delta.get("thinking").and_then(|v| v.as_str()) {
+                                thinking_content.push_str(thinking);
+                            }
+                            // Thinking signature
+                            if let Some(sig) = delta.get("signature").and_then(|v| v.as_str()) {
+                                thinking_signature = sig.to_string();
+                            }
+                            // Text content
+                            if let Some(text) = delta.get("text").and_then(|v| v.as_str()) {
+                                response_content.push_str(text);
+                            }
+                        }
+
+                        // Token usage extraction
+                        if let Some(usage) = json.get("usage").or(json.get("usageMetadata")) {
+                            log.input_tokens = usage
+                                .get("prompt_tokens")
+                                .or(usage.get("input_tokens"))
+                                .or(usage.get("promptTokenCount"))
+                                .and_then(|v| v.as_u64())
+                                .map(|v| v as u32);
+                            log.output_tokens = usage
+                                .get("completion_tokens")
+                                .or(usage.get("output_tokens"))
+                                .or(usage.get("candidatesTokenCount"))
+                                .and_then(|v| v.as_u64())
+                                .map(|v| v as u32);
+
+                            if log.input_tokens.is_none() && log.output_tokens.is_none() {
                                 log.output_tokens = usage
-                                    .get("completion_tokens")
-                                    .or(usage.get("output_tokens"))
+                                    .get("total_tokens")
+                                    .or(usage.get("totalTokenCount"))
                                     .and_then(|v| v.as_u64())
                                     .map(|v| v as u32);
-                                if log.input_tokens.is_none() && log.output_tokens.is_none() {
-                                    log.output_tokens = usage
-                                        .get("total_tokens")
+                            }
+                        }
+                    }
+                }
+
+                // Build consolidated response object
+                let mut consolidated = serde_json::Map::new();
+
+                if !thinking_content.is_empty() {
+                    consolidated.insert("thinking".to_string(), Value::String(thinking_content));
+                }
+                if !thinking_signature.is_empty() {
+                    consolidated.insert(
+                        "thinking_signature".to_string(),
+                        Value::String(thinking_signature),
+                    );
+                }
+                if !response_content.is_empty() {
+                    consolidated.insert("content".to_string(), Value::String(response_content));
+                }
+                if let Some(input) = log.input_tokens {
+                    consolidated.insert("input_tokens".to_string(), Value::Number(input.into()));
+                }
+                if let Some(output) = log.output_tokens {
+                    consolidated.insert("output_tokens".to_string(), Value::Number(output.into()));
+                }
+
+                if consolidated.is_empty() {
+                    // Fallback: store raw SSE data if parsing failed
+                    log.response_body = Some(full_response.to_string());
+                } else {
+                    log.response_body = Some(
+                        serde_json::to_string_pretty(&Value::Object(consolidated))
+                            .unwrap_or_else(|_| full_response.to_string()),
+                    );
+                }
+            } else {
+                log.response_body = Some(format!(
+                    "[Binary Stream Data: {} bytes]",
+                    all_stream_data.len()
+                ));
+            }
+
+            // Fallback token extraction from tail if not already extracted
+            if log.input_tokens.is_none() && log.output_tokens.is_none() {
+                if let Ok(full_tail) = std::str::from_utf8(&last_few_bytes) {
+                    for line in full_tail.lines().rev() {
+                        if line.starts_with("data: ")
+                            && (line.contains("\"usage\"") || line.contains("\"usageMetadata\""))
+                        {
+                            let json_str = line.trim_start_matches("data: ").trim();
+                            if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+                                if let Some(usage) = json.get("usage").or(json.get("usageMetadata"))
+                                {
+                                    log.input_tokens = usage
+                                        .get("prompt_tokens")
+                                        .or(usage.get("input_tokens"))
+                                        .or(usage.get("promptTokenCount"))
                                         .and_then(|v| v.as_u64())
                                         .map(|v| v as u32);
+                                    log.output_tokens = usage
+                                        .get("completion_tokens")
+                                        .or(usage.get("output_tokens"))
+                                        .or(usage.get("candidatesTokenCount"))
+                                        .and_then(|v| v.as_u64())
+                                        .map(|v| v as u32);
+                                    break;
                                 }
-                                break;
                             }
                         }
                     }

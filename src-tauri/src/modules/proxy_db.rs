@@ -82,6 +82,7 @@ pub fn init_db() -> Result<(), String> {
     );
     let _ = conn.execute("ALTER TABLE request_logs ADD COLUMN account_email TEXT", []);
     let _ = conn.execute("ALTER TABLE request_logs ADD COLUMN mapped_model TEXT", []);
+    let _ = conn.execute("ALTER TABLE request_logs ADD COLUMN protocol TEXT", []);
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_timestamp ON request_logs (timestamp DESC)",
@@ -103,8 +104,8 @@ pub fn save_log(log: &ProxyRequestLog) -> Result<(), String> {
     let conn = connect_db()?;
 
     conn.execute(
-        "INSERT INTO request_logs (id, timestamp, method, url, status, duration, model, error, request_body, response_body, input_tokens, output_tokens, account_email, mapped_model)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+        "INSERT INTO request_logs (id, timestamp, method, url, status, duration, model, error, request_body, response_body, input_tokens, output_tokens, account_email, mapped_model, protocol)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             log.id,
             log.timestamp,
@@ -120,6 +121,7 @@ pub fn save_log(log: &ProxyRequestLog) -> Result<(), String> {
             log.output_tokens,
             log.account_email,
             log.mapped_model,
+            log.protocol,
         ],
     ).map_err(|e| e.to_string())?;
 
@@ -134,7 +136,7 @@ pub fn get_logs_summary(limit: usize, offset: usize) -> Result<Vec<ProxyRequestL
         .prepare(
             "SELECT id, timestamp, method, url, status, duration, model, error, 
                 NULL as request_body, NULL as response_body,
-                input_tokens, output_tokens, account_email, mapped_model
+                input_tokens, output_tokens, account_email, mapped_model, protocol
          FROM request_logs 
          ORDER BY timestamp DESC 
          LIMIT ?1 OFFSET ?2",
@@ -158,6 +160,7 @@ pub fn get_logs_summary(limit: usize, offset: usize) -> Result<Vec<ProxyRequestL
                 response_body: None, // Don't query large fields for list view
                 input_tokens: row.get(10).unwrap_or(None),
                 output_tokens: row.get(11).unwrap_or(None),
+                protocol: row.get(14).unwrap_or(None),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -225,7 +228,7 @@ pub fn get_log_detail(log_id: &str) -> Result<ProxyRequestLog, String> {
         .prepare(
             "SELECT id, timestamp, method, url, status, duration, model, error, 
                 request_body, response_body, input_tokens, output_tokens, 
-                account_email, mapped_model
+                account_email, mapped_model, protocol
          FROM request_logs 
          WHERE id = ?1",
         )
@@ -247,6 +250,7 @@ pub fn get_log_detail(log_id: &str) -> Result<ProxyRequestLog, String> {
             response_body: row.get(9).unwrap_or(None),
             input_tokens: row.get(10).unwrap_or(None),
             output_tokens: row.get(11).unwrap_or(None),
+            protocol: row.get(14).unwrap_or(None),
         })
     })
     .map_err(|e| e.to_string())
@@ -353,7 +357,7 @@ pub fn get_logs_filtered(
     let sql = if errors_only {
         "SELECT id, timestamp, method, url, status, duration, model, error, 
                 NULL as request_body, NULL as response_body,
-                input_tokens, output_tokens, account_email, mapped_model
+                input_tokens, output_tokens, account_email, mapped_model, protocol
          FROM request_logs 
          WHERE (status < 200 OR status >= 400)
          ORDER BY timestamp DESC 
@@ -361,14 +365,14 @@ pub fn get_logs_filtered(
     } else if filter.is_empty() {
         "SELECT id, timestamp, method, url, status, duration, model, error, 
                 NULL as request_body, NULL as response_body,
-                input_tokens, output_tokens, account_email, mapped_model
+                input_tokens, output_tokens, account_email, mapped_model, protocol
          FROM request_logs 
          ORDER BY timestamp DESC 
          LIMIT ?1 OFFSET ?2"
     } else {
         "SELECT id, timestamp, method, url, status, duration, model, error, 
                 NULL as request_body, NULL as response_body,
-                input_tokens, output_tokens, account_email, mapped_model
+                input_tokens, output_tokens, account_email, mapped_model, protocol
          FROM request_logs 
          WHERE (url LIKE ?3 OR method LIKE ?3 OR model LIKE ?3 OR CAST(status AS TEXT) LIKE ?3)
          ORDER BY timestamp DESC 
@@ -390,10 +394,11 @@ pub fn get_logs_filtered(
                     mapped_model: row.get(13).unwrap_or(None),
                     account_email: row.get(12).unwrap_or(None),
                     error: row.get(7)?,
-                    request_body: None,
-                    response_body: None,
+                    request_body: None,  // Don't query large fields for list view
+                    response_body: None, // Don't query large fields for list view
                     input_tokens: row.get(10).unwrap_or(None),
                     output_tokens: row.get(11).unwrap_or(None),
+                    protocol: row.get(14).unwrap_or(None),
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -417,6 +422,7 @@ pub fn get_logs_filtered(
                     response_body: None,
                     input_tokens: row.get(10).unwrap_or(None),
                     output_tokens: row.get(11).unwrap_or(None),
+                    protocol: row.get(14).unwrap_or(None),
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -440,6 +446,7 @@ pub fn get_logs_filtered(
                     response_body: None,
                     input_tokens: row.get(10).unwrap_or(None),
                     output_tokens: row.get(11).unwrap_or(None),
+                    protocol: row.get(14).unwrap_or(None),
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -457,7 +464,7 @@ pub fn get_all_logs_for_export() -> Result<Vec<ProxyRequestLog>, String> {
         .prepare(
             "SELECT id, timestamp, method, url, status, duration, model, error, 
                 request_body, response_body, input_tokens, output_tokens, 
-                account_email, mapped_model
+                account_email, mapped_model, protocol
          FROM request_logs 
          ORDER BY timestamp DESC",
         )
@@ -480,6 +487,7 @@ pub fn get_all_logs_for_export() -> Result<Vec<ProxyRequestLog>, String> {
                 response_body: row.get(9).unwrap_or(None),
                 input_tokens: row.get(10).unwrap_or(None),
                 output_tokens: row.get(11).unwrap_or(None),
+                protocol: row.get(14).unwrap_or(None),
             })
         })
         .map_err(|e| e.to_string())?;
@@ -492,6 +500,7 @@ pub fn get_all_logs_for_export() -> Result<Vec<ProxyRequestLog>, String> {
 }
 
 /// Get logs by ID list with full details for export
+#[allow(dead_code)]
 pub fn get_logs_by_ids(ids: &[String]) -> Result<Vec<ProxyRequestLog>, String> {
     if ids.is_empty() {
         return Ok(Vec::new());
@@ -508,7 +517,7 @@ pub fn get_logs_by_ids(ids: &[String]) -> Result<Vec<ProxyRequestLog>, String> {
     let sql = format!(
         "SELECT id, timestamp, method, url, status, duration, model, error, 
                 request_body, response_body, input_tokens, output_tokens, 
-                account_email, mapped_model
+                account_email, mapped_model, protocol
          FROM request_logs 
          WHERE id IN ({})
          ORDER BY timestamp DESC",
@@ -519,7 +528,6 @@ pub fn get_logs_by_ids(ids: &[String]) -> Result<Vec<ProxyRequestLog>, String> {
 
     // Convert ids to params
     let params: Vec<&dyn rusqlite::ToSql> = ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
-
     let logs_iter = stmt
         .query_map(params.as_slice(), |row| {
             Ok(ProxyRequestLog {
@@ -537,6 +545,7 @@ pub fn get_logs_by_ids(ids: &[String]) -> Result<Vec<ProxyRequestLog>, String> {
                 response_body: row.get(9).unwrap_or(None),
                 input_tokens: row.get(10).unwrap_or(None),
                 output_tokens: row.get(11).unwrap_or(None),
+                protocol: row.get(14).unwrap_or(None),
             })
         })
         .map_err(|e| e.to_string())?;

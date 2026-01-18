@@ -253,7 +253,14 @@ pub async fn handle_generate(
         }
 
         // 5. 包装请求 (project injection)
-        let wrapped_body = wrap_request(&optimized_body, &project_id, &mapped_model);
+        // [FIX #765] Pass session_id to wrap_request for signature injection
+        // [MERGE] Use optimized_body to keep budget optimizations
+        let wrapped_body = wrap_request(
+            &optimized_body,
+            &project_id,
+            &mapped_model,
+            Some(&session_id),
+        );
 
         // 5. 上游调用
         let query_string = if is_stream { Some("alt=sse") } else { None };
@@ -291,6 +298,7 @@ pub async fn handle_generate(
 
                 let mut response_stream = response.bytes_stream();
                 let mut buffer = BytesMut::new();
+                let s_id = session_id.clone(); // Clone for stream closure
 
                 let stream = async_stream::stream! {
                     while let Some(item) = response_stream.next().await {
@@ -313,6 +321,28 @@ pub async fn handle_generate(
 
                                             match serde_json::from_str::<Value>(json_part) {
                                                 Ok(mut json) => {
+                                                    // [FIX #765] Extract thoughtSignature from stream
+                                                    let inner_val = if json.get("response").is_some() {
+                                                        json.get("response")
+                                                    } else {
+                                                        Some(&json)
+                                                    };
+
+                                                    if let Some(resp) = inner_val {
+                                                        if let Some(candidates) = resp.get("candidates").and_then(|c| c.as_array()) {
+                                                            for cand in candidates {
+                                                                if let Some(parts) = cand.get("content").and_then(|c| c.get("parts")).and_then(|p| p.as_array()) {
+                                                                    for part in parts {
+                                                                        if let Some(sig) = part.get("thoughtSignature").and_then(|s| s.as_str()) {
+                                                                            crate::proxy::SignatureCache::global().cache_session_signature(&s_id, sig.to_string());
+                                                                            debug!("[Gemini-SSE] Cached signature (len: {}) for session: {}", sig.len(), s_id);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+
                                                     // Unwrap v1internal response wrapper
                                                     if let Some(inner) = json.get_mut("response").map(|v| v.take()) {
                                                         let new_line = format!("data: {}\n\n", serde_json::to_string(&inner).unwrap_or_default());
@@ -364,6 +394,35 @@ pub async fn handle_generate(
                 .json()
                 .await
                 .map_err(|e| (StatusCode::BAD_GATEWAY, format!("Parse error: {}", e)))?;
+
+            // [FIX #765] Extract thoughtSignature from non-streaming response
+            let inner_val = if gemini_resp.get("response").is_some() {
+                gemini_resp.get("response")
+            } else {
+                Some(&gemini_resp)
+            };
+
+            if let Some(resp) = inner_val {
+                if let Some(candidates) = resp.get("candidates").and_then(|c| c.as_array()) {
+                    for cand in candidates {
+                        if let Some(parts) = cand
+                            .get("content")
+                            .and_then(|c| c.get("parts"))
+                            .and_then(|p| p.as_array())
+                        {
+                            for part in parts {
+                                if let Some(sig) =
+                                    part.get("thoughtSignature").and_then(|s| s.as_str())
+                                {
+                                    crate::proxy::SignatureCache::global()
+                                        .cache_session_signature(&session_id, sig.to_string());
+                                    debug!("[Gemini-Response] Cached signature (len: {}) for session: {}", sig.len(), session_id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             let unwrapped = unwrap_response(&gemini_resp);
 

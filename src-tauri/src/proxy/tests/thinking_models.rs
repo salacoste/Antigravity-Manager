@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn test_claude_opus_standard_strips_thinking() {
         let req = create_basic_request("claude-opus-4-5-thinking", true);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok(), "Request should succeed");
 
@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn test_claude_opus_thinking_with_thinking_request() {
         let req = create_basic_request("claude-opus-4-5-thinking", true);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok(), "Request should succeed");
 
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn test_claude_sonnet_without_thinking_request() {
         let req = create_basic_request("claude-sonnet-4-5", false);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok(), "Request should succeed");
 
@@ -300,7 +300,7 @@ mod tests {
     #[test]
     fn test_gemini_with_thinking_request() {
         let req = create_basic_request("gemini-3-pro-high", true);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok(), "Request should succeed");
 
@@ -318,7 +318,7 @@ mod tests {
     #[test]
     fn test_gemini_without_thinking_request() {
         let req = create_basic_request("gemini-3-flash", false);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok(), "Request should succeed");
 
@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn test_haiku_to_gemini_routing() {
         let req = create_basic_request("claude-haiku-4-5", true);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok(), "Request should succeed");
 
@@ -372,7 +372,7 @@ mod tests {
             budget_tokens: Some(64000), // Large budget requested
         });
 
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
         assert!(result.is_ok());
 
         let body = result.unwrap();
@@ -394,7 +394,7 @@ mod tests {
             budget_tokens: Some(64000), // Exceeds max 24576 for Flash
         });
 
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
         assert!(result.is_ok());
 
         let body = result.unwrap();
@@ -421,7 +421,7 @@ mod tests {
             budget_tokens: Some(64000), // Exceeds max 32000
         });
 
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
         assert!(result.is_ok());
 
         let body = result.unwrap();
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn test_thinking_model_with_disabled_thinking() {
         let req = create_basic_request("claude-sonnet-4-5-thinking", false);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok());
 
@@ -465,7 +465,7 @@ mod tests {
             budget_tokens: None,
         });
 
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
         assert!(result.is_ok());
 
         let body = result.unwrap();
@@ -489,7 +489,7 @@ mod tests {
             budget_tokens: Some(2000),
         });
 
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
         assert!(result.is_ok());
 
         let body = result.unwrap();
@@ -517,7 +517,7 @@ mod tests {
     #[test]
     fn test_gemini_3_pro_low_routing() {
         let req = create_basic_request("gemini-3-pro-low", false);
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
 
         assert!(result.is_ok(), "Request should succeed");
 
@@ -539,8 +539,8 @@ mod tests {
         let req_low = create_basic_request("gemini-3-pro-low", true);
         let req_high = create_basic_request("gemini-3-pro-high", true);
 
-        let result_low = transform_claude_request_in(&req_low, "test-project");
-        let result_high = transform_claude_request_in(&req_high, "test-project");
+        let result_low = transform_claude_request_in(&req_low, "test-project", false);
+        let result_high = transform_claude_request_in(&req_high, "test-project", false);
 
         assert!(result_low.is_ok());
         assert!(result_high.is_ok());
@@ -571,7 +571,7 @@ mod tests {
             budget_tokens: Some(16000),
         });
 
-        let result = transform_claude_request_in(&req, "test-project");
+        let result = transform_claude_request_in(&req, "test-project", false);
         assert!(result.is_ok(), "Request should succeed");
 
         let body = result.unwrap();
@@ -592,7 +592,7 @@ mod tests {
 
         for model_alias in aliases {
             let req = create_basic_request(model_alias, false);
-            let result = transform_claude_request_in(&req, "test-project");
+            let result = transform_claude_request_in(&req, "test-project", false);
 
             assert!(
                 result.is_ok(),

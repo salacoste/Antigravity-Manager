@@ -44,6 +44,7 @@ import { Account } from '../../types/account';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../../utils/cn';
 import { getQuotaColor, formatTimeRemaining, getTimeRemainingColor } from '../../utils/format';
+import { useConfigStore } from '../../stores/useConfigStore';
 
 // ============================================================================
 // 类型定义
@@ -295,10 +296,18 @@ function AccountRowContent({
     onWarmup,
 }: AccountRowContentProps) {
     const { t } = useTranslation();
-    const geminiProModel = account.quota?.models.find(m => m.name.toLowerCase() === 'gemini-3-pro-high');
-    const geminiFlashModel = account.quota?.models.find(m => m.name.toLowerCase() === 'gemini-3-flash');
-    const geminiImageModel = account.quota?.models.find(m => m.name.toLowerCase() === 'gemini-3-pro-image');
-    const claudeModel = account.quota?.models.find(m => m.name.toLowerCase() === 'claude-sonnet-4-5-thinking');
+    const { config } = useConfigStore();
+    
+    // 模型配置映射：model_id -> { label, protectedKey }
+    const MODEL_CONFIG: Record<string, { label: string; protectedKey: string }> = {
+        'gemini-3-pro-high': { label: 'G3 Pro', protectedKey: 'gemini-pro' },
+        'gemini-3-flash': { label: 'G3 Flash', protectedKey: 'gemini-flash' },
+        'gemini-3-pro-image': { label: 'G3 Image', protectedKey: 'gemini-pro-image' },
+        'claude-sonnet-4-5-thinking': { label: 'Claude 4.5', protectedKey: 'claude-sonnet' },
+    };
+    
+    // 获取要显示的模型列表
+    const pinnedModels = config?.pinned_quota_models?.models || Object.keys(MODEL_CONFIG);
     const isDisabled = Boolean(account.disabled);
 
     return (
@@ -385,134 +394,49 @@ function AccountRowContent({
                         <span>{t('accounts.forbidden_msg')}</span>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 py-0">
-                        {/* Gemini Pro */}
-                        <div className="relative h-[22px] flex items-center px-1.5 rounded-md overflow-hidden border border-gray-100/50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5 group/quota">
-                            {geminiProModel && (
-                                <div
-                                    className={`absolute inset-y-0 left-0 transition-all duration-700 ease-out opacity-15 dark:opacity-20 ${getColorClass(geminiProModel.percentage)}`}
-                                    style={{ width: `${geminiProModel.percentage}%` }}
-                                />
-                            )}
-                            <div className="relative z-10 w-full flex items-center text-[10px] font-mono leading-none">
-                                <span className="w-[54px] text-gray-500 dark:text-gray-400 font-bold truncate pr-1" title="Gemini 3 Pro">G3 Pro</span>
-                                <div className="flex-1 flex justify-center">
-                                    {geminiProModel?.reset_time ? (
-                                        <span className={cn("flex items-center gap-0.5 font-medium transition-colors", getTimeColorClass(geminiProModel.reset_time))}>
-                                            <Clock className="w-2.5 h-2.5" />
-                                            {formatTimeRemaining(geminiProModel.reset_time)}
+                    <div className={cn(
+                        "grid gap-x-4 gap-y-1 py-0",
+                        pinnedModels.length === 1 ? "grid-cols-1" : "grid-cols-2"
+                    )}>
+                        {pinnedModels.filter(modelId => MODEL_CONFIG[modelId]).map((modelId) => {
+                            const modelConfig = MODEL_CONFIG[modelId];
+                            const modelData = account.quota?.models.find(m => m.name.toLowerCase() === modelId);
+                            
+                            return (
+                                <div key={modelId} className="relative h-[22px] flex items-center px-1.5 rounded-md overflow-hidden border border-gray-100/50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5 group/quota">
+                                    {modelData && (
+                                        <div
+                                            className={`absolute inset-y-0 left-0 transition-all duration-700 ease-out opacity-15 dark:opacity-20 ${getColorClass(modelData.percentage)}`}
+                                            style={{ width: `${modelData.percentage}%` }}
+                                        />
+                                    )}
+                                    <div className="relative z-10 w-full flex items-center text-[10px] font-mono leading-none">
+                                        <span className="w-[54px] text-gray-500 dark:text-gray-400 font-bold truncate pr-1" title={modelId}>
+                                            {modelConfig.label}
                                         </span>
-                                    ) : (
-                                        <span className="text-gray-300 dark:text-gray-600 italic scale-90">N/A</span>
-                                    )}
-                                </div>
-                                <span className={cn("w-[36px] text-right font-bold transition-colors flex items-center justify-end gap-0.5",
-                                    getQuotaColor(geminiProModel?.percentage || 0) === 'success' ? 'text-emerald-600 dark:text-emerald-400' :
-                                        getQuotaColor(geminiProModel?.percentage || 0) === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
-                                )}>
-                                    {isModelProtected(account.protected_models, 'gemini-pro') && (
-                                        <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
-                                    )}
-                                    {geminiProModel ? `${geminiProModel.percentage}%` : '-'}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Gemini Flash */}
-                        <div className="relative h-[22px] flex items-center px-1.5 rounded-md overflow-hidden border border-gray-100/50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5 group/quota">
-                            {geminiFlashModel && (
-                                <div
-                                    className={`absolute inset-y-0 left-0 transition-all duration-700 ease-out opacity-15 dark:opacity-20 ${getColorClass(geminiFlashModel.percentage)}`}
-                                    style={{ width: `${geminiFlashModel.percentage}%` }}
-                                />
-                            )}
-                            <div className="relative z-10 w-full flex items-center text-[10px] font-mono leading-none">
-                                <span className="w-[54px] text-gray-500 dark:text-gray-400 font-bold truncate pr-1" title="Gemini 3 Flash">G3 Flash</span>
-                                <div className="flex-1 flex justify-center">
-                                    {geminiFlashModel?.reset_time ? (
-                                        <span className={cn("flex items-center gap-0.5 font-medium transition-colors", getTimeColorClass(geminiFlashModel.reset_time))}>
-                                            <Clock className="w-2.5 h-2.5" />
-                                            {formatTimeRemaining(geminiFlashModel.reset_time)}
+                                        <div className="flex-1 flex justify-center">
+                                            {modelData?.reset_time ? (
+                                                <span className={cn("flex items-center gap-0.5 font-medium transition-colors", getTimeColorClass(modelData.reset_time))}>
+                                                    <Clock className="w-2.5 h-2.5" />
+                                                    {formatTimeRemaining(modelData.reset_time)}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-300 dark:text-gray-600 italic scale-90">N/A</span>
+                                            )}
+                                        </div>
+                                        <span className={cn("w-[36px] text-right font-bold transition-colors flex items-center justify-end gap-0.5",
+                                            getQuotaColor(modelData?.percentage || 0) === 'success' ? 'text-emerald-600 dark:text-emerald-400' :
+                                                getQuotaColor(modelData?.percentage || 0) === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
+                                        )}>
+                                            {isModelProtected(account.protected_models, modelConfig.protectedKey) && (
+                                                <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
+                                            )}
+                                            {modelData ? `${modelData.percentage}%` : '-'}
                                         </span>
-                                    ) : (
-                                        <span className="text-gray-300 dark:text-gray-600 italic scale-90">N/A</span>
-                                    )}
+                                    </div>
                                 </div>
-                                <span className={cn("w-[36px] text-right font-bold transition-colors flex items-center justify-end gap-0.5",
-                                    getQuotaColor(geminiFlashModel?.percentage || 0) === 'success' ? 'text-emerald-600 dark:text-emerald-400' :
-                                        getQuotaColor(geminiFlashModel?.percentage || 0) === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
-                                )}>
-                                    {isModelProtected(account.protected_models, 'gemini-flash') && (
-                                        <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
-                                    )}
-                                    {geminiFlashModel ? `${geminiFlashModel.percentage}%` : '-'}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Gemini Image */}
-                        <div className="relative h-[22px] flex items-center px-1.5 rounded-md overflow-hidden border border-gray-100/50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5 group/quota">
-                            {geminiImageModel && (
-                                <div
-                                    className={`absolute inset-y-0 left-0 transition-all duration-700 ease-out opacity-15 dark:opacity-20 ${getColorClass(geminiImageModel.percentage)}`}
-                                    style={{ width: `${geminiImageModel.percentage}%` }}
-                                />
-                            )}
-                            <div className="relative z-10 w-full flex items-center text-[10px] font-mono leading-none">
-                                <span className="w-[54px] text-gray-500 dark:text-gray-400 font-bold truncate pr-1" title="Gemini 3 Pro Image">G3 Image</span>
-                                <div className="flex-1 flex justify-center">
-                                    {geminiImageModel?.reset_time ? (
-                                        <span className={cn("flex items-center gap-0.5 font-medium transition-colors", getTimeColorClass(geminiImageModel.reset_time))}>
-                                            <Clock className="w-2.5 h-2.5" />
-                                            {formatTimeRemaining(geminiImageModel.reset_time)}
-                                        </span>
-                                    ) : (
-                                        <span className="text-gray-300 dark:text-gray-600 italic scale-90">N/A</span>
-                                    )}
-                                </div>
-                                <span className={cn("w-[36px] text-right font-bold transition-colors flex items-center justify-end gap-0.5",
-                                    getQuotaColor(geminiImageModel?.percentage || 0) === 'success' ? 'text-emerald-600 dark:text-emerald-400' :
-                                        getQuotaColor(geminiImageModel?.percentage || 0) === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
-                                )}>
-                                    {isModelProtected(account.protected_models, 'gemini-pro-image') && (
-                                        <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
-                                    )}
-                                    {geminiImageModel ? `${geminiImageModel.percentage}%` : '-'}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Claude */}
-                        <div className="relative h-[22px] flex items-center px-1.5 rounded-md overflow-hidden border border-gray-100/50 dark:border-white/5 bg-gray-50/30 dark:bg-white/5 group/quota">
-                            {claudeModel && (
-                                <div
-                                    className={`absolute inset-y-0 left-0 transition-all duration-700 ease-out opacity-15 dark:opacity-20 ${getColorClass(claudeModel.percentage)}`}
-                                    style={{ width: `${claudeModel.percentage}%` }}
-                                />
-                            )}
-                            <div className="relative z-10 w-full flex items-center text-[10px] font-mono leading-none">
-                                <span className="w-[54px] text-gray-500 dark:text-gray-400 font-bold truncate pr-1" title="Claude-sonnet-4.5">Claude 4.5</span>
-                                <div className="flex-1 flex justify-center">
-                                    {claudeModel?.reset_time ? (
-                                        <span className={cn("flex items-center gap-0.5 font-medium transition-colors", getTimeColorClass(claudeModel.reset_time))}>
-                                            <Clock className="w-2.5 h-2.5" />
-                                            {formatTimeRemaining(claudeModel.reset_time)}
-                                        </span>
-                                    ) : (
-                                        <span className="text-gray-300 dark:text-gray-600 italic scale-90">N/A</span>
-                                    )}
-                                </div>
-                                <span className={cn("w-[36px] text-right font-bold transition-colors flex items-center justify-end gap-0.5",
-                                    getQuotaColor(claudeModel?.percentage || 0) === 'success' ? 'text-emerald-600 dark:text-emerald-400' :
-                                        getQuotaColor(claudeModel?.percentage || 0) === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
-                                )}>
-                                    {isModelProtected(account.protected_models, 'claude-sonnet') && (
-                                        <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
-                                    )}
-                                    {claudeModel ? `${claudeModel.percentage}%` : '-'}
-                                </span>
-                            </div>
-                        </div>
+                            );
+                        })}
                     </div>
                 )}
             </td>

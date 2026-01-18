@@ -69,7 +69,8 @@ pub fn compact_tool_result_text(text: &str, max_chars: usize) -> String {
 /// 检测模式: "result (N characters) exceeds maximum allowed tokens. Output saved to <path>"
 /// 策略: 提取关键信息(文件路径、字符数、格式说明)
 ///
-/// 参考: anthropicGeminiBridgeService.js:278-310
+/// 根据提示内容类型自动提取关键信息
+
 fn compact_saved_output_notice(text: &str, max_chars: usize) -> Option<String> {
     // 正则匹配: result (N characters) exceeds maximum allowed tokens. Output saved to <path>
     let re = Regex::new(
@@ -130,7 +131,8 @@ fn compact_saved_output_notice(text: &str, max_chars: usize) -> Option<String> {
 /// 检测: "page snapshot" 或 "页面快照" 或大量 "ref=" 引用
 /// 策略: 保留头部 70% + 尾部 30%,中间省略
 ///
-/// 参考: anthropicGeminiBridgeService.js:312-339
+/// 使用头+尾保留策略压缩较长的页面快照数据
+
 fn compact_browser_snapshot(text: &str, max_chars: usize) -> Option<String> {
     // 检测是否是浏览器快照
     let is_snapshot = text.to_lowercase().contains("page snapshot")
@@ -236,7 +238,8 @@ fn deep_clean_html(html: &str) -> String {
 /// 2. 压缩文本内容 (使用智能压缩策略)
 /// 3. 限制总字符数 (默认 200,000)
 ///
-/// 参考: anthropicGeminiBridgeService.js:540-597
+/// 清理并截断工具调用结果内容块
+
 pub fn sanitize_tool_result_blocks(blocks: &mut Vec<Value>) {
     let mut used_chars = 0;
     let mut cleaned_blocks = Vec::new();

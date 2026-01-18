@@ -86,6 +86,7 @@ where
     // 用于累积内容块
     let mut current_text = String::new();
     let mut current_thinking = String::new();
+    let mut current_signature: Option<String> = None;
     let mut current_tool_use: Option<Value> = None;
     let mut current_tool_input = String::new();
 
@@ -113,7 +114,13 @@ where
                     if let Some(block_type) = content_block.get("type").and_then(|v| v.as_str()) {
                         match block_type {
                             "text" => current_text.clear(),
-                            "thinking" => current_thinking.clear(),
+                            "thinking" => {
+                                current_thinking.clear();
+                                // Extract signature from content_block
+                                current_signature = content_block.get("signature")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string());
+                            }
                             "tool_use" => {
                                 current_tool_use = Some(content_block.clone());
                                 current_tool_input.clear();
@@ -139,6 +146,10 @@ where
                                 {
                                     current_thinking.push_str(thinking);
                                 }
+                                // In case signature comes in delta (less likely but possible update)
+                                if let Some(sig) = delta.get("signature").and_then(|v| v.as_str()) {
+                                    current_signature = Some(sig.to_string());
+                                }
                             }
                             "input_json_delta" => {
                                 if let Some(partial_json) =
@@ -163,7 +174,7 @@ where
                 } else if !current_thinking.is_empty() {
                     response.content.push(ContentBlock::Thinking {
                         thinking: current_thinking.clone(),
-                        signature: None, // TODO: 从 delta 中提取签名
+                        signature: current_signature.take(),
                         cache_control: None,
                     });
                     current_thinking.clear();
@@ -264,6 +275,38 @@ mod tests {
             assert_eq!(text, "Hello World");
         } else {
             panic!("Expected Text block");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_collect_thinking_response_with_signature() {
+        // 模拟一个包含 Thinking Block 和签名的 SSE 流
+        let sse_data = vec![
+            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_think\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-3-7-sonnet\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\n",
+            // content_block_start 中包含 signature
+            "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\", \"signature\": \"sig_123456\"}}\n\n",
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"I am \"}}\n\n",
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"thinking\"}}\n\n",
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+            "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":10}}\n\n",
+            "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+        ];
+
+        let byte_stream = stream::iter(
+            sse_data.into_iter().map(|s| Ok::<Bytes, io::Error>(Bytes::from(s)))
+        );
+
+        let result = collect_stream_to_json(byte_stream).await;
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        
+        if let ContentBlock::Thinking { thinking, signature, .. } = &response.content[0] {
+            assert_eq!(thinking, "I am thinking");
+            // 验证签名是否被正确提取
+            assert_eq!(signature.as_deref(), Some("sig_123456"));
+        } else {
+            panic!("Expected Thinking block");
         }
     }
 }

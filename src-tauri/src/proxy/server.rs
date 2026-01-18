@@ -328,7 +328,7 @@ impl AxumServer {
             .route(
                 "/v1/audio/transcriptions",
                 post(handlers::audio::handle_audio_transcription),
-            ) // 音频转录 API (PR #311)
+            ) // 音频转录 API
             // Claude Protocol
             .route("/v1/messages", post(handlers::claude::handle_messages))
             .route(

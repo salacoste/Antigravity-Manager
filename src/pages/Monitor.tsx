@@ -1,13 +1,18 @@
+<<<<<<< HEAD
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, Shield, Music } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+=======
+import React from 'react';
+>>>>>>> upstream/main
 import { ProxyMonitor } from '../components/proxy/ProxyMonitor';
 import { ComplianceMetrics } from '../components/proxy/ComplianceMetrics';
 import { DetectionPanel } from '../components/monitor/DetectionPanel';
 import { AudioAnalyticsPanel } from '../components/monitor/AudioAnalyticsPanel';
 
 const Monitor: React.FC = () => {
+<<<<<<< HEAD
     const navigate = useNavigate();
     const { t } = useTranslation();
     const [showCompliance, setShowCompliance] = useState(true);
@@ -87,6 +92,11 @@ const Monitor: React.FC = () => {
                     <ProxyMonitor className="h-[600px] border border-gray-200 dark:border-base-300 shadow-md" />
                 </div>
             </div>
+=======
+    return (
+        <div className="h-full w-full overflow-hidden">
+            <ProxyMonitor className="h-full" />
+>>>>>>> upstream/main
         </div>
     );
 };

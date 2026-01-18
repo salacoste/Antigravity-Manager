@@ -13,16 +13,14 @@ pub mod utils;
 pub use collector::collect_stream_to_json;
 pub use grounding::GroundingConfig;
 pub use models::*;
-pub use request::transform_claude_request_in;
-
-/// Stub: Set app handle for event emission (placeholder)
-pub fn set_app_handle(_handle: tauri::AppHandle) {
-    // Stub: app handle setting moved to a different approach
-    // Events are emitted through monitor which already has app handle
-}
+pub use request::{
+    clean_cache_control_from_messages, merge_consecutive_messages, transform_claude_request_in,
+};
 pub use response::transform_response;
 pub use streaming::{PartProcessor, StreamingState};
-pub use thinking_utils::close_tool_loop_for_thinking;
+pub use thinking_utils::{
+    close_tool_loop_for_thinking, filter_invalid_thinking_blocks_with_family,
+};
 
 use bytes::Bytes;
 use futures::Stream;
@@ -181,7 +179,7 @@ fn process_sse_line(
     // [DISABLED] Temporarily disabled to fix Cherry Studio compatibility
     // Cherry Studio doesn't recognize "web_search_tool_result" type, causing validation errors
     // Search results are still displayed via Markdown text block in streaming.rs (lines 341-381)
-    // TODO: Research Antigravity2Api implementation for correct type mapping
+
     /*
     if let Some(grounding) = raw_json
         .get("candidates")

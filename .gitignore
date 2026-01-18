@@ -61,6 +61,7 @@ __pycache__/
 *.dist-info/
 dist/
 
+<<<<<<< HEAD
 # Development
 .vscode/*
 !.vscode/settings.json
@@ -96,3 +97,8 @@ watch-logs.sh
 
 # Antigravity Manager specific
 src-tauri/.antigravity_tools/
+=======
+# Reference projects (for development only)
+CLIProxyAPI/
+DOCKER_DEPLOYMENT.md
+>>>>>>> upstream/main
