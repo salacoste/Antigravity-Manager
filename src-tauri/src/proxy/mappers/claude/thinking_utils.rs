@@ -1,10 +1,9 @@
-use super::models::{Message, MessageContent, ContentBlock};
-use tracing::{info, debug, warn};
+use super::models::{ContentBlock, Message, MessageContent};
 use crate::proxy::SignatureCache;
+use tracing::{debug, info, warn};
 
 pub const MIN_SIGNATURE_LENGTH: usize = 50;
 pub const GEMINI_SKIP_SIGNATURE: &str = "skip_thought_signature_validator";
-
 
 #[derive(Debug, Default)]
 pub struct ConversationState {
@@ -34,7 +33,9 @@ pub fn analyze_conversation_state(messages: &[Message]) -> ConversationState {
     let has_tool_use = if let Some(idx) = state.last_assistant_idx {
         if let Some(msg) = messages.get(idx) {
             if let MessageContent::Array(blocks) = &msg.content {
-                blocks.iter().any(|b| matches!(b, ContentBlock::ToolUse { .. }))
+                blocks
+                    .iter()
+                    .any(|b| matches!(b, ContentBlock::ToolUse { .. }))
             } else {
                 false
             }
@@ -52,22 +53,28 @@ pub fn analyze_conversation_state(messages: &[Message]) -> ConversationState {
     // Check what follows the assistant's tool use
     if let Some(last_msg) = messages.last() {
         if last_msg.role == "user" {
-           if let MessageContent::Array(blocks) = &last_msg.content {
-               // Case 1: Final message is ToolResult -> Active Tool Loop
-               if blocks.iter().any(|b| matches!(b, ContentBlock::ToolResult { .. })) {
-                   state.in_tool_loop = true;
-                   debug!("[Thinking-Recovery] Active tool loop detected (last msg is ToolResult).");
-               } else {
-                   // Case 2: Final message is Text (User) -> Interrupted Tool
-                   state.interrupted_tool = true;
-                   debug!("[Thinking-Recovery] Interrupted tool detected (last msg is Text user).");
-               }
-           } else if let MessageContent::String(_) = &last_msg.content {
-               // Case 2: Final message is String (User) -> Interrupted Tool
-               state.interrupted_tool = true;
-               debug!("[Thinking-Recovery] Interrupted tool detected (last msg is String user).");
-           }
-
+            if let MessageContent::Array(blocks) = &last_msg.content {
+                // Case 1: Final message is ToolResult -> Active Tool Loop
+                if blocks
+                    .iter()
+                    .any(|b| matches!(b, ContentBlock::ToolResult { .. }))
+                {
+                    state.in_tool_loop = true;
+                    debug!(
+                        "[Thinking-Recovery] Active tool loop detected (last msg is ToolResult)."
+                    );
+                } else {
+                    // Case 2: Final message is Text (User) -> Interrupted Tool
+                    state.interrupted_tool = true;
+                    debug!(
+                        "[Thinking-Recovery] Interrupted tool detected (last msg is Text user)."
+                    );
+                }
+            } else if let MessageContent::String(_) = &last_msg.content {
+                // Case 2: Final message is String (User) -> Interrupted Tool
+                state.interrupted_tool = true;
+                debug!("[Thinking-Recovery] Interrupted tool detected (last msg is String user).");
+            }
         }
     }
 
@@ -77,57 +84,74 @@ pub fn analyze_conversation_state(messages: &[Message]) -> ConversationState {
 /// Recover from broken tool loops or interrupted tool calls by injecting synthetic messages
 pub fn close_tool_loop_for_thinking(messages: &mut Vec<Message>) {
     let state = analyze_conversation_state(messages);
-    
+
     if !state.in_tool_loop && !state.interrupted_tool {
         return;
     }
-    
+
     // Check if the last assistant message has a valid thinking block
     let mut has_valid_thinking = false;
     if let Some(idx) = state.last_assistant_idx {
         if let Some(msg) = messages.get(idx) {
-             if let MessageContent::Array(blocks) = &msg.content {
-                 for block in blocks {
-                     if let ContentBlock::Thinking { thinking, signature, .. } = block {
-                         if !thinking.is_empty() && signature.as_ref().map(|s| s.len() >= MIN_SIGNATURE_LENGTH).unwrap_or(false) {
-                             has_valid_thinking = true;
-                             break;
-                         }
-                     }
-                 }
-             }
+            if let MessageContent::Array(blocks) = &msg.content {
+                for block in blocks {
+                    if let ContentBlock::Thinking {
+                        thinking,
+                        signature,
+                        ..
+                    } = block
+                    {
+                        if !thinking.is_empty()
+                            && signature
+                                .as_ref()
+                                .map(|s| s.len() >= MIN_SIGNATURE_LENGTH)
+                                .unwrap_or(false)
+                        {
+                            has_valid_thinking = true;
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 
     if !has_valid_thinking {
         if state.in_tool_loop {
             info!("[Thinking-Recovery] Broken tool loop (ToolResult without preceding Thinking). Recovery triggered.");
-            
+
             // Insert acknowledging message to "close" the history turn
             messages.push(Message {
                 role: "assistant".to_string(),
-                content: MessageContent::Array(vec![
-                    ContentBlock::Text { text: "[System: Tool execution completed. Proceeding to final response.]".to_string() }
-                ])
+                content: MessageContent::Array(vec![ContentBlock::Text {
+                    text: "[System: Tool execution completed. Proceeding to final response.]"
+                        .to_string(),
+                }]),
             });
             messages.push(Message {
                 role: "user".to_string(),
-                content: MessageContent::Array(vec![
-                    ContentBlock::Text { text: "Please provide the final result based on the tool output above.".to_string() }
-                ])
+                content: MessageContent::Array(vec![ContentBlock::Text {
+                    text: "Please provide the final result based on the tool output above."
+                        .to_string(),
+                }]),
             });
         } else if state.interrupted_tool {
-            info!("[Thinking-Recovery] Interrupted tool call detected. Injecting synthetic closure.");
-            
+            info!(
+                "[Thinking-Recovery] Interrupted tool call detected. Injecting synthetic closure."
+            );
+
             // For interrupted tool, we need to insert the closure AFTER the assistant's tool use
             // but BEFORE the user's latest message.
             if let Some(idx) = state.last_assistant_idx {
-                messages.insert(idx + 1, Message {
-                    role: "assistant".to_string(),
-                    content: MessageContent::Array(vec![
-                        ContentBlock::Text { text: "[Tool call was interrupted by user.]".to_string() }
-                    ])
-                });
+                messages.insert(
+                    idx + 1,
+                    Message {
+                        role: "assistant".to_string(),
+                        content: MessageContent::Array(vec![ContentBlock::Text {
+                            text: "[Tool call was interrupted by user.]".to_string(),
+                        }]),
+                    },
+                );
             }
         }
     }
@@ -144,12 +168,17 @@ pub fn get_signature_family(signature: &str) -> Option<String> {
 }
 
 /// [CRITICAL] Sanitize thinking blocks and check cross-model compatibility
-pub fn filter_invalid_thinking_blocks_with_family(messages: &mut [Message], target_family: Option<&str>) {
+pub fn filter_invalid_thinking_blocks_with_family(
+    messages: &mut [Message],
+    target_family: Option<&str>,
+) {
     let mut stripped_count = 0;
-    
+
     for msg in messages.iter_mut() {
-        if msg.role != "assistant" { continue; }
-        
+        if msg.role != "assistant" {
+            continue;
+        }
+
         if let MessageContent::Array(blocks) = &mut msg.content {
             let original_len = blocks.len();
             blocks.retain(|block| {
@@ -159,10 +188,9 @@ pub fn filter_invalid_thinking_blocks_with_family(messages: &mut [Message], targ
                         Some(s) if s.len() >= MIN_SIGNATURE_LENGTH => s,
                         _ => {
                             stripped_count += 1;
-                            return false; 
+                            return false;
                         }
                     };
-                    
                     // 2. Family compatibility check (Prevents SONNET-Thinking sig being sent to OPUS-Thinking)
                     if let Some(target) = target_family {
                         if let Some(origin_family) = get_signature_family(sig) {
@@ -176,16 +204,20 @@ pub fn filter_invalid_thinking_blocks_with_family(messages: &mut [Message], targ
                 }
                 true
             });
-            
+
             // SAFETY: Claude API requires at least one block
             if blocks.is_empty() && original_len > 0 {
-                blocks.push(ContentBlock::Text { text: ".".to_string() });
+                blocks.push(ContentBlock::Text {
+                    text: ".".to_string(),
+                });
             }
         }
     }
-    
-    if stripped_count > 0 {
-        info!("[Thinking-Sanitizer] Stripped {} invalid or incompatible thinking blocks", stripped_count);
 
+    if stripped_count > 0 {
+        info!(
+            "[Thinking-Sanitizer] Stripped {} invalid or incompatible thinking blocks",
+            stripped_count
+        );
     }
 }

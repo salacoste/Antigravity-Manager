@@ -117,7 +117,8 @@ where
                             "thinking" => {
                                 current_thinking.clear();
                                 // Extract signature from content_block
-                                current_signature = content_block.get("signature")
+                                current_signature = content_block
+                                    .get("signature")
                                     .and_then(|v| v.as_str())
                                     .map(|s| s.to_string());
                             }
@@ -293,15 +294,22 @@ mod tests {
         ];
 
         let byte_stream = stream::iter(
-            sse_data.into_iter().map(|s| Ok::<Bytes, io::Error>(Bytes::from(s)))
+            sse_data
+                .into_iter()
+                .map(|s| Ok::<Bytes, io::Error>(Bytes::from(s))),
         );
 
         let result = collect_stream_to_json(byte_stream).await;
         assert!(result.is_ok());
 
         let response = result.unwrap();
-        
-        if let ContentBlock::Thinking { thinking, signature, .. } = &response.content[0] {
+
+        if let ContentBlock::Thinking {
+            thinking,
+            signature,
+            ..
+        } = &response.content[0]
+        {
             assert_eq!(thinking, "I am thinking");
             // 验证签名是否被正确提取
             assert_eq!(signature.as_deref(), Some("sig_123456"));

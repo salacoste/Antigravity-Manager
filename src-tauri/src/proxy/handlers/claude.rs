@@ -13,13 +13,12 @@ use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info};
 
 use crate::proxy::mappers::claude::{
-    transform_claude_request_in, transform_response, create_claude_sse_stream, ClaudeRequest,
-    filter_invalid_thinking_blocks_with_family, close_tool_loop_for_thinking,
-    clean_cache_control_from_messages, merge_consecutive_messages,
-    models::{ContentBlock},
+    clean_cache_control_from_messages, close_tool_loop_for_thinking, create_claude_sse_stream,
+    filter_invalid_thinking_blocks_with_family, merge_consecutive_messages, models::ContentBlock,
+    transform_claude_request_in, transform_response, ClaudeRequest,
 };
-use crate::proxy::server::AppState;
 use crate::proxy::mappers::context_manager::{ContextManager, PurificationStrategy};
+use crate::proxy::server::AppState;
 use axum::http::HeaderMap;
 use std::sync::atomic::Ordering;
 
@@ -334,7 +333,8 @@ pub async fn handle_messages(
     let target_family = if use_zai {
         Some("claude")
     } else {
-        let mapped_model = crate::proxy::common::model_mapping::map_claude_model_to_gemini(&request.model);
+        let mapped_model =
+            crate::proxy::common::model_mapping::map_claude_model_to_gemini(&request.model);
         if mapped_model.contains("gemini") {
             Some("gemini")
         } else {
@@ -668,28 +668,31 @@ pub async fn handle_messages(
             } else {
                 PurificationStrategy::None
             };
-            
+
             // 4. 执行清洗
             if strategy != PurificationStrategy::None {
                 info!(
                     "[{}] [ContextManager] Context pressure: {:.1}% ({} / {}), Strategy: {:?} => Purifying history", 
                     trace_id, usage_ratio * 100.0, estimated_usage, context_limit, strategy
                 );
-                
+
                 if ContextManager::purify_history(&mut request_with_mapped.messages, strategy) {
                     is_purified = true;
                     debug!("[{}] History purified successfully", trace_id);
                 }
-
-                }
             }
+        }
 
         request_with_mapped.model = mapped_model;
 
         // 生成 Trace ID (简单用时间戳后缀)
         // let _trace_id = format!("req_{}", chrono::Utc::now().timestamp_subsec_millis());
 
-        let gemini_body = match transform_claude_request_in(&request_with_mapped, &project_id, retried_without_thinking) {
+        let gemini_body = match transform_claude_request_in(
+            &request_with_mapped,
+            &project_id,
+            retried_without_thinking,
+        ) {
             Ok(b) => {
                 debug!(
                     "[{}] Transformed Gemini Body: {}",
@@ -735,8 +738,14 @@ pub async fn handle_messages(
         // [FIX #765] Prepare Beta Headers for Thinking + Tools
         let mut extra_headers = std::collections::HashMap::new();
         if request_with_mapped.thinking.is_some() && request_with_mapped.tools.is_some() {
-            extra_headers.insert("anthropic-beta".to_string(), "interleaved-thinking-2025-05-14".to_string());
-            tracing::debug!("[{}] Added Beta Header: interleaved-thinking-2025-05-14", trace_id);
+            extra_headers.insert(
+                "anthropic-beta".to_string(),
+                "interleaved-thinking-2025-05-14".to_string(),
+            );
+            tracing::debug!(
+                "[{}] Added Beta Header: interleaved-thinking-2025-05-14",
+                trace_id
+            );
         }
 
         let response = match upstream
@@ -813,7 +822,10 @@ pub async fn handle_messages(
                                 .header(header::CONNECTION, "keep-alive")
                                 .header("X-Account-Email", &email)
                                 .header("X-Mapped-Model", &request_with_mapped.model)
-                                .header("X-Context-Purified", if is_purified { "true" } else { "false" })
+                                .header(
+                                    "X-Context-Purified",
+                                    if is_purified { "true" } else { "false" },
+                                )
                                 .body(Body::from_stream(combined_stream))
                                 .unwrap();
                         } else {
@@ -831,8 +843,13 @@ pub async fn handle_messages(
                                         .header(header::CONTENT_TYPE, "application/json")
                                         .header("X-Account-Email", &email)
                                         .header("X-Mapped-Model", &request_with_mapped.model)
-                                        .header("X-Context-Purified", if is_purified { "true" } else { "false" })
-                                        .body(Body::from(serde_json::to_string(&full_response).unwrap()))
+                                        .header(
+                                            "X-Context-Purified",
+                                            if is_purified { "true" } else { "false" },
+                                        )
+                                        .body(Body::from(
+                                            serde_json::to_string(&full_response).unwrap(),
+                                        ))
                                         .unwrap();
                                 }
                                 Err(e) => {
@@ -910,7 +927,13 @@ pub async fn handle_messages(
                 let s_id_owned = session_id.map(|s| s.to_string());
                 let context_limit = 2_000_000; // Default context limit
 
-                let claude_response = match transform_response(&gemini_response, scaling_enabled, context_limit, s_id_owned, request_with_mapped.model.clone()) {
+                let claude_response = match transform_response(
+                    &gemini_response,
+                    scaling_enabled,
+                    context_limit,
+                    s_id_owned,
+                    request_with_mapped.model.clone(),
+                ) {
                     Ok(r) => r,
                     Err(e) => {
                         return (
@@ -983,8 +1006,7 @@ pub async fn handle_messages(
         // 4. 处理 400 错误 (Thinking 签名失效 或 块顺序错误)
         if status_code == 400
             && !retried_without_thinking
-            && (
-                error_text.contains("Invalid `signature`")
+            && (error_text.contains("Invalid `signature`")
                 || error_text.contains("thinking.signature: Field required")
                 || error_text.contains("thinking.thinking: Field required")
                 || error_text.contains("thinking.signature")
@@ -998,8 +1020,7 @@ pub async fn handle_messages(
                 || error_text.contains("Found `text`")
                 || error_text.contains("Found 'text'")
                 || error_text.contains("must be `thinking`")
-                || error_text.contains("must be 'thinking'")
-            )
+                || error_text.contains("must be 'thinking'"))
         {
             // Existing logic for thinking signature...
             retried_without_thinking = true;
@@ -1015,10 +1036,12 @@ pub async fn handle_messages(
             // 既然我们已经将历史 Thinking Block 转换为 Text，那么当前请求可以视为一个新的 Thinking 会话
             // 保持 thinking 配置开启，让模型重新生成思维，避免退化为简单的 "OK" 回复
             // request_for_body.thinking = None;
-            
+
             // 清理历史消息中的所有 Thinking Block，将其转换为 Text 以保留上下文
             for msg in request_for_body.messages.iter_mut() {
-                if let crate::proxy::mappers::claude::models::MessageContent::Array(blocks) = &mut msg.content {
+                if let crate::proxy::mappers::claude::models::MessageContent::Array(blocks) =
+                    &mut msg.content
+                {
                     let mut new_blocks = Vec::with_capacity(blocks.len());
                     for block in blocks.drain(..) {
                         match block {
@@ -1026,8 +1049,8 @@ pub async fn handle_messages(
                                 // 降级为 text
                                 if !thinking.is_empty() {
                                     tracing::debug!("[Fallback] Converting thinking block to text (len={})", thinking.len());
-                                    new_blocks.push(crate::proxy::mappers::claude::models::ContentBlock::Text { 
-                                        text: thinking 
+                                    new_blocks.push(crate::proxy::mappers::claude::models::ContentBlock::Text {
+                                        text: thinking
                                     });
                                 }
                             },
@@ -1041,9 +1064,11 @@ pub async fn handle_messages(
                     *blocks = new_blocks;
                 }
             }
-            
+
             // [NEW] Heal session first (remove broken tool loops)
-            crate::proxy::mappers::claude::close_tool_loop_for_thinking(&mut request_for_body.messages);
+            crate::proxy::mappers::claude::close_tool_loop_for_thinking(
+                &mut request_for_body.messages,
+            );
             // 清理模型名中的 -thinking 后缀
             if request_for_body.model.contains("claude-") {
                 let mut m = request_for_body.model.clone();
@@ -1058,11 +1083,13 @@ pub async fn handle_messages(
             // [FIX] 强制重试：因为我们已经清理了 thinking block，所以这是一个新的、可以重试的请求
             // 不要使用 determine_retry_strategy，因为它会因为 retried_without_thinking=true 而返回 NoRetry
             if apply_retry_strategy(
-                RetryStrategy::FixedDelay(Duration::from_millis(100)), 
-                attempt, 
-                status_code, 
-                &trace_id
-            ).await {
+                RetryStrategy::FixedDelay(Duration::from_millis(100)),
+                attempt,
+                status_code,
+                &trace_id,
+            )
+            .await
+            {
                 continue;
             }
         }
@@ -1362,9 +1389,9 @@ fn select_background_model(task_type: BackgroundTaskType) -> &'static str {
 fn is_warmup_request(request: &ClaudeRequest) -> bool {
     // [FIX] Only check the LATEST message for Warmup characteristics.
     // Scanning history (take(10)) caused a "poisoned session" bug where one historical Warmup
-    // message would cause all subsequent user inputs (e.g. "Continue") to be intercepted 
+    // message would cause all subsequent user inputs (e.g. "Continue") to be intercepted
     // and replied with "OK".
-    
+
     if let Some(msg) = request.messages.last() {
         // We only care if the *current* trigger is a Warmup
         match &msg.content {
@@ -1383,8 +1410,10 @@ fn is_warmup_request(request: &ClaudeRequest) -> bool {
                                 return true;
                             }
                         }
-                        crate::proxy::mappers::claude::models::ContentBlock::ToolResult { 
-                            content, is_error, .. 
+                        crate::proxy::mappers::claude::models::ContentBlock::ToolResult {
+                            content,
+                            is_error,
+                            ..
                         } => {
                             // Check tool result errors
                             let content_str = if let Some(s) = content.as_str() {
@@ -1392,7 +1421,7 @@ fn is_warmup_request(request: &ClaudeRequest) -> bool {
                             } else {
                                 content.to_string()
                             };
-                            
+
                             // If it's an error and starts with Warmup, it's a warmup signal
                             if *is_error == Some(true) && content_str.trim().starts_with("Warmup") {
                                 return true;

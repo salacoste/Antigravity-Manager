@@ -12,16 +12,21 @@ pub fn transform_openai_request(
     let tools_val = request.tools.as_ref().map(|list| list.to_vec());
 
     let mapped_model_lower = mapped_model.to_lowercase();
-    
+
     // Resolve grounding config
-    let config = crate::proxy::mappers::common_utils::resolve_request_config(&request.model, &mapped_model_lower, &tools_val);
+    let config = crate::proxy::mappers::common_utils::resolve_request_config(
+        &request.model,
+        &mapped_model_lower,
+        &tools_val,
+    );
 
     // 检测 Gemini 3 Pro thinking 模型
-    let is_gemini_3_thinking = mapped_model_lower.contains("gemini-3") && 
-        (mapped_model_lower.ends_with("-high") || mapped_model_lower.ends_with("-low") || mapped_model_lower.contains("-pro"));
+    let is_gemini_3_thinking = mapped_model_lower.contains("gemini-3")
+        && (mapped_model_lower.ends_with("-high")
+            || mapped_model_lower.ends_with("-low")
+            || mapped_model_lower.contains("-pro"));
     let is_claude_thinking = mapped_model_lower.ends_with("-thinking");
     let is_thinking_model = is_gemini_3_thinking || is_claude_thinking;
-
 
     // 1. 提取所有 System Message 并注入补丁
     let mut system_instructions: Vec<String> = request
@@ -198,7 +203,6 @@ pub fn transform_openai_request(
                     */
 
                     let mut args = serde_json::from_str::<Value>(&tc.function.arguments).unwrap_or(json!({}));
-                    
                     // [CRITICAL FIX] Shell tool command must be an array of strings
                     if tc.function.name == "local_shell_call" {
                         if let Some(command) = args.get_mut("command") {
@@ -279,7 +283,6 @@ pub fn transform_openai_request(
     let contents = merged_contents;
 
     // 3. 构建请求体
-
 
     let mut gen_config = json!({
         "maxOutputTokens": request.max_tokens.unwrap_or(16384),
