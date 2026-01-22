@@ -575,14 +575,11 @@ pub async fn handle_messages(
             request_with_mapped.thinking = None;
             
             // 3. 清理历史消息中的 Thinking Block，防止 Invalid Argument
-            for msg in request_with_mapped.messages.iter_mut() {
-                if let crate::proxy::mappers::claude::models::MessageContent::Array(blocks) = &mut msg.content {
-                    blocks.retain(|b| !matches!(b, 
-                        crate::proxy::mappers::claude::models::ContentBlock::Thinking { .. } |
-                        crate::proxy::mappers::claude::models::ContentBlock::RedactedThinking { .. }
-                    ));
-                }
-            }
+            // 使用 ContextManager 的统一策略 (Aggressive)
+            crate::proxy::mappers::context_manager::ContextManager::purify_history(
+                &mut request_with_mapped.messages, 
+                crate::proxy::mappers::context_manager::PurificationStrategy::Aggressive
+            );
         }
 
         // ===== [3-Layer Progressive Compression + Calibrated Estimation] Context Management =====
@@ -640,7 +637,6 @@ pub async fn handle_messages(
                         // Success, no need for Layer 2
                     } else {
                         // Still high pressure, update for Layer 2
-                        estimated_usage = new_usage;
                         usage_ratio = new_ratio;
                         compression_applied = false; // Allow Layer 2 to run
                     }
@@ -673,7 +669,6 @@ pub async fn handle_messages(
                         trace_id, usage_ratio * 100.0, new_ratio * 100.0, estimated_usage - new_usage
                     );
                     
-                    estimated_usage = new_usage;
                     usage_ratio = new_ratio;
                 }
             }
@@ -711,8 +706,6 @@ pub async fn handle_messages(
                             "[{}] [Layer-3] Compression result: {:.1}% → {:.1}% (saved {} tokens)",
                             trace_id, usage_ratio * 100.0, new_ratio * 100.0, estimated_usage - new_usage
                         );
-                        
-                        estimated_usage = new_usage;
                     }
                     Err(e) => {
                         error!(

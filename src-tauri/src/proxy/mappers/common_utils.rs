@@ -100,6 +100,12 @@ pub fn resolve_request_config(
     }
 }
 
+/// Legacy wrapper for backward compatibility and simple usage
+#[allow(dead_code)]
+pub fn parse_image_config(model_name: &str) -> (Value, String) {
+    parse_image_config_with_params(model_name, None, None)
+}
+
 /// Extended version that accepts OpenAI size and quality parameters
 ///
 /// This function supports parsing image configuration from:
