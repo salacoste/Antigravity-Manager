@@ -273,6 +273,10 @@ print(response.choices[0].message.content)
         -   **[Core Fix] Persistent Bindings & Reliable Quota Protection (Issue #1700)**:
             -   **Binding Persistence**: Fixed a regression where `account_bindings` were overwritten during settings save, ensuring persistent mappings across restarts.
             -   **Protection Boost**: Enhanced model normalization to recognize physical API model names and perfected instant sync and scheduler filtering to prevent low-quota account leakage.
+        -   **[Core Feature] Optimize Global Upstream Proxy I18n & Styling (Issue #1701)**:
+            -   **I18n Synchronization**: Completed proxy configuration strings for all 12 supported languages, resolving missing content in `zh.json` and inconsistent translations across locales.
+            -   **Styling Refined**: Reconstructed the global proxy configuration card with gradient backgrounds and micro-animations, ensuring visual consistency with Proxy Pool settings.
+            -   **SOCKS5H Support**: Added a protocol suggestion hint for `socks5h://` in the UI and unified backend proxy URL normalization logic to improve guidance for remote DNS resolution.
     *   **v4.1.9 (2026-02-08)**:
         -   **[Core Feature] Expand CLI Config Quick Sync Support (PR #1680, #1685)**:
             -   **Multi-Tool Integration**: Now supports syncing configurations to **Claude Code**, **Gemini CLI**, **Codex AI**, **OpenCode**, and **Droid**.
