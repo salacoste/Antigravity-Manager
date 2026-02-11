@@ -453,6 +453,7 @@ impl TokenManager {
         let project_id = token_obj
             .get("project_id")
             .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
             .map(|s| s.to_string());
 
         // 【新增】提取订阅等级 (subscription_tier 为 "FREE" | "PRO" | "ULTRA")
@@ -1200,9 +1201,14 @@ impl TokenManager {
                         }
                     }
 
-                    // 确保有 project_id
+                    // 确保有 project_id (filter empty strings to trigger re-fetch)
                     let project_id = if let Some(pid) = &token.project_id {
-                        pid.clone()
+                        if pid.is_empty() { None } else { Some(pid.clone()) }
+                    } else {
+                        None
+                    };
+                    let project_id = if let Some(pid) = project_id {
+                        pid
                     } else {
                         match crate::proxy::project_resolver::fetch_project_id(&token.access_token)
                             .await
@@ -1565,9 +1571,14 @@ impl TokenManager {
                 }
             }
 
-            // 4. 确保有 project_id
+            // 4. 确保有 project_id (filter empty strings to trigger re-fetch)
             let project_id = if let Some(pid) = &token.project_id {
-                pid.clone()
+                if pid.is_empty() { None } else { Some(pid.clone()) }
+            } else {
+                None
+            };
+            let project_id = if let Some(pid) = project_id {
+                pid
             } else {
                 tracing::debug!("账号 {} 缺少 project_id，尝试获取...", token.email);
                 match crate::proxy::project_resolver::fetch_project_id(&token.access_token).await {
@@ -1725,7 +1736,9 @@ impl TokenManager {
             None => return Err(format!("未找到账号: {}", email)),
         };
 
-        let project_id = project_id_opt.unwrap_or_else(|| "bamboo-precept-lgxtn".to_string());
+        let project_id = project_id_opt
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "bamboo-precept-lgxtn".to_string());
 
         // 检查是否过期 (提前5分钟)
         if now < timestamp + expires_in - 300 {
