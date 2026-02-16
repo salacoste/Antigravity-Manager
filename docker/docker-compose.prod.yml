@@ -1,0 +1,25 @@
+services:
+  antigravity-manager:
+    image: ${ABV_IMAGE:-antigravity-manager:latest}
+    container_name: antigravity-manager
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+      - ABV_API_KEY=${ABV_API_KEY}
+      - ABV_WEB_PASSWORD=${ABV_WEB_PASSWORD}
+      - ABV_AUTH_MODE=${ABV_AUTH_MODE:-strict}
+      - ABV_BIND_LOCAL_ONLY=false
+      - ABV_MAX_BODY_SIZE=${ABV_MAX_BODY_SIZE:-104857600}
+      - ABV_CORS_ALLOW_ORIGINS=${ABV_CORS_ALLOW_ORIGINS:-}
+    volumes:
+      - ${ABV_DATA_DIR:-~/.antigravity_tools}:/root/.antigravity_tools
+    expose:
+      - "8045"
+    networks:
+      - antigravity-internal
+
+networks:
+  antigravity-internal:
+    name: antigravity-internal

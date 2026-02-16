@@ -1,0 +1,4 @@
+services:
+  antigravity-manager:
+    ports:
+      - "${ABV_LOCAL_BIND_ADDR:-127.0.0.1}:${ABV_LOCAL_BIND_PORT:-18045}:8045"
