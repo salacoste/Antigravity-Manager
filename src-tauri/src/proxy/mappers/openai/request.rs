@@ -1037,7 +1037,7 @@ mod tests {
         let (result, _sid, _msg_count) = transform_openai_request(&req, "test-v", mapped_model);
         
         // Extract the tool call part from contents
-        let contents = result["contents"].as_array().unwrap();
+        let contents = result["request"]["contents"].as_array().unwrap();
         // Identify the part with functionCall
         let parts = contents[0]["parts"].as_array().unwrap();
         let tool_part = parts.iter().find(|p| p.get("functionCall").is_some()).expect("Should find functionCall part");
@@ -1081,4 +1081,3 @@ mod tests {
         crate::proxy::config::update_image_thinking_mode(Some("enabled".to_string()));
     }
 }
-

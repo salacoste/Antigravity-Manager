@@ -2560,6 +2560,12 @@ mod tests {
                     "expiry_timestamp": now + 3600,
                     "project_id": format!("pid-{}", id)
                 },
+                "quota": {
+                    "models": [
+                        { "name": "gemini-3-flash", "percentage": 90 },
+                        { "name": "gemini-1.5-flash", "percentage": 90 }
+                    ]
+                },
                 "disabled": false,
                 "proxy_disabled": proxy_disabled,
                 "proxy_disabled_reason": if proxy_disabled { "manual" } else { "" },

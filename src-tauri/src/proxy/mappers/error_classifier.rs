@@ -12,7 +12,7 @@
 pub fn classify_stream_error<E: std::fmt::Display>(error: &E) -> (&'static str, &'static str, &'static str) {
     let error_str = error.to_string().to_lowercase();
     
-    if error_str.contains("timeout") || error_str.contains("deadline") {
+    if error_str.contains("timeout") || error_str.contains("timed out") || error_str.contains("deadline") {
         (
             "timeout_error",
             "Request timeout, please check your network connection",

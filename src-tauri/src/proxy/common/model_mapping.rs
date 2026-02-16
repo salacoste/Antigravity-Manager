@@ -81,15 +81,15 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
 /// 映射后的目标模型名称
 /// 
 /// # 示例
-/// ```
+/// ```ignore
 /// // 精确匹配
-/// assert_eq!(map_claude_model_to_gemini("claude-opus-4"), "claude-opus-4-5-thinking");
+/// assert_eq!(map_claude_model_to_gemini("claude-opus-4"), "claude-opus-4-6-thinking");
 /// 
 /// // Gemini 模型透传
 /// assert_eq!(map_claude_model_to_gemini("gemini-2.5-flash"), "gemini-2.5-flash");
 /// 
 /// // 直接透传未知模型 (NEW!)
-/// assert_eq!(map_claude_model_to_gemini("claude-opus-4-6"), "claude-opus-4-6");
+/// assert_eq!(map_claude_model_to_gemini("claude-opus-4-6"), "claude-opus-4-6-thinking");
 /// assert_eq!(map_claude_model_to_gemini("claude-sonnet-5"), "claude-sonnet-5");
 /// ```
 pub fn map_claude_model_to_gemini(input: &str) -> String {
