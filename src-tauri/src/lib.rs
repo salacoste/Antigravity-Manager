@@ -11,6 +11,46 @@ use modules::logger;
 use tracing::{info, warn, error};
 use std::sync::Arc;
 
+#[derive(Clone, Copy)]
+struct AppRuntimeFlags {
+    tray_enabled: bool,
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var(name)
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn is_wayland_session() -> bool {
+    std::env::var("WAYLAND_DISPLAY")
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+        || std::env::var("XDG_SESSION_TYPE")
+            .map(|v| v.eq_ignore_ascii_case("wayland"))
+            .unwrap_or(false)
+}
+
+fn should_enable_tray() -> bool {
+    if env_flag_enabled("ANTIGRAVITY_DISABLE_TRAY") {
+        info!("Tray disabled by ANTIGRAVITY_DISABLE_TRAY");
+        return false;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if is_wayland_session() && !env_flag_enabled("ANTIGRAVITY_FORCE_TRAY") {
+            warn!(
+                "Linux Wayland session detected; disabling tray by default to avoid GTK/AppIndicator crashes. Set ANTIGRAVITY_FORCE_TRAY=1 to force-enable."
+            );
+            return false;
+        }
+    }
+
+    true
+}
+
 /// Increase file descriptor limit for macOS to prevent "Too many open files" errors
 #[cfg(target_os = "macos")]
 fn increase_nofile_limit() {
@@ -222,6 +262,8 @@ pub fn run() {
         return;
     }
 
+    let tray_enabled = should_enable_tray();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -244,6 +286,7 @@ pub fn run() {
         }))
         .manage(commands::proxy::ProxyServiceState::new())
         .manage(commands::cloudflared::CloudflaredState::new())
+        .manage(AppRuntimeFlags { tray_enabled })
         .setup(|app| {
             info!("Setup starting...");
 
@@ -272,8 +315,13 @@ pub fn run() {
                 }
             }
 
-            modules::tray::create_tray(app.handle())?;
-            info!("Tray created");
+            let runtime_flags = app.state::<AppRuntimeFlags>();
+            if runtime_flags.tray_enabled {
+                modules::tray::create_tray(app.handle())?;
+                info!("Tray created");
+            } else {
+                info!("Tray disabled for this session");
+            }
 
             // 立即启动管理服务器 (8045)，以便 Web 端能访问
             let handle = app.handle().clone();
@@ -323,13 +371,24 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let _ = window.hide();
-                #[cfg(target_os = "macos")]
-                {
-                    use tauri::Manager;
-                    window.app_handle().set_activation_policy(tauri::ActivationPolicy::Accessory).unwrap_or(());
+                let tray_enabled = window
+                    .app_handle()
+                    .try_state::<AppRuntimeFlags>()
+                    .map(|flags| flags.tray_enabled)
+                    .unwrap_or(true);
+
+                if tray_enabled {
+                    let _ = window.hide();
+                    #[cfg(target_os = "macos")]
+                    {
+                        use tauri::Manager;
+                        window
+                            .app_handle()
+                            .set_activation_policy(tauri::ActivationPolicy::Accessory)
+                            .unwrap_or(());
+                    }
+                    api.prevent_close();
                 }
-                api.prevent_close();
             }
         })
         .invoke_handler(tauri::generate_handler![
