@@ -12,3 +12,11 @@ export const isTauri = () => {
 export const isLinux = () => {
     return navigator.userAgent.toLowerCase().includes('linux');
 };
+
+/**
+ * Detect if running on macOS
+ */
+export const isMacOS = () => {
+    const ua = navigator.userAgent.toLowerCase();
+    return ua.includes('mac os') || ua.includes('macintosh');
+};

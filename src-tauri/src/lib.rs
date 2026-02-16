@@ -105,6 +105,18 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+fn mask_secret(secret: &str) -> String {
+    if secret.is_empty() {
+        return "(empty)".to_string();
+    }
+    if secret.len() <= 8 {
+        return "****".to_string();
+    }
+    let prefix = &secret[..4];
+    let suffix = &secret[secret.len() - 4..];
+    format!("{}...{}", prefix, suffix)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Check for headless mode
@@ -238,9 +250,9 @@ pub fn run() {
                     info!("--------------------------------------------------");
                     info!("🚀 Headless mode proxy service starting...");
                     info!("📍 Port: {}", config.proxy.port);
-                    info!("🔑 Current API Key: {}", config.proxy.api_key);
+                    info!("🔑 Current API Key: {}", mask_secret(&config.proxy.api_key));
                     if let Some(ref pwd) = config.proxy.admin_password {
-                        info!("🔐 Web UI Password: {}", pwd);
+                        info!("🔐 Web UI Password: {}", mask_secret(pwd));
                     } else {
                         info!("🔐 Web UI Password: (Same as API Key)");
                     }
@@ -350,6 +362,38 @@ pub fn run() {
                 info!("Tray disabled for this session");
             }
 
+            // Force-show the main window on startup. The window-state plugin and/or prior app state
+            // can restore the window as hidden, which makes it look like the app "closed" even
+            // though the backend is running in the tray.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                #[cfg(target_os = "macos")]
+                {
+                    let _ = app
+                        .handle()
+                        .set_activation_policy(tauri::ActivationPolicy::Regular);
+                }
+            }
+
+            // Some window-state restore paths can re-hide the window right after setup.
+            // Ensure the window is visible again shortly after startup.
+            {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                    if let Some(window) = handle.get_webview_window("main") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        #[cfg(target_os = "macos")]
+                        {
+                            let _ =
+                                handle.set_activation_policy(tauri::ActivationPolicy::Regular);
+                        }
+                    }
+                });
+            }
+
             // 立即启动管理服务器 (8045)，以便 Web 端能访问
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -398,6 +442,11 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // In development we prefer a real close to avoid looking like an app crash.
+                if cfg!(debug_assertions) {
+                    return;
+                }
+
                 let tray_enabled = window
                     .app_handle()
                     .try_state::<AppRuntimeFlags>()

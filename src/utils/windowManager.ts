@@ -1,5 +1,54 @@
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
-import { isTauri } from './env';
+import { isMacOS, isTauri } from './env';
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const waitForVisibleWindow = async (retries: number = 10, delayMs: number = 100) => {
+    const win = getCurrentWindow();
+    for (let i = 0; i < retries; i++) {
+        try {
+            if (await win.isVisible()) return win;
+        } catch {
+            // Ignore transient errors during window init/teardown
+        }
+        await sleep(delayMs);
+    }
+    return null;
+};
+
+const safeSetDecorations = async (decorated: boolean) => {
+    // Workaround: tao/wry on macOS can crash AppKit when toggling window style mask
+    // (decorations/resizable). Prefer leaving decorations as-is.
+    if (isMacOS()) return;
+    const win = await waitForVisibleWindow();
+    if (!win) return;
+    try {
+        const current = await win.isDecorated();
+        if (current !== decorated) {
+            await win.setDecorations(decorated);
+        }
+    } catch (error) {
+        console.error('Failed to set window decorations:', error);
+    }
+};
+
+const safeSetResizable = async (resizable: boolean) => {
+    // Workaround: tao/wry on macOS can crash AppKit when toggling resizable
+    // with certain first-responder states. Prefer keeping the window resizable.
+    if (isMacOS()) return;
+    const win = await waitForVisibleWindow();
+    if (!win) return;
+    try {
+        const current = await win.isResizable();
+        if (current !== resizable) {
+            await win.setResizable(resizable);
+        }
+    } catch (error) {
+        console.error('Failed to set window resizable:', error);
+    }
+};
+
+let ensureFullViewStateInFlight: Promise<void> | null = null;
 
 /**
  * Enter mini view mode
@@ -9,10 +58,11 @@ import { isTauri } from './env';
 export const enterMiniMode = async (contentHeight: number, shouldCenter: boolean = false) => {
     if (!isTauri()) return;
     try {
-        const win = getCurrentWindow();
+        const win = await waitForVisibleWindow();
+        if (!win) return;
 
         // Hide window decorations (title bar) first to ensure accurate sizing
-        await win.setDecorations(false);
+        await safeSetDecorations(false);
 
         // Set window size: width 300, height = content height 
         await win.setSize(new LogicalSize(300, contentHeight+2));
@@ -21,7 +71,7 @@ export const enterMiniMode = async (contentHeight: number, shouldCenter: boolean
         // Enable window shadow
         await win.setShadow(true);
         // Disable resizing in mini mode
-        await win.setResizable(false);
+        await safeSetResizable(false);
 
         // Center window only if requested (usually on first load)
         if (shouldCenter) {
@@ -38,15 +88,16 @@ export const enterMiniMode = async (contentHeight: number, shouldCenter: boolean
 export const exitMiniMode = async () => {
     if (!isTauri()) return;
     try {
-        const win = getCurrentWindow();
+        const win = await waitForVisibleWindow();
+        if (!win) return;
         // Restore to a reasonable default size
         await win.setSize(new LogicalSize(1200, 800));
         await win.setAlwaysOnTop(false);
         await win.center();
         // Restore window decorations (title bar)
-        await win.setDecorations(true);
+        await safeSetDecorations(true);
         // Re-enable resizing
-        await win.setResizable(true);
+        await safeSetResizable(true);
     } catch (error) {
         console.error('Failed to exit mini mode:', error);
     }
@@ -58,19 +109,26 @@ export const exitMiniMode = async () => {
  */
 export const ensureFullViewState = async () => {
     if (!isTauri()) return;
-    try {
-        const win = getCurrentWindow();
-        const size = await win.outerSize();
-        // If window is suspiciously narrow (likely leftover from Mini View), restore default size
-        if (size.width < 500) {
-            await win.setSize(new LogicalSize(1200, 800));
-            await win.center();
+    if (ensureFullViewStateInFlight) return ensureFullViewStateInFlight;
+    ensureFullViewStateInFlight = (async () => {
+        try {
+            const win = await waitForVisibleWindow();
+            if (!win) return;
+            const size = await win.outerSize();
+            // If window is suspiciously narrow (likely leftover from Mini View), restore default size
+            if (size.width < 500) {
+                await win.setSize(new LogicalSize(1200, 800));
+                await win.center();
+            }
+            // Always enforce standard window properties for Full View
+            await safeSetDecorations(true);
+            await safeSetResizable(true);
+            await win.setAlwaysOnTop(false);
+        } catch (error) {
+            console.error('Failed to ensure full view state:', error);
+        } finally {
+            ensureFullViewStateInFlight = null;
         }
-        // Always enforce standard window properties for Full View
-        await win.setDecorations(true);
-        await win.setResizable(true);
-        await win.setAlwaysOnTop(false);
-    } catch (error) {
-        console.error('Failed to ensure full view state:', error);
-    }
+    })();
+    return ensureFullViewStateInFlight;
 };
