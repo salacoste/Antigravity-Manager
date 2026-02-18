@@ -204,7 +204,7 @@ pub fn update_tray_menus(app: &tauri::AppHandle) {
                              let name = m.name.to_lowercase();
                              if name == "gemini-3-pro-high" { gemini_high = m.percentage; }
                              if name == "gemini-3-pro-image" { gemini_image = m.percentage; }
-                             if name == "claude-sonnet-4-5" { claude = m.percentage; }
+                             if name == "claude-sonnet-4-6" || name == "claude-sonnet-4-5" { claude = m.percentage; }
                          }
                          
                          menu_lines.push(format!("Gemini High: {}%", gemini_high));

@@ -839,7 +839,7 @@
         },
         "router": {
             "title": "Bộ Định tuyến Model (Router)",
-            "subtitle": "Định tuyến model theo nhóm (Series) hoặc thêm ánh xạ chính xác.\nLưu ý: Các native model Claude (ví dụ: claude-opus-4-6-thinking) mặc định sẽ bỏ qua nhóm series và đi thẳng. Dùng \"Định tuyến Tùy chỉnh Cao cấp\" để ghi đè.",
+            "subtitle": "Định tuyến model theo nhóm (Series) hoặc thêm ánh xạ chính xác.\nLưu ý: Các native model Claude (ví dụ: claude-sonnet-4-6-thinking, claude-opus-4-6-thinking) mặc định sẽ bỏ qua nhóm series và đi thẳng. Dùng \"Định tuyến Tùy chỉnh Cao cấp\" để ghi đè.",
             "subtitle_simple": "Tùy chỉnh định tuyến model với ký tự đại diện hoặc ánh xạ chính xác",
             "background_task_title": "Mô hình tác vụ nền",
             "background_task_desc": "Mô hình được sử dụng cho các tác vụ nền của Claude CLI như tạo tiêu đề, tóm tắt, v.v. (Mặc định: gemini-2.5-flash)",
@@ -855,7 +855,7 @@
             "gemini3_option_flash": "gemini-3-flash (Nhanh)",
             "groups": {
                 "claude_45": {
-                    "name": "Dòng Claude 4.6 TK",
+                    "name": "Dòng Opus 4.6 TK",
                     "desc": "Opus 4.5 TK"
                 },
                 "claude_35": {

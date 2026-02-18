@@ -932,7 +932,7 @@
     },
     "router": {
       "title": "モデルルーター",
-      "subtitle": "シリーズごとにモデルをルーティングするか、カスタムマッピングを追加します。\n注: ネイティブなClaudeパススルーモデル (例: claude-opus-4-6-thinking) はデフォルトでシリーズグループをバイパスします。上書きするには「エキスパートカスタムルーティング」を使用してください。",
+      "subtitle": "シリーズごとにモデルをルーティングするか、カスタムマッピングを追加します。\n注: ネイティブなClaudeパススルーモデル (例: claude-sonnet-4-6-thinking, claude-opus-4-6-thinking) はデフォルトでシリーズグループをバイパスします。上書きするには「エキスパートカスタムルーティング」を使用してください。",
       "subtitle_simple": "ワイルドカードまたは完全一致マッピングでモデルルーティングをカスタマイズ",
       "background_task_title": "バックグラウンドタスク用モデル",
       "background_task_desc": "タイトル生成や要約など、Claude CLIのバックグラウンドタスクに使用されるモデル (デフォルト: gemini-2.5-flash)",
@@ -973,7 +973,7 @@
       "gemini3_option_flash": "gemini-3-flash (高速)",
       "groups": {
         "claude_45": {
-          "name": "Claude 4.6 TK シリーズ",
+          "name": "Opus 4.6 TK シリーズ",
           "desc": "Opus 4.5 TK"
         },
         "claude_35": {

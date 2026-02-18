@@ -64,24 +64,24 @@ export const useProxyModels = () => {
 
         // Claude Series
         {
-            id: 'claude-sonnet-4-5',
-            name: 'Claude 4.5',
-            desc: t('proxy.model.claude_4_5'),
-            group: 'Claude 4.5',
+            id: 'claude-sonnet-4-6',
+            name: 'Sonnet 4.6',
+            desc: t('proxy.model.claude_4_6'),
+            group: 'Sonnet 4.6',
             icon: <Cpu size={16} />
         },
         {
-            id: 'claude-sonnet-4-5-thinking',
-            name: 'Claude 4.5 TK',
+            id: 'claude-sonnet-4-6-thinking',
+            name: 'Sonnet 4.6 TK',
             desc: t('proxy.model.claude_sonnet_thinking'),
-            group: 'Claude 4.5',
+            group: 'Sonnet 4.6',
             icon: <Cpu size={16} />
         },
         {
             id: 'claude-opus-4-6-thinking',
-            name: 'Claude 4.6 TK',
+            name: 'Opus 4.6 TK',
             desc: t('proxy.model.claude_opus_thinking'),
-            group: 'Claude 4.6',
+            group: 'Opus 4.6',
             icon: <Cpu size={16} />
         }
     ];

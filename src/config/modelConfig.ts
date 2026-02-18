@@ -66,21 +66,21 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
     },
 
     // Claude 系列
-    'claude-sonnet-4-5': {
-        label: 'Claude 4.5',
-        shortLabel: 'Claude 4.5',
+    'claude-sonnet-4-6': {
+        label: 'Sonnet 4.6',
+        shortLabel: 'Sonnet 4.6',
         protectedKey: 'claude',
         Icon: Claude.Color,
     },
-    'claude-sonnet-4-5-thinking': {
-        label: 'Claude 4.5 TK',
-        shortLabel: 'Claude 4.5 TK',
+    'claude-sonnet-4-6-thinking': {
+        label: 'Sonnet 4.6 TK',
+        shortLabel: 'Sonnet 4.6 TK',
         protectedKey: 'claude',
         Icon: Claude.Color,
     },
     'claude-opus-4-6-thinking': {
-        label: 'Claude 4.6 TK',
-        shortLabel: 'Claude 4.6 TK',
+        label: 'Opus 4.6 TK',
+        shortLabel: 'Opus 4.6 TK',
         protectedKey: 'claude',
         Icon: Claude.Color,
     },

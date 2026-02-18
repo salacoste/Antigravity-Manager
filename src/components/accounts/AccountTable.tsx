@@ -343,7 +343,7 @@ function AccountRowContent({
                     data: account.quota?.models.find(m => m.name.toLowerCase() === modelId)
                 };
             })
-        ).filter(m => m.id !== 'claude-sonnet-4-5-thinking' && m.id !== 'claude-opus-4-5-thinking')
+        ).filter(m => m.id !== 'claude-sonnet-4-6-thinking' && m.id !== 'claude-sonnet-4-5-thinking' && m.id !== 'claude-opus-4-5-thinking')
     );
 
 

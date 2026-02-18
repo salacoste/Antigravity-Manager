@@ -6,13 +6,17 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     let mut m = HashMap::new();
 
     // 直接支持的模型
-    m.insert("claude-sonnet-4-5", "claude-sonnet-4-5");
-    m.insert("claude-sonnet-4-5-thinking", "claude-sonnet-4-5-thinking");
+    m.insert("claude-sonnet-4-6", "claude-sonnet-4-6");
+    m.insert("claude-sonnet-4-6-thinking", "claude-sonnet-4-6-thinking");
+
+    // [Redirect] Sonnet 4.5 -> Sonnet 4.6
+    m.insert("claude-sonnet-4-5", "claude-sonnet-4-6");
+    m.insert("claude-sonnet-4-5-thinking", "claude-sonnet-4-6-thinking");
 
     // 别名映射
-    m.insert("claude-sonnet-4-5-20250929", "claude-sonnet-4-5-thinking");
-    m.insert("claude-3-5-sonnet-20241022", "claude-sonnet-4-5");
-    m.insert("claude-3-5-sonnet-20240620", "claude-sonnet-4-5");
+    m.insert("claude-sonnet-4-5-20250929", "claude-sonnet-4-6-thinking");
+    m.insert("claude-3-5-sonnet-20241022", "claude-sonnet-4-6");
+    m.insert("claude-3-5-sonnet-20240620", "claude-sonnet-4-6");
     // [Redirect] Opus 4.5 -> Opus 4.6 (Issue #1743)
     m.insert("claude-opus-4", "claude-opus-4-6-thinking");
     m.insert("claude-opus-4-5-thinking", "claude-opus-4-6-thinking");
@@ -23,9 +27,9 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     m.insert("claude-opus-4-6", "claude-opus-4-6-thinking");
     m.insert("claude-opus-4-6-20260201", "claude-opus-4-6-thinking");
 
-    m.insert("claude-haiku-4", "claude-sonnet-4-5");
-    m.insert("claude-3-haiku-20240307", "claude-sonnet-4-5");
-    m.insert("claude-haiku-4-5-20251001", "claude-sonnet-4-5");
+    m.insert("claude-haiku-4", "claude-sonnet-4-6");
+    m.insert("claude-3-haiku-20240307", "claude-sonnet-4-6");
+    m.insert("claude-haiku-4-5-20251001", "claude-sonnet-4-6");
     // OpenAI 协议映射表
     m.insert("gpt-4", "gemini-2.5-flash");
     m.insert("gpt-4-turbo", "gemini-2.5-flash");
@@ -304,7 +308,16 @@ mod tests {
     fn test_model_mapping() {
         assert_eq!(
             map_claude_model_to_gemini("claude-3-5-sonnet-20241022"),
-            "claude-sonnet-4-5"
+            "claude-sonnet-4-6"
+        );
+        // [Redirect] Sonnet 4.5 -> Sonnet 4.6
+        assert_eq!(
+            map_claude_model_to_gemini("claude-sonnet-4-5"),
+            "claude-sonnet-4-6"
+        );
+        assert_eq!(
+            map_claude_model_to_gemini("claude-sonnet-4-5-thinking"),
+            "claude-sonnet-4-6-thinking"
         );
         assert_eq!(
             map_claude_model_to_gemini("claude-opus-4"),

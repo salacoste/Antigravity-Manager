@@ -832,7 +832,7 @@
         },
         "router": {
             "title": "Roteador de Modelos",
-            "subtitle": "Rotear modelos por série ou adicionar mapeamentos exatos personalizados.\nNota: Modelos de passagem nativa Claude (ex: claude-opus-4-6-thinking) ignoram grupos de série por padrão. Use \"Roteamento Personalizado Especialista\" para substituir.",
+            "subtitle": "Rotear modelos por série ou adicionar mapeamentos exatos personalizados.\nNota: Modelos de passagem nativa Claude (ex: claude-sonnet-4-6-thinking, claude-opus-4-6-thinking) ignoram grupos de série por padrão. Use \"Roteamento Personalizado Especialista\" para substituir.",
             "subtitle_simple": "Personalizar roteamento de modelos com curingas ou mapeamentos exatos",
             "background_task_title": "Modelo de Tarefa em Segundo Plano",
             "background_task_desc": "Modelo usado para tarefas em segundo plano do Claude CLI, como geração de título, resumo, etc. (Padrão: gemini-2.5-flash)",
@@ -848,7 +848,7 @@
             "gemini3_option_flash": "gemini-3-flash (Rápido)",
             "groups": {
                 "claude_45": {
-                    "name": "Série Claude 4.6 TK",
+                    "name": "Série Opus 4.6 TK",
                     "desc": "Opus 4.5 TK"
                 },
                 "claude_35": {

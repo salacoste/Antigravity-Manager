@@ -833,7 +833,7 @@
         },
         "router": {
             "title": "Penghalaan Model",
-            "subtitle": "Halakan model mengikut siri atau tambah pemetaan tepat tersuai.\nNota: Model pass-through Claude asli (cth. claude-opus-4-6-thinking) memintas kumpulan siri secara lalai. Gunakan \"Penghalaan Tersuai Pakar\" untuk mengatasi.",
+            "subtitle": "Halakan model mengikut siri atau tambah pemetaan tepat tersuai.\nNota: Model pass-through Claude asli (cth. claude-sonnet-4-6-thinking, claude-opus-4-6-thinking) memintas kumpulan siri secara lalai. Gunakan \"Penghalaan Tersuai Pakar\" untuk mengatasi.",
             "subtitle_simple": "Sesuaikan penghalaan model dengan wildcard atau pemetaan tepat",
             "background_task_title": "Model Tugas Latar Belakang",
             "background_task_desc": "Model digunakan untuk tugas latar belakang Claude CLI seperti penjanaan tajuk, ringkasan, dll. (Lalai: gemini-2.5-flash)",
@@ -849,7 +849,7 @@
             "gemini3_option_flash": "gemini-3-flash (Pantas)",
             "groups": {
                 "claude_45": {
-                    "name": "Siri Claude 4.6 TK",
+                    "name": "Siri Opus 4.6 TK",
                     "desc": "Opus 4.5 TK"
                 },
                 "claude_35": {
