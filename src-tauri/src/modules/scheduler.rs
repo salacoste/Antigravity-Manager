@@ -89,10 +89,6 @@ pub fn start_scheduler(app_handle: Option<tauri::AppHandle>, proxy_state: crate:
 
             // Scan each model for each account
             for account in &accounts {
-                // Skip disabled accounts
-                if account.disabled || account.proxy_disabled {
-                    continue;
-                }
 
                 // Get valid token
                 let Ok((token, pid)) = quota::get_valid_token_for_warmup(account).await else {
@@ -104,13 +100,13 @@ pub fn start_scheduler(app_handle: Option<tauri::AppHandle>, proxy_state: crate:
                     continue;
                 };
 
-                // [FIX] 预热阶段检测到 403 时，持久化 is_forbidden 标记，避免无效账号继续参与轮询
+                // [FIX] 预热阶段检测到 403 时，使用统一禁用逻辑，确保账号文件和索引同时更新
                 if fresh_quota.is_forbidden {
                     logger::log_warn(&format!(
-                        "[Scheduler] Account {} returned 403 Forbidden during quota fetch, persisting forbidden status",
+                        "[Scheduler] Account {} returned 403 Forbidden during quota fetch, marking as forbidden",
                         account.email
                     ));
-                    let _ = account::update_account_quota(&account.id, fresh_quota);
+                    let _ = account::mark_account_forbidden(&account.id, "Scheduler: 403 Forbidden - quota fetch denied");
                     continue;
                 }
 
@@ -276,9 +272,6 @@ pub fn start_scheduler(app_handle: Option<tauri::AppHandle>, proxy_state: crate:
 
 /// Trigger immediate smart warmup check for a single account
 pub async fn trigger_warmup_for_account(account: &Account) {
-    if account.disabled || account.proxy_disabled {
-        return;
-    }
 
     // Get valid token
     let Ok((token, pid)) = quota::get_valid_token_for_warmup(account).await else {
@@ -290,13 +283,13 @@ pub async fn trigger_warmup_for_account(account: &Account) {
         return;
     };
 
-    // [FIX] 预热阶段检测到 403 时，持久化 is_forbidden 标记，避免无效账号继续参与轮询
+    // [FIX] 预热阶段检测到 403 时，使用统一禁用逻辑，确保账号文件和索引同时更新
     if fresh_quota.is_forbidden {
         logger::log_warn(&format!(
-            "[Scheduler] Account {} returned 403 Forbidden during quota fetch, persisting forbidden status",
+            "[Scheduler] Account {} returned 403 Forbidden during quota fetch, marking as forbidden",
             account.email
         ));
-        let _ = account::update_account_quota(&account.id, fresh_quota);
+        let _ = account::mark_account_forbidden(&account.id, "Scheduler: 403 Forbidden - quota fetch denied");
         return;
     }
 

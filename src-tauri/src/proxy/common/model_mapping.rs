@@ -1,6 +1,17 @@
 // 模型名称映射
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use dashmap::DashMap;
+
+// 动态官方废弃模型转发表 (old_model_id -> new_model_id)
+pub static DYNAMIC_MODEL_FORWARDING_RULES: Lazy<DashMap<String, String>> = Lazy::new(|| DashMap::new());
+
+pub fn update_dynamic_forwarding_rules(old_model: String, new_model: String) {
+    if !DYNAMIC_MODEL_FORWARDING_RULES.contains_key(&old_model) {
+        crate::modules::logger::log_info(&format!("[Mapping] Registered automatic forwarding rule: {} -> {}", old_model, new_model));
+    }
+    DYNAMIC_MODEL_FORWARDING_RULES.insert(old_model, new_model);
+}
 
 static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     let mut m = HashMap::new();
@@ -54,16 +65,17 @@ static CLAUDE_TO_GEMINI: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|
     // Gemini 协议映射表
     m.insert("gemini-2.5-flash-lite", "gemini-2.5-flash");
     m.insert("gemini-2.5-flash-thinking", "gemini-2.5-flash-thinking");
-    // [Migrate] Gemini 3 Pro High/Low -> Gemini 3.1 Pro High/Low
-    // Keep 3.0 aliases for backward compatibility.
-    m.insert("gemini-3.1-pro-low", "gemini-3.1-pro-preview");
-    m.insert("gemini-3.1-pro-high", "gemini-3.1-pro-preview");
+    // Gemini Pro family:
+    // - Concrete model IDs should pass through unchanged.
+    // - Generic aliases (without tier) still route to preview as fallback entrypoint.
+    m.insert("gemini-3.1-pro-low", "gemini-3.1-pro-low");
+    m.insert("gemini-3.1-pro-high", "gemini-3.1-pro-high");
     m.insert("gemini-3.1-pro-preview", "gemini-3.1-pro-preview");
     m.insert("gemini-3.1-pro", "gemini-3.1-pro-preview");
-    m.insert("gemini-3-pro-low", "gemini-3.1-pro-preview");
-    m.insert("gemini-3-pro-high", "gemini-3.1-pro-preview");
-    m.insert("gemini-3-pro-preview", "gemini-3.1-pro-preview");
-    m.insert("gemini-3-pro", "gemini-3.1-pro-preview");
+    m.insert("gemini-3-pro-low", "gemini-3-pro-low");
+    m.insert("gemini-3-pro-high", "gemini-3-pro-high");
+    m.insert("gemini-3-pro-preview", "gemini-3-pro-preview");
+    m.insert("gemini-3-pro", "gemini-3-pro-preview");
     m.insert("gemini-2.5-flash", "gemini-2.5-flash");
     m.insert("gemini-3-flash", "gemini-3-flash");
     m.insert("gemini-3-pro-image", "gemini-3-pro-image");
@@ -125,9 +137,10 @@ pub fn get_supported_models() -> Vec<String> {
     CLAUDE_TO_GEMINI.keys().map(|s| s.to_string()).collect()
 }
 
-/// 动态获取所有可用模型列表 (包含内置与用户自定义)
+/// 动态获取所有可用模型列表 (包含内置与用户自定义与官方端点动态下发)
 pub async fn get_all_dynamic_models(
     custom_mapping: &tokio::sync::RwLock<std::collections::HashMap<String, String>>,
+    token_manager: Option<&crate::proxy::token_manager::TokenManager>,
 ) -> Vec<String> {
     use std::collections::HashSet;
     let mut model_ids = HashSet::new();
@@ -142,6 +155,13 @@ pub async fn get_all_dynamic_models(
         let mapping = custom_mapping.read().await;
         for key in mapping.keys() {
             model_ids.insert(key.clone());
+        }
+    }
+
+    // 3. [NEW] 获取所有账号从官方接口汇聚而来的动态模型
+    if let Some(tm) = token_manager {
+        for dynamic_model in tm.get_all_collected_models() {
+            model_ids.insert(dynamic_model);
         }
     }
 
@@ -234,7 +254,14 @@ pub fn resolve_model_route(
     original_model: &str,
     custom_mapping: &std::collections::HashMap<String, String>,
 ) -> String {
-    // 1. 精确匹配 (最高优先级)
+    // 0. API 热更新废弃模型转发 (最高物理优先级，强制纠正)
+    // 如果用户非要用已经被移除的模型，并且官方下发了 fallback path，我们在此拦截并纠正
+    if let Some(forwarded) = DYNAMIC_MODEL_FORWARDING_RULES.get(original_model) {
+        crate::modules::logger::log_info(&format!("[Router] 官方淘汰重定向: {} -> {}", original_model, forwarded.value()));
+        return forwarded.value().clone();
+    }
+
+    // 1. 精确匹配 (次高优先级)
     if let Some(target) = custom_mapping.get(original_model) {
         crate::modules::logger::log_info(&format!("[Router] 精确映射: {} -> {}", original_model, target));
         return target.clone();
@@ -283,8 +310,8 @@ pub fn resolve_model_route(
 pub fn normalize_to_standard_id(model_name: &str) -> Option<String> {
     let lower = model_name.to_lowercase();
     
-    // 1. gemini-3-pro-image (优先匹配，使用前缀匹配以支持分辨率/比例后缀)
-    if lower.starts_with("gemini-3-pro-image") {
+    // 1. image 资源 (优先匹配，使用 contains 匹配以支持任何变体，如 gemini-3.1-flash-image)
+    if lower.contains("image") {
         return Some("gemini-3-pro-image".to_string());
     }
 
@@ -334,25 +361,31 @@ mod tests {
             map_claude_model_to_gemini("gemini-2.5-flash-mini-test"),
             "gemini-2.5-flash-mini-test"
         );
-        assert_eq!(
-            map_claude_model_to_gemini("unknown-model"),
-            "unknown-model"
-        );
-        // [Migrate] Gemini 3 Pro High/Low should route to Gemini 3.1 Pro
+        assert_eq!(map_claude_model_to_gemini("unknown-model"), "unknown-model");
+        // Gemini Pro concrete IDs should pass through unchanged.
         assert_eq!(
             map_claude_model_to_gemini("gemini-3-pro-high"),
-            "gemini-3.1-pro-preview"
+            "gemini-3-pro-high"
         );
         assert_eq!(
             map_claude_model_to_gemini("gemini-3-pro-low"),
-            "gemini-3.1-pro-preview"
+            "gemini-3-pro-low"
         );
         assert_eq!(
             map_claude_model_to_gemini("gemini-3.1-pro-high"),
-            "gemini-3.1-pro-preview"
+            "gemini-3.1-pro-high"
         );
         assert_eq!(
             map_claude_model_to_gemini("gemini-3.1-pro-low"),
+            "gemini-3.1-pro-low"
+        );
+        // Generic aliases still map to preview entrypoint.
+        assert_eq!(
+            map_claude_model_to_gemini("gemini-3-pro"),
+            "gemini-3-pro-preview"
+        );
+        assert_eq!(
+            map_claude_model_to_gemini("gemini-3.1-pro"),
             "gemini-3.1-pro-preview"
         );
 
@@ -384,6 +417,14 @@ mod tests {
         );
         assert_eq!(
             normalize_to_standard_id("gemini-3-pro-image-4k-16x9"),
+            Some("gemini-3-pro-image".to_string())
+        );
+        assert_eq!(
+            normalize_to_standard_id("gemini-3.1-flash-image"),
+            Some("gemini-3-pro-image".to_string())
+        );
+        assert_eq!(
+            normalize_to_standard_id("gemini-3.1-flash-image-4k"),
             Some("gemini-3-pro-image".to_string())
         );
     }

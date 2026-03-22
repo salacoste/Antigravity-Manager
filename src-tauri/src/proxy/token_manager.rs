@@ -35,6 +35,7 @@ pub struct ProxyToken {
     pub validation_blocked_until: i64,     // [NEW] Timestamp until which the account is blocked
     pub validation_url: Option<String>,    // [NEW] Validation URL (#1522)
     pub model_quotas: HashMap<String, i32>, // [OPTIMIZATION] In-memory cache for model-specific quotas
+    pub model_limits: HashMap<String, u64>, // [NEW] max_output_tokens per model from quota data
 }
 
 pub struct TokenManager {
@@ -197,27 +198,24 @@ impl TokenManager {
 
     /// 从内存中彻底移除指定账号及其关联数据 (Issue #1477)
     pub fn remove_account(&self, account_id: &str) {
-        // 1. 从 DashMap 中移除令牌
+        // ... (省略原有逻辑)
         if self.tokens.remove(account_id).is_some() {
             tracing::info!("[Proxy] Removed account {} from memory cache", account_id);
         }
-
-        // 2. 清理相关的健康分数
         self.health_scores.remove(account_id);
-
-        // 3. 清理该账号的所有限流记录
         self.clear_rate_limit(account_id);
-
-        // 4. 清理涉及该账号的所有会话绑定
         self.session_accounts.retain(|_, v| v != account_id);
-
-        // 5. 如果是当前优先账号，也需要清理
         if let Ok(mut preferred) = self.preferred_account_id.try_write() {
             if preferred.as_deref() == Some(account_id) {
                 *preferred = None;
                 tracing::info!("[Proxy] Cleared preferred account status for {}", account_id);
             }
         }
+    }
+
+    /// 根据账号 ID 获取完整的 ProxyToken 对象 (v4.1.29)
+    pub fn get_token_by_id(&self, account_id: &str) -> Option<ProxyToken> {
+        self.tokens.get(account_id).map(|t| t.clone())
     }
 
     /// Check if an account has been disabled on disk.
@@ -489,6 +487,8 @@ impl TokenManager {
 
         // [OPTIMIZATION] 构建模型配额内存缓存，避免排序时读取磁盘
         let mut model_quotas = HashMap::new();
+        // [NEW] 构建模型输出限额内存缓存 (max_output_tokens)
+        let mut model_limits: HashMap<String, u64> = HashMap::new();
         if let Some(models) = account.get("quota").and_then(|q| q.get("models")).and_then(|m| m.as_array()) {
             for model in models {
                 if let (Some(name), Some(pct)) = (model.get("name").and_then(|v| v.as_str()), model.get("percentage").and_then(|v| v.as_i64())) {
@@ -496,6 +496,25 @@ impl TokenManager {
                     let standard_id = crate::proxy::common::model_mapping::normalize_to_standard_id(name)
                         .unwrap_or_else(|| name.to_string());
                     model_quotas.insert(standard_id, pct as i32);
+                }
+                // [NEW] 解析并缓存 max_output_tokens (按原始 model name，不归一化)
+                if let (Some(name), Some(limit)) = (
+                    model.get("name").and_then(|v| v.as_str()),
+                    model.get("max_output_tokens").and_then(|v| v.as_u64()),
+                ) {
+                    model_limits.insert(name.to_string(), limit);
+                }
+            }
+        }
+
+        // [NEW] 启动时自动同步持久化的淘汰模型路由表，注入热更新拦截器
+        if let Some(rules) = account.get("quota").and_then(|q| q.get("model_forwarding_rules")).and_then(|r| r.as_object()) {
+            for (k, v) in rules {
+                if let Some(new_model) = v.as_str() {
+                    crate::proxy::common::model_mapping::update_dynamic_forwarding_rules(
+                        k.to_string(),
+                        new_model.to_string()
+                    );
                 }
             }
         }
@@ -518,6 +537,7 @@ impl TokenManager {
             validation_blocked_until: account.get("validation_blocked_until").and_then(|v| v.as_i64()).unwrap_or(0),
             validation_url: account.get("validation_url").and_then(|v| v.as_str()).map(|s| s.to_string()),
             model_quotas,
+            model_limits,
         }))
     }
 
@@ -702,6 +722,101 @@ impl TokenManager {
             }
         }
         None
+    }
+
+    fn get_available_models_from_json(account_path: &PathBuf) -> Option<HashSet<String>> {
+        let content = std::fs::read_to_string(account_path).ok()?;
+        let account: serde_json::Value = serde_json::from_str(&content).ok()?;
+        let models = account.get("quota")?.get("models")?.as_array()?;
+        let mut result = HashSet::new();
+        for model in models {
+            if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
+                let normalized = name.trim().to_lowercase();
+                if !normalized.is_empty() {
+                    result.insert(normalized);
+                }
+            }
+        }
+        Some(result)
+    }
+
+    fn build_dynamic_model_candidates(model_name: &str) -> Option<Vec<String>> {
+        let model = model_name.trim().to_lowercase();
+        if model.is_empty() {
+            return None;
+        }
+
+        let pro_family = [
+            "gemini-3-pro",
+            "gemini-3-pro-preview",
+            "gemini-3-pro-high",
+            "gemini-3-pro-low",
+            "gemini-3.1-pro",
+            "gemini-3.1-pro-preview",
+            "gemini-3.1-pro-high",
+            "gemini-3.1-pro-low",
+        ];
+
+        if !pro_family.contains(&model.as_str()) {
+            return None;
+        }
+
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        let mut push = |candidate: &str| {
+            let c = candidate.to_string();
+            if seen.insert(c.clone()) {
+                out.push(c);
+            }
+        };
+
+        // Keep requested model as top priority, then fallback across the same family.
+        push(&model);
+        push("gemini-3.1-pro-preview");
+        push("gemini-3-pro-preview");
+        push("gemini-3.1-pro-high");
+        push("gemini-3-pro-high");
+        push("gemini-3.1-pro-low");
+        push("gemini-3-pro-low");
+
+        Some(out)
+    }
+
+    pub async fn resolve_dynamic_model_for_account(
+        &self,
+        account_id: &str,
+        mapped_model: &str,
+    ) -> String {
+        let candidates = match Self::build_dynamic_model_candidates(mapped_model) {
+            Some(c) => c,
+            None => return mapped_model.to_string(),
+        };
+
+        let account_path = match self.tokens.get(account_id) {
+            Some(token) => token.account_path.clone(),
+            None => return mapped_model.to_string(),
+        };
+
+        let available_models = match Self::get_available_models_from_json(&account_path) {
+            Some(models) if !models.is_empty() => models,
+            _ => return mapped_model.to_string(),
+        };
+
+        for candidate in candidates {
+            if available_models.contains(&candidate) {
+                if candidate != mapped_model.to_lowercase() {
+                    tracing::info!(
+                        "[Dynamic-Model-Rewrite] account={} {} -> {}",
+                        account_id,
+                        mapped_model,
+                        candidate
+                    );
+                }
+                return candidate;
+            }
+        }
+
+        mapped_model.to_string()
     }
 
     /// 测试辅助函数：公开访问 get_model_quota_from_json
@@ -1973,9 +2088,13 @@ impl TokenManager {
     /// - `reason`: 限流原因（QuotaExhausted/ServerError 等）
     /// - `model`: 可选的模型名称,用于模型级别限流
     pub fn set_precise_lockout(&self, account_id: &str, reason: crate::proxy::rate_limit::RateLimitReason, model: Option<String>) -> bool {
+        // [FIX #2209] 统一归一化模型名称
+        let normalized_model = model.as_deref().and_then(|m| crate::proxy::common::model_mapping::normalize_to_standard_id(m));
+        let model_to_lock = normalized_model.or(model);
+
         if let Some(reset_time_str) = self.get_quota_reset_time(account_id) {
             tracing::info!("找到账号 {} 的配额刷新时间: {}", account_id, reset_time_str);
-            self.rate_limit_tracker.set_lockout_until_iso(account_id, &reset_time_str, reason, model)
+            self.rate_limit_tracker.set_lockout_until_iso(account_id, &reset_time_str, reason, model_to_lock)
         } else {
             tracing::debug!("未找到账号 {} 的配额刷新时间,将使用默认退避策略", account_id);
             false
@@ -2044,8 +2163,13 @@ impl TokenManager {
                         email,
                         reset_time_str
                     );
+                    
+                    // [FIX #2209] 统一归一化模型名称
+                    let normalized_model = model.as_deref().and_then(|m| crate::proxy::common::model_mapping::normalize_to_standard_id(m));
+                    let model_to_lock = normalized_model.or(model);
+
                     // [FIX] 使用 account_id 作为 key，与 is_rate_limited 检查一致
-                    self.rate_limit_tracker.set_lockout_until_iso(&account_id, reset_time_str, reason, model)
+                    self.rate_limit_tracker.set_lockout_until_iso(&account_id, reset_time_str, reason, model_to_lock)
                 } else {
                     tracing::warn!("账号 {} 配额刷新成功但未找到 reset_time", email);
                     false
@@ -2080,6 +2204,10 @@ impl TokenManager {
         error_body: &str,
         model: Option<&str>, // 🆕 新增模型参数
     ) {
+        // [FIX #2209] 统一归一化模型名称，确保锁定 Key 与负载均衡检查 Key 一致
+        let normalized_model = model.and_then(|m| crate::proxy::common::model_mapping::normalize_to_standard_id(m));
+        let model_to_track = normalized_model.as_deref().or(model);
+
         // [NEW] 检查熔断是否启用
         let config = self.circuit_breaker_config.read().await.clone();
         if !config.enabled {
@@ -2112,7 +2240,7 @@ impl TokenManager {
                 status,
                 retry_after_header,
                 error_body,
-                model.map(|s| s.to_string()),
+                model_to_track.map(|s| s.to_string()),
                 &config.backoff_steps, // [NEW] 传入配置
             );
             return;
@@ -2130,7 +2258,7 @@ impl TokenManager {
         };
 
         // API 未返回 quotaResetDelay,需要实时刷新配额获取精确锁定时间
-        if let Some(m) = model {
+        if let Some(m) = model_to_track {
             tracing::info!(
                 "账号 {} 的模型 {} 的 429 响应未包含 quotaResetDelay,尝试实时刷新配额...",
                 account_id,
@@ -2144,13 +2272,13 @@ impl TokenManager {
         }
 
         // [FIX] 传入 email 而不是 account_id，因为 fetch_and_lock_with_realtime_quota 期望 email
-        if self.fetch_and_lock_with_realtime_quota(email, reason, model.map(|s| s.to_string())).await {
+        if self.fetch_and_lock_with_realtime_quota(email, reason, model_to_track.map(|s| s.to_string())).await {
             tracing::info!("账号 {} 已使用实时配额精确锁定", email);
             return;
         }
 
         // 实时刷新失败,尝试使用本地缓存的配额刷新时间
-        if self.set_precise_lockout(&account_id, reason, model.map(|s| s.to_string())) {
+        if self.set_precise_lockout(&account_id, reason, model_to_track.map(|s| s.to_string())) {
             tracing::info!("账号 {} 已使用本地缓存配额锁定", account_id);
             return;
         }
@@ -2162,7 +2290,7 @@ impl TokenManager {
             status,
             retry_after_header,
             error_body,
-            model.map(|s| s.to_string()),
+            model_to_track.map(|s| s.to_string()),
             &config.backoff_steps, // [NEW] 传入配置
         );
     }
@@ -2358,6 +2486,29 @@ impl TokenManager {
         earliest_ts
     }
 
+    /// 获取当前所有可用账号中收集到的官方下发的所有动态模型集合
+    pub fn get_all_collected_models(&self) -> std::collections::HashSet<String> {
+        let mut all_models = std::collections::HashSet::new();
+        for entry in self.tokens.iter() {
+            let token = entry.value();
+            for model_id in token.model_quotas.keys() {
+                all_models.insert(model_id.clone());
+            }
+        }
+        all_models
+    }
+
+    /// [NEW] 从指定账号的动态额度数据中获取特定模型的 max_output_tokens
+    ///
+    /// # 返回
+    /// - `Some(u64)`: 找到了动态限额数据
+    /// - `None`: 账号不存在或该模型无数据（调用方应继续查静态默认表）
+    pub fn get_model_output_limit_for_account(&self, account_id: &str, model_name: &str) -> Option<u64> {
+        self.tokens
+            .get(account_id)
+            .and_then(|token| token.model_limits.get(model_name).copied())
+    }
+
     /// Helper to find account ID by email
     pub fn get_account_id_by_email(&self, email: &str) -> Option<String> {
         for entry in self.tokens.iter() {
@@ -2402,6 +2553,10 @@ impl TokenManager {
                          if let Some(meta) = detail.get("metadata") {
                              if let Some(v_url) = meta.get("validation_url").and_then(|v| v.as_str()) {
                                  url = Some(v_url.to_string());
+                                 break;
+                             }
+                             if let Some(a_url) = meta.get("appeal_url").and_then(|v| v.as_str()) {
+                                 url = Some(a_url.to_string());
                                  break;
                              }
                          }
@@ -2451,40 +2606,11 @@ impl TokenManager {
 
     /// Set is_forbidden status for an account (called when proxy encounters 403)
     pub async fn set_forbidden(&self, account_id: &str, reason: &str) -> Result<(), String> {
-        // 1. Persist to disk - update quota.is_forbidden in account JSON
-        let path = self.data_dir.join("accounts").join(format!("{}.json", account_id));
-        if !path.exists() {
-            return Err(format!("Account file not found: {:?}", path));
-        }
-
-        let content = std::fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read account file: {}", e))?;
-
-        let mut account: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse account JSON: {}", e))?;
-
-        // Update quota.is_forbidden
-        if let Some(quota) = account.get_mut("quota") {
-            quota["is_forbidden"] = serde_json::Value::Bool(true);
-            quota["forbidden_reason"] = serde_json::Value::String(reason.to_string());
-        } else {
-            // Create quota object if not exists
-            account["quota"] = serde_json::json!({
-                "models": [],
-                "last_updated": chrono::Utc::now().timestamp(),
-                "is_forbidden": true,
-                "forbidden_reason": reason
-            });
-        }
+        // [FIX] 调用封装好的模块函数，确保线程安全地更新账号文件和索引
+        crate::modules::account::mark_account_forbidden(account_id, reason)?;
 
         // Clear sticky session if forbidden
         self.session_accounts.retain(|_, v| *v != account_id);
-
-        let json_str = serde_json::to_string_pretty(&account)
-            .map_err(|e| format!("Failed to serialize account JSON: {}", e))?;
-
-        std::fs::write(&path, json_str)
-            .map_err(|e| format!("Failed to write account file: {}", e))?;
 
         // [FIX] 从内存池中移除账号，避免重试时再次选中
         self.remove_account(account_id);
@@ -2492,7 +2618,7 @@ impl TokenManager {
         tracing::warn!(
             "🚫 Account {} marked as forbidden (403): {}",
             account_id,
-            truncate_reason(reason, 1000) // [FIX] 放宽日志显示限制到 1000
+            truncate_reason(reason, 1000)
         );
 
         Ok(())
@@ -2743,7 +2869,9 @@ mod tests {
             reset_time,
             validation_blocked: false,
             validation_blocked_until: 0,
+            validation_url: None,
             model_quotas: HashMap::new(),
+            model_limits: HashMap::new(),
         }
     }
 
@@ -2999,7 +3127,9 @@ mod tests {
             reset_time: None,
             validation_blocked: false,
             validation_blocked_until: 0,
+            validation_url: None,
             model_quotas: HashMap::new(),
+            model_limits: HashMap::new(),
         }
     }
 

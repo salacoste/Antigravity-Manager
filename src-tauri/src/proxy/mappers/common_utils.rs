@@ -107,10 +107,10 @@ pub fn resolve_request_config(
     // Force a stable search model for search requests.
     let mut final_model = mapped_model.trim_end_matches("-online").to_string();
 
-    // [FIX] Map logic aliases back to physical model names for upstream compatibility
+    // Map explicit preview aliases that have stable physical counterparts.
+    // Note: gemini-3-pro-preview / gemini-3.1-pro-preview are intentionally NOT forced
+    // to *-high here; dynamic runtime rewrite is handled after account selection.
     final_model = match final_model.as_str() {
-        "gemini-3-pro-preview" => "gemini-3.1-pro-high".to_string(), // 3.0 preview redirects to 3.1 High
-        "gemini-3.1-pro-preview" => "gemini-3.1-pro-high".to_string(),
         "gemini-3-pro-image-preview" => "gemini-3-pro-image".to_string(),
         "gemini-3-flash-preview" => "gemini-3-flash".to_string(),
         _ => final_model,
@@ -229,11 +229,41 @@ pub fn parse_image_config_with_params(
         }
     }
 
-    // The upstream model must be EXACTLY "gemini-3-pro-image"
+    let clean_model_name = clean_image_model_name(model_name);
+
     (
         serde_json::Value::Object(config),
-        "gemini-3-pro-image".to_string(),
+        clean_model_name,
     )
+}
+
+/// Helper function to clean image model names by removing resolution/aspect-ratio suffixes.
+/// E.g., "gemini-3.1-flash-image-16x9-4k" -> "gemini-3.1-flash-image"
+fn clean_image_model_name(model_name: &str) -> String {
+    let mut clean_name = model_name.to_lowercase();
+    
+    // Ordered list of known suffixes to strip
+    let suffixes = [
+        "-4k", "-2k", "-1k", "-hd", "-standard", "-medium",
+        "-21x9", "-21-9", "-16x9", "-16-9", "-9x16", "-9-16",
+        "-4x3", "-4-3", "-3x4", "-3-4", "-3x2", "-3-2",
+        "-2x3", "-2-3", "-5x4", "-5-4", "-4x5", "-4-5",
+        "-1x1", "-1-1"
+    ];
+
+    // Repeatedly strip suffixes until no more are found
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for suffix in &suffixes {
+            if clean_name.ends_with(suffix) {
+                clean_name.truncate(clean_name.len() - suffix.len());
+                changed = true;
+            }
+        }
+    }
+
+    clean_name
 }
 
 /// 动态计算宽高比（解决硬编码问题）
@@ -306,20 +336,28 @@ fn calculate_aspect_ratio_from_size(size: &str) -> &'static str {
 }
 
 /// Inject current googleSearch tool and ensure no duplicate legacy search tools
-pub fn inject_google_search_tool(body: &mut Value) {
+pub fn inject_google_search_tool(body: &mut Value, mapped_model: Option<&str>) {
     if let Some(obj) = body.as_object_mut() {
         let tools_entry = obj.entry("tools").or_insert_with(|| json!([]));
         if let Some(tools_arr) = tools_entry.as_array_mut() {
-            // [安全校验] 如果数组中已经包含 functionDeclarations，严禁注入 googleSearch
-            // 因为 Gemini v1internal 不支持在一次请求中混用 search 和 functions
+            // [安全校验] Gemini v1internal 对混合工具有严格要求。
+            // 只有 Gemini 2.0+ 及 3.0 系列模型确认支持混合工具 (Function Calling + Google Search)。
+            let mut supports_mixed_tools = false;
+            if let Some(model) = mapped_model {
+                let model_lower = model.to_lowercase();
+                supports_mixed_tools = model_lower.contains("gemini-2.0")
+                    || model_lower.contains("gemini-2.5")
+                    || model_lower.contains("gemini-3");
+            }
+
             let has_functions = tools_arr.iter().any(|t| {
                 t.as_object()
                     .map_or(false, |o| o.contains_key("functionDeclarations"))
             });
 
-            if has_functions {
+            if has_functions && !supports_mixed_tools {
                 tracing::debug!(
-                    "Skipping googleSearch injection due to existing functionDeclarations"
+                    "Skipping googleSearch injection due to existing functionDeclarations on older model"
                 );
                 return;
             }
@@ -574,45 +612,53 @@ mod tests {
     #[test]
     fn test_parse_image_config_with_openai_params() {
         // Test quality parameter mapping
-        let (config_hd, _) = parse_image_config_with_params("gemini-3-pro-image", None, Some("hd"), None);
+        let (config_hd, model_hd) = parse_image_config_with_params("gemini-3-pro-image", None, Some("hd"), None);
         assert_eq!(config_hd["imageSize"], "4K");
         assert_eq!(config_hd["aspectRatio"], "1:1");
+        assert_eq!(model_hd, "gemini-3-pro-image");
 
-        let (config_medium, _) =
+        let (config_medium, model_medium) =
             parse_image_config_with_params("gemini-3-pro-image", None, Some("medium"), None);
         assert_eq!(config_medium["imageSize"], "2K");
+        assert_eq!(model_medium, "gemini-3-pro-image");
 
-        let (config_standard, _) =
+        let (config_standard, model_standard) =
             parse_image_config_with_params("gemini-3-pro-image", None, Some("standard"), None);
         assert_eq!(config_standard["imageSize"], "1K");
+        assert_eq!(model_standard, "gemini-3-pro-image");
 
         // Test size parameter mapping with dynamic calculation
-        let (config_16_9, _) =
+        let (config_16_9, model_16_9) =
             parse_image_config_with_params("gemini-3-pro-image", Some("1280x720"), None, None);
         assert_eq!(config_16_9["aspectRatio"], "16:9");
+        assert_eq!(model_16_9, "gemini-3-pro-image");
 
-        let (config_9_16, _) =
+        let (config_9_16, model_9_16) =
             parse_image_config_with_params("gemini-3-pro-image", Some("720x1280"), None, None);
         assert_eq!(config_9_16["aspectRatio"], "9:16");
+        assert_eq!(model_9_16, "gemini-3-pro-image");
 
-        let (config_4_3, _) =
+        let (config_4_3, model_4_3) =
             parse_image_config_with_params("gemini-3-pro-image", Some("800x600"), None, None);
         assert_eq!(config_4_3["aspectRatio"], "4:3");
+        assert_eq!(model_4_3, "gemini-3-pro-image");
 
         // Test combined size + quality
-        let (config_combined, _) =
+        let (config_combined, model_combined) =
             parse_image_config_with_params("gemini-3-pro-image", Some("1920x1080"), Some("hd"), None);
         assert_eq!(config_combined["aspectRatio"], "16:9");
         assert_eq!(config_combined["imageSize"], "4K");
+        assert_eq!(model_combined, "gemini-3-pro-image");
 
         // Test backward compatibility: model suffix takes precedence when no params
-        let (config_compat, _) =
+        let (config_compat, model_compat) =
             parse_image_config_with_params("gemini-3-pro-image-16x9-4k", None, None, None);
         assert_eq!(config_compat["aspectRatio"], "16:9");
         assert_eq!(config_compat["imageSize"], "4K");
+        assert_eq!(model_compat, "gemini-3-pro-image");
 
         // Test parameter priority: params override model suffix
-        let (config_override, _) = parse_image_config_with_params(
+        let (config_override, model_override) = parse_image_config_with_params(
             "gemini-3-pro-image-1x1-2k",
             Some("1280x720"),
             Some("hd"),
@@ -620,6 +666,23 @@ mod tests {
         );
         assert_eq!(config_override["aspectRatio"], "16:9"); // from size param, not model suffix
         assert_eq!(config_override["imageSize"], "4K"); // from quality param, not model suffix
+        assert_eq!(model_override, "gemini-3-pro-image");
+    }
+
+    #[test]
+    fn test_clean_image_model_name() {
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-4k"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3-pro-image-16x9"), "gemini-3-pro-image");
+        assert_eq!(clean_image_model_name("gemini-3-pro-image-16x9-4k"), "gemini-3-pro-image");
+        // Test varying order
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-4k-16x9"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-16-9-hd"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-2k-9x16"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-1x1"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-standard"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-medium"), "gemini-3.1-flash-image");
+        assert_eq!(clean_image_model_name("gemini-3.1-flash-image-21-9-4k"), "gemini-3.1-flash-image");
     }
 
     #[test]

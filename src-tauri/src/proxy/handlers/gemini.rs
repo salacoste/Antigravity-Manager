@@ -150,12 +150,18 @@ pub async fn handle_generate(
             }
         };
 
+        let mapped_model = token_manager
+            .resolve_dynamic_model_for_account(&account_id, &mapped_model)
+            .await;
+
         last_email = Some(email.clone());
         info!("✓ Using account: {} (type: {})", email, config.request_type);
 
         // 5. 包装请求 (project injection)
         // [FIX #765] Pass session_id to wrap_request for signature injection
-        let wrapped_body = wrap_request(&body, &project_id, &mapped_model, Some(&session_id));
+        // [NEW] 获取完整 Token 对象以注入动态规格 (dynamic > static default > 65535)
+        let token_obj = token_manager.get_token_by_id(&account_id);
+        let wrapped_body = wrap_request(&body, &project_id, &mapped_model, Some(account_id.as_str()), Some(&session_id), token_obj.as_ref());
 
         if debug_logger::is_enabled(&debug_cfg) {
             let payload = json!({
@@ -337,7 +343,13 @@ pub async fn handle_generate(
                             Some(Ok(b)) => b,
                             Some(Err(e)) => {
                                 error!("[Gemini-SSE] Connection error: {}", e);
-                                yield Err(format!("Stream error: {}", e));
+                                let error_json = serde_json::json!({
+                                    "error": {
+                                        "message": format!("Stream error: {}", e),
+                                        "type": "stream_error"
+                                    }
+                                });
+                                yield Ok::<Bytes, String>(Bytes::from(format!("data: {}\n\n", error_json)));
                                 break;
                             }
                             None => break,
@@ -642,7 +654,7 @@ pub async fn handle_list_models(
     use crate::proxy::common::model_mapping::get_all_dynamic_models;
 
     // 获取所有动态模型列表（与 /v1/models 一致）
-    let model_ids = get_all_dynamic_models(&state.custom_mapping).await;
+    let model_ids = get_all_dynamic_models(&state.custom_mapping, Some(&state.token_manager)).await;
 
     // 转换为 Gemini API 格式
     let models: Vec<_> = model_ids

@@ -4,7 +4,12 @@ use serde_json::json;
 use crate::models::QuotaData;
 use crate::modules::config;
 
-const QUOTA_API_URL: &str = "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels";
+// Quota API endpoints (fallback order: Sandbox → Daily → Prod)
+const QUOTA_API_ENDPOINTS: [&str; 3] = [
+    "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
+    "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+    "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+];
 
 /// Critical retry threshold: considered near recovery when quota reaches 95%
 const NEAR_READY_THRESHOLD: i32 = 95;
@@ -14,12 +19,35 @@ const RETRY_DELAY_SECS: u64 = 30;
 #[derive(Debug, Serialize, Deserialize)]
 struct QuotaResponse {
     models: std::collections::HashMap<String, ModelInfo>,
+    #[serde(rename = "deprecatedModelIds")]
+    deprecated_model_ids: Option<std::collections::HashMap<String, DeprecatedModelInfo>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct DeprecatedModelInfo {
+    #[serde(rename = "newModelId")]
+    new_model_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ModelInfo {
     #[serde(rename = "quotaInfo")]
     quota_info: Option<QuotaInfo>,
+    #[serde(rename = "displayName")]
+    display_name: Option<String>,
+    #[serde(rename = "supportsImages")]
+    supports_images: Option<bool>,
+    #[serde(rename = "supportsThinking")]
+    supports_thinking: Option<bool>,
+    #[serde(rename = "thinkingBudget")]
+    thinking_budget: Option<i32>,
+    recommended: Option<bool>,
+    #[serde(rename = "maxTokens")]
+    max_tokens: Option<i32>,
+    #[serde(rename = "maxOutputTokens")]
+    max_output_tokens: Option<i32>,
+    #[serde(rename = "supportedMimeTypes")]
+    supported_mime_types: Option<std::collections::HashMap<String, bool>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,36 +66,48 @@ struct LoadProjectResponse {
     current_tier: Option<Tier>,
     #[serde(rename = "paidTier")]
     paid_tier: Option<Tier>,
+    #[serde(rename = "allowedTiers")]
+    allowed_tiers: Option<Vec<Tier>>,
+    #[serde(rename = "ineligibleTiers")]
+    ineligible_tiers: Option<Vec<IneligibleTier>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct IneligibleTier {
+    #[allow(dead_code)]
+    #[serde(rename = "reasonCode")]
+    reason_code: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Tier {
+    #[allow(dead_code)]
+    is_default: Option<bool>,
     id: Option<String>,
     #[allow(dead_code)]
     #[serde(rename = "quotaTier")]
     quota_tier: Option<String>,
-    #[allow(dead_code)]
     name: Option<String>,
     #[allow(dead_code)]
     slug: Option<String>,
 }
 
-/// Get shared HTTP Client (15s timeout)
-async fn create_client(account_id: Option<&str>) -> rquest::Client {
+/// Get shared HTTP Client (15s timeout) for pure info fetching (No JA3)
+async fn create_standard_client(account_id: Option<&str>) -> rquest::Client {
     if let Some(pool) = crate::proxy::proxy_pool::get_global_proxy_pool() {
-        pool.get_effective_client(account_id, 15).await
+        pool.get_effective_standard_client(account_id, 15).await
     } else {
-        crate::utils::http::get_client()
+        crate::utils::http::get_standard_client()
     }
 }
 
-/// Get shared HTTP Client (60s timeout)
+/// Get shared HTTP Client (60s timeout) for pure info fetching (No JA3)
 #[allow(dead_code)] // 预留给预热/后台任务调用
-async fn create_warmup_client(account_id: Option<&str>) -> rquest::Client {
+async fn create_long_standard_client(account_id: Option<&str>) -> rquest::Client {
     if let Some(pool) = crate::proxy::proxy_pool::get_global_proxy_pool() {
-        pool.get_effective_client(account_id, 60).await
+        pool.get_effective_standard_client(account_id, 60).await
     } else {
-        crate::utils::http::get_long_client()
+        crate::utils::http::get_long_standard_client()
     }
 }
 
@@ -75,14 +115,14 @@ const CLOUD_CODE_BASE_URL: &str = "https://daily-cloudcode-pa.sandbox.googleapis
 
 /// Fetch project ID and subscription tier
 async fn fetch_project_id(access_token: &str, email: &str, account_id: Option<&str>) -> (Option<String>, Option<String>) {
-    let client = create_client(account_id).await;
+    let client = create_standard_client(account_id).await;
     let meta = json!({"metadata": {"ideType": "ANTIGRAVITY"}});
 
     let res = client
         .post(format!("{}/v1internal:loadCodeAssist", CLOUD_CODE_BASE_URL))
         .header(rquest::header::AUTHORIZATION, format!("Bearer {}", access_token))
         .header(rquest::header::CONTENT_TYPE, "application/json")
-        .header(rquest::header::USER_AGENT, crate::constants::USER_AGENT.as_str())
+        .header(rquest::header::USER_AGENT, crate::constants::NATIVE_OAUTH_USER_AGENT.as_str())
         .json(&meta)
         .send()
         .await;
@@ -93,10 +133,32 @@ async fn fetch_project_id(access_token: &str, email: &str, account_id: Option<&s
                 if let Ok(data) = res.json::<LoadProjectResponse>().await {
                     let project_id = data.project_id.clone();
                     
-                    // Core logic: Priority to subscription ID from paid_tier, which better reflects actual account benefits than current_tier
-                    let subscription_tier = data.paid_tier
-                        .and_then(|t| t.id)
-                        .or_else(|| data.current_tier.and_then(|t| t.id));
+                    // Core logic: Multi-level fallback for tier extraction
+                    // 1. Paid Tier (Google One AI Premium etc.)
+                    // 2. Current Tier (If not ineligible)
+                    // 3. Allowed Tiers (Restricted/Default proxy access)
+                    let mut subscription_tier = data.paid_tier.as_ref().and_then(|t| t.name.clone())
+                        .or_else(|| data.paid_tier.as_ref().and_then(|t| t.id.clone()));
+                        
+                    let is_ineligible = data.ineligible_tiers.is_some() && !data.ineligible_tiers.as_ref().unwrap().is_empty();
+                    
+                    if subscription_tier.is_none() {
+                        if !is_ineligible {
+                            subscription_tier = data.current_tier.as_ref().and_then(|t| t.name.clone())
+                                .or_else(|| data.current_tier.as_ref().and_then(|t| t.id.clone()));
+                        } else {
+                            // If account is marked as INELIGIBLE, drop to allowedTiers and extract default
+                            if let Some(mut allowed) = data.allowed_tiers {
+                                if let Some(default_tier) = allowed.iter_mut().find(|t| t.is_default == Some(true)) {
+                                    if let Some(name) = &default_tier.name {
+                                        subscription_tier = Some(format!("{} (Restricted)", name));
+                                    } else if let Some(id) = &default_tier.id {
+                                        subscription_tier = Some(format!("{} (Restricted)", id));
+                                    }
+                                }
+                            }
+                        }
+                    }
                     
                     if let Some(ref tier) = subscription_tier {
                         crate::modules::logger::log_info(&format!(
@@ -141,22 +203,25 @@ pub async fn fetch_quota_with_cache(
         fetch_project_id(access_token, email, account_id).await
     };
     
-    let final_project_id = project_id.as_deref().unwrap_or("bamboo-precept-lgxtn");
+    // We keep project_id to store in the DB, but we NO LONGER force inject it into payload if it's absent
     
-    let client = create_client(account_id).await;
-    let payload = json!({
-        "project": final_project_id
-    });
+    let client = create_standard_client(account_id).await;
+    let payload = if let Some(ref pid) = project_id {
+        json!({ "project": pid })
+    } else {
+        json!({}) // Empty payload fallback
+    };
     
-    let url = QUOTA_API_URL;
     let mut last_error: Option<AppError> = None;
 
-    for attempt in 1..=MAX_RETRIES {
+    for (ep_idx, ep_url) in QUOTA_API_ENDPOINTS.iter().enumerate() {
+        let has_next = ep_idx + 1 < QUOTA_API_ENDPOINTS.len();
+
         match client
-            .post(url)
+            .post(*ep_url)
             .bearer_auth(access_token)
-            .header(rquest::header::USER_AGENT, crate::constants::USER_AGENT.as_str())
-            .json(&json!(payload))
+            .header(rquest::header::USER_AGENT, crate::constants::NATIVE_OAUTH_USER_AGENT.as_str())
+            .json(&payload)
             .send()
             .await
         {
@@ -176,17 +241,21 @@ pub async fn fetch_quota_with_cache(
                         return Ok((q, project_id.clone()));
                     }
                     
-                    // Continue retry logic for other errors
-                    if attempt < MAX_RETRIES {
-                         let text = response.text().await.unwrap_or_default();
-                         crate::modules::logger::log_warn(&format!("API Error: {} - {} (Attempt {}/{})", status, text, attempt, MAX_RETRIES));
+                    let text = response.text().await.unwrap_or_default();
+
+                    // 429/5xx: fallback to next endpoint
+                    if has_next && (status == rquest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error()) {
+                         crate::modules::logger::log_warn(&format!("Quota API {} returned {}, falling back to next endpoint", ep_url, status));
                          last_error = Some(AppError::Unknown(format!("HTTP {} - {}", status, text)));
                          tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                          continue;
-                    } else {
-                         let text = response.text().await.unwrap_or_default();
-                         return Err(AppError::Unknown(format!("API Error: {} - {}", status, text)));
                     }
+
+                    return Err(AppError::Unknown(format!("API Error: {} - {}", status, text)));
+                }
+
+                if ep_idx > 0 {
+                    crate::modules::logger::log_info(&format!("Quota API fallback succeeded at endpoint #{}", ep_idx + 1));
                 }
 
                 let quota_response: QuotaResponse = response
@@ -207,10 +276,30 @@ pub async fn fetch_quota_with_cache(
                         
                         let reset_time = quota_info.reset_time.clone().unwrap_or_default();
                         
-                        // Only keep models we care about
-                        if name.contains("gemini") || name.contains("claude") || name.contains("image") || name.contains("imagen") {
-                            quota_data.add_model(name, percentage, reset_time);
+                        // Only keep models we care about (exclude internal chat models)
+                        if name.starts_with("gemini") || name.starts_with("claude") || name.starts_with("gpt") || name.starts_with("image") || name.starts_with("imagen") {
+                            let model_quota = crate::models::quota::ModelQuota {
+                                name,
+                                percentage,
+                                reset_time,
+                                display_name: info.display_name,
+                                supports_images: info.supports_images,
+                                supports_thinking: info.supports_thinking,
+                                thinking_budget: info.thinking_budget,
+                                recommended: info.recommended,
+                                max_tokens: info.max_tokens,
+                                max_output_tokens: info.max_output_tokens,
+                                supported_mime_types: info.supported_mime_types,
+                            };
+                            quota_data.add_model(model_quota);
                         }
+                    }
+                }
+                
+                // Parse deprecated model routing rules
+                if let Some(deprecated) = quota_response.deprecated_model_ids {
+                    for (old_id, info) in deprecated {
+                        quota_data.model_forwarding_rules.insert(old_id, info.new_model_id);
                     }
                 }
                 
@@ -220,16 +309,16 @@ pub async fn fetch_quota_with_cache(
                 return Ok((quota_data, project_id.clone()));
             },
             Err(e) => {
-                crate::modules::logger::log_warn(&format!("Request failed: {} (Attempt {}/{})", e, attempt, MAX_RETRIES));
+                crate::modules::logger::log_warn(&format!("Quota API request failed at {}: {}", ep_url, e));
                 last_error = Some(AppError::from(e));
-                if attempt < MAX_RETRIES {
+                if has_next {
                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 }
             }
         }
     }
     
-    Err(last_error.unwrap_or_else(|| AppError::Unknown("Quota fetch failed".to_string())))
+    Err(last_error.unwrap_or_else(|| AppError::Unknown("Quota fetch failed: all endpoints exhausted".to_string())))
 }
 
 /// Internal fetch quota logic
@@ -368,13 +457,13 @@ pub async fn warm_up_all_accounts() -> Result<String, String> {
 
             for handle in handles {
                 if let Ok(Some((id, email, token, pid, Some((fresh_quota, _))))) = handle.await {
-                    // [FIX] 预热阶段检测到 403 时，持久化 is_forbidden 标记，避免无效账号继续参与轮询
+                    // [FIX] 预热阶段检测到 403 时，使用统一禁用逻辑，确保账号文件和索引同时更新
                     if fresh_quota.is_forbidden {
                         crate::modules::logger::log_warn(&format!(
-                            "[Warmup] Account {} returned 403 Forbidden during quota fetch, persisting forbidden status",
+                            "[Warmup] Account {} returned 403 Forbidden during quota fetch, marking as forbidden",
                             email
                         ));
-                        let _ = crate::modules::account::update_account_quota(&id, fresh_quota);
+                        let _ = crate::modules::account::mark_account_forbidden(&id, "Warmup: 403 Forbidden - quota fetch denied");
                         continue;
                     }
                     let mut account_warmed_series = std::collections::HashSet::new();
@@ -496,13 +585,15 @@ pub async fn warm_up_account(account_id: &str) -> Result<String, String> {
     let (token, pid) = get_valid_token_for_warmup(&account_owned).await?;
     let (fresh_quota, _) = fetch_quota_with_cache(&token, &email, Some(&pid), Some(&account_owned.id)).await.map_err(|e| format!("Failed to fetch quota: {}", e))?;
     
-    // [FIX] 预热阶段检测到 403 时，持久化 is_forbidden 标记，避免无效账号继续参与轮询
+    // [FIX] 预热阶段检测到 403 时，使用统一的 mark_account_forbidden 逻辑，
+    // 确保账号文件和索引文件同时更新，且前端刷新后能感知到禁用状态
     if fresh_quota.is_forbidden {
         crate::modules::logger::log_warn(&format!(
-            "[Warmup] Account {} returned 403 Forbidden during quota fetch, persisting forbidden status",
+            "[Warmup] Account {} returned 403 Forbidden during quota fetch, marking as forbidden",
             email
         ));
-        let _ = crate::modules::account::update_account_quota(account_id, fresh_quota);
+        let reason = "Warmup: 403 Forbidden - quota fetch denied";
+        let _ = crate::modules::account::mark_account_forbidden(account_id, reason);
         return Err("Account is forbidden (403)".to_string());
     }
 

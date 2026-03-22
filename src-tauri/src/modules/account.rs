@@ -654,10 +654,23 @@ pub fn save_account(account: &Account) -> Result<(), String> {
     let accounts_dir = get_accounts_dir()?;
     let account_path = accounts_dir.join(format!("{}.json", account.id));
 
+    let temp_filename = format!("{}.tmp.{}", account.id, Uuid::new_v4());
+    let temp_path = accounts_dir.join(&temp_filename);
+
     let content = serde_json::to_string_pretty(account)
         .map_err(|e| format!("failed_to_serialize_account_data: {}", e))?;
 
-    fs::write(&account_path, content).map_err(|e| format!("failed_to_save_account_data: {}", e))
+    if let Err(e) = std::fs::write(&temp_path, content) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("failed_to_write_temp_account_file: {}", e));
+    }
+
+    if let Err(e) = atomic_replace_file(&temp_path, &account_path) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(format!("failed_to_replace_account_file: {}", e));
+    }
+
+    Ok(())
 }
 
 /// List all accounts
@@ -1309,6 +1322,55 @@ pub fn toggle_proxy_status(
     Ok(())
 }
 
+/// Find account ID by email (from index)
+pub fn find_account_id_by_email(email: &str) -> Option<String> {
+    load_account_index().ok()?.accounts.into_iter()
+        .find(|a| a.email == email)
+        .map(|a| a.id)
+}
+
+pub fn mark_account_forbidden(account_id: &str, reason: &str) -> Result<(), String> {
+    let _lock = ACCOUNT_INDEX_LOCK
+        .lock()
+        .map_err(|e| format!("failed_to_acquire_lock: {}", e))?;
+
+    let mut account = load_account(account_id)?;
+
+    // 1. Update quota status
+    if let Some(ref mut q) = account.quota {
+        q.is_forbidden = true;
+        q.forbidden_reason = Some(reason.to_string());
+    } else {
+        account.quota = Some(crate::models::QuotaData {
+            models: Vec::new(),
+            last_updated: chrono::Utc::now().timestamp(),
+            subscription_tier: None,
+            is_forbidden: true,
+            forbidden_reason: Some(reason.to_string()),
+            model_forwarding_rules: std::collections::HashMap::new(),
+        });
+    }
+
+    // 2. Disable proxy for this account
+    account.proxy_disabled = true;
+    account.proxy_disabled_reason = Some(format!("Forbidden (403): {}", reason));
+    account.proxy_disabled_at = Some(chrono::Utc::now().timestamp());
+
+    save_account(&account)?;
+
+    // 3. Update index summary
+    let mut index = load_account_index()?;
+    if let Some(summary) = index.accounts.iter_mut().find(|a| a.id == account_id) {
+        summary.proxy_disabled = true;
+        save_account_index(&index)?;
+    }
+
+    // 4. Notify frontend to refresh account list
+    crate::modules::log_bridge::emit_accounts_refreshed();
+
+    Ok(())
+}
+
 /// Export accounts by IDs (for backup/migration)
 pub fn export_accounts_by_ids(account_ids: &[String]) -> Result<crate::models::AccountExportResponse, String> {
     use crate::models::{AccountExportItem, AccountExportResponse};
@@ -1559,22 +1621,10 @@ pub async fn refresh_all_quotas_logic() -> Result<RefreshStats, String> {
     let tasks: Vec<_> = accounts
         .into_iter()
         .filter(|account| {
-            if account.disabled || account.proxy_disabled {
-                crate::modules::logger::log_info(&format!(
-                    "  - Skipping {} ({})",
-                    account.email,
-                    if account.disabled { "Disabled" } else { "Proxy Disabled" }
-                ));
-                return false;
-            }
-            // [FIX] Check proxy_disabled status
-            if account.proxy_disabled {
-                crate::modules::logger::log_info(&format!(
-                    "  - Skipping {} (Proxy Disabled)",
-                    account.email
-                ));
-                return false;
-            }
+            // [MOD] Now we allow refreshing disabled and proxy_disabled accounts
+            // to support forced re-sync from UI. 
+            // Only strictly skip forbidden accounts if necessary, but even those 
+            // might want a retry to see if they are unbanned.
             if let Some(ref q) = account.quota {
                 if q.is_forbidden {
                     crate::modules::logger::log_info(&format!(
@@ -1640,9 +1690,10 @@ pub async fn refresh_all_quotas_logic() -> Result<RefreshStats, String> {
     ));
 
     // After quota refresh, immediately check and trigger warmup for recovered models
-    tokio::spawn(async {
-        check_and_trigger_warmup_for_recovered_models().await;
-    });
+    // [Disabled] Automatic warmup is temporarily disabled
+    // tokio::spawn(async {
+    //     check_and_trigger_warmup_for_recovered_models().await;
+    // });
 
     Ok(RefreshStats {
         total,
