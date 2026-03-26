@@ -1168,7 +1168,7 @@ fn build_contents(
                                 // This provides conversation-level isolation
                                 crate::proxy::SignatureCache::global().get_session_signature(session_id)
                                     .map(|s| {
-                                        tracing::info!(
+                                        tracing::debug!(
                                             "[Claude-Request] Recovered signature from SESSION cache (session: {}, len: {})",
                                             session_id, s.len()
                                         );
@@ -1179,7 +1179,7 @@ fn build_contents(
                                 // Try tool-specific signature cache (Layer 1)
                                 crate::proxy::SignatureCache::global().get_tool_signature(id)
                                     .map(|s| {
-                                        tracing::info!("[Claude-Request] Recovered signature from TOOL cache for tool_id: {}", id);
+                                        tracing::debug!("[Claude-Request] Recovered signature from TOOL cache for tool_id: {}", id);
                                         s
                                     })
                             })

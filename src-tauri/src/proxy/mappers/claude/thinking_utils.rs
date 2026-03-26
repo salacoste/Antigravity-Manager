@@ -202,7 +202,7 @@ pub fn filter_invalid_thinking_blocks_with_family(
                     if let Some(target) = target_family {
                         if let Some(origin_family) = get_signature_family(sig) {
                             if origin_family != target {
-                                warn!("[Thinking-Sanitizer] Dropping signature from family '{}' for target '{}'", origin_family, target);
+                                debug!("[Thinking-Sanitizer] Dropping signature from family '{}' for target '{}'", origin_family, target);
                                 stripped_count += 1;
                                 return false;
                             }
